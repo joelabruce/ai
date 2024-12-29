@@ -43,7 +43,6 @@ impl Mul<Complexf> for Complexf {
     }
 }
 
-
 mod tests {
     use std::thread::AccessError;
     

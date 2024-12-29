@@ -1,7 +1,6 @@
 pub mod geoalg;
 pub mod partitions;
 
-use crate::geoalg::f32_math::vec2f::*;
 use crate::partitions::*;
 
 //use std::io;
@@ -9,12 +8,10 @@ use crate::partitions::*;
 use colored::*;
 
 fn _main() {
-    //let res = my_vec + 3;
     //println!("n: ");
     // let _secret_number =  rand::thread_rng().gen_range(1..=100);
     
     //let mut prompt_response = String::new();
-
     //io::stdin()
     //    .read_line(&mut prompt_response)
     //    .expect("Oh nos! Problem with entering text from keyboard!");

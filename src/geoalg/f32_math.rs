@@ -1,2 +1,5 @@
+pub mod basis_vectors;
+pub mod bivectors;
 pub mod complex;
 pub mod vec2f;
+pub mod vec3f;
