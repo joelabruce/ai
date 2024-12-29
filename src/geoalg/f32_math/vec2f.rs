@@ -54,8 +54,9 @@ impl Mul<f32> for Vec2f {
     }
 }
 
+#[cfg(test)]
 mod tests {
-    use std::thread::AccessError;
+    //use std::thread::AccessError;
 
     use super::*;
 

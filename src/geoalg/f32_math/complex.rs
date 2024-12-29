@@ -43,8 +43,9 @@ impl Mul<Complexf> for Complexf {
     }
 }
 
+#[cfg(test)]
 mod tests {
-    use std::thread::AccessError;
+    //use std::thread::AccessError;
     
     use super::*;
 
