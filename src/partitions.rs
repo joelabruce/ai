@@ -38,7 +38,7 @@ pub fn strict_partitions_n_into_4_recursive(n: i128) -> i128 {
 
     let mut accumulator = 0;
     for i in 1..=terms {
-        accumulator += strict_partitions_n_into_3_fast(4*i + offset);
+        accumulator += strict_partitions_n_into_3_fastest(4*i + offset);
     }
 
     accumulator
@@ -62,11 +62,14 @@ fn _strict_partitions_n_into_5_recursive(n: i128) -> i128 {
 /// Calculates the Kronecker Delta given i and j that are equatable to eachother.
 /// # Arguments
 /// # Returns
-fn kronecker_delta_f32<I:Eq>(i: I, j: I) -> f32 {
+pub fn kronecker_delta_f32<I:Eq>(i: I, j: I) -> f32 {
     if i == j { 1.0 } else { 0.0 } 
 }
 
-struct IdentityMatrixIterator {
+/// Used to create an identity matrix of size n.
+/// # Arguments
+/// # Returns
+pub struct IdentityMatrixIterator {
     i: u128,
     n: u128
 }
