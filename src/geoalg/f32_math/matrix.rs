@@ -33,6 +33,7 @@ impl Iterator for IdentityMatrixIterator {
 
 /// Row-major matrix.
 #[derive(PartialEq)]
+#[derive(Debug)]
 pub struct Matrix {
     cols: u64,
     rows: u64,
@@ -63,6 +64,18 @@ impl Matrix {
         };
 
         let values = imi.collect::<Vec<_>>();
+        Self {
+            cols: n,
+            rows: n,
+            values
+        }
+    }
+
+    pub fn new_identity_alt(n: u64) -> Self {
+        assert!(n > 0);
+
+        let values = (0..n).map(|i| kronecker_delta_f32(i % (n + 1), 0)).collect();
+
         Self {
             cols: n,
             rows: n,
@@ -193,6 +206,63 @@ mod tests {
             0.0f32, 0.0f32, 1.0f32, 0.0f32,
             0.0f32, 0.0f32, 0.0f32, 1.0f32
             ];
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn identity_1_alt() {
+        let actual = Matrix::new_identity(1);
+        let expected = Matrix{
+            rows: 1,
+            cols: 1,
+            values: vec![1.0f32]
+        };
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn identity_2_alt() {
+        let actual = Matrix::new_identity(2);
+        let expected = Matrix {
+            rows: 2,
+            cols: 2,
+            values: vec![
+                1.0f32, 0.0f32,
+                0.0f32, 1.0f32]
+        };
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn identity_3_alt() {
+        let actual = Matrix::new_identity(3);
+        let expected = Matrix {
+            rows: 3,
+            cols: 3,
+            values: vec![
+                1.0f32, 0.0f32, 0.0f32, 
+                0.0f32, 1.0f32, 0.0f32, 
+                0.0f32, 0.0f32, 1.0f32]
+        };
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn identity_4_alt() {
+        let actual = Matrix::new_identity(4);
+        let expected = Matrix {
+            rows: 4,
+            cols: 4,
+            values: vec![
+                1.0f32, 0.0f32, 0.0f32, 0.0f32,
+                0.0f32, 1.0f32, 0.0f32, 0.0f32,
+                0.0f32, 0.0f32, 1.0f32, 0.0f32,
+                0.0f32, 0.0f32, 0.0f32, 1.0f32]
+        };
 
         assert_eq!(actual, expected);
     }
