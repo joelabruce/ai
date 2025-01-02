@@ -1,6 +1,6 @@
 use std::ops::Mul;
 
-use rand::distributions::{Distribution, Uniform};
+use rand::{distributions::{Distribution, Uniform}, Error};
 
 /// Calculates the Kronecker Delta given i and j that are equatable to eachother.
 /// # Arguments
@@ -116,10 +116,29 @@ impl Matrix {
     pub fn get(&self, row: u64, column: u64) -> Option<&f32> {
         self.values.get(self.index_for(row, column) as usize)
     }
+
+    /// Returns slice of matrix that is a row of the matrix
+    /// # Arguments
+    /// # Returns
+    pub fn row_vector(&self, j: u64) -> &[f32] {
+        assert!(j < self.rows);
+
+        let start = (j * self.cols) as usize;
+        let end = start + (self.cols as usize);
+        &self.values[start..=end]
+    }
+
+
+    // pub fn col_vector(&self, i: u64) -> &[f32] {
+    //     assert!(i < self.cols);
+    
+    //     let n = self.cols as usize;
+    //     &self.values.iter().skip(n-1).step_by(n)..collect()[..]
+    // }
 }
 
 impl Mul<&Matrix> for Matrix {
-    type Output = Self;
+    type Output = Self;//Result<Self, Error>;
 
     fn mul(self, rhs: &Matrix) -> Self::Output {
         assert_eq!(self.cols, rhs.rows);

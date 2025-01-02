@@ -1,5 +1,10 @@
-fn fun() {
+use super::matrix::Matrix;
 
+fn fun() {
+    // let input_layer = Matrix {
+    //     cols: 28,
+    //     rows: 28
+    // }
 }
 
 #[cfg(test)]

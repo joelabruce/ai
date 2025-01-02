@@ -1,5 +1,8 @@
+pub mod cost_functions;
 pub mod geoalg;
 pub mod partitions;
+
+pub mod file_inputs;
 
 use crate::partitions::*;
 
