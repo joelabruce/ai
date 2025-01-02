@@ -2,12 +2,29 @@ use std::fs::File;
 use std::io::{self, prelude::*, BufReader};
 use std::num::ParseFloatError;
 
-    pub fn read(file_path: &str, line_index: usize) -> io::Result<Vec<f32>>{
-        let file = File::open(file_path)?;
-        let mut reader = BufReader::new(file);
+struct InputCsvReader {
+    reader: BufReader<File>
+}
 
+impl InputCsvReader {
+    pub fn new(file_path: &str) -> InputCsvReader {
+        let file = File::open(file_path).unwrap();
+        let reader = BufReader::new(file);
+
+        InputCsvReader {
+            reader
+        }
+    }
+
+    pub fn read_and_skip_header_line(&mut self) -> io::Result<()>{
         let mut line = String::new();
-        let len = reader.read_line(&mut line);
+        let _ = self.reader.read_line(&mut line);
+        Ok(())
+    }
+
+    pub fn read_and_parse_data_line(&mut self) -> Vec<f32> {
+        let mut line = String::new();
+        let _len = self.reader.read_line(&mut line);
         
         let x: Vec<_> = line.split(",").map(|s| {
             let retrieved_value = s.trim();
@@ -21,17 +38,22 @@ use std::num::ParseFloatError;
             }
         }).collect();
 
-        assert_eq!(x.len(), 785);
-
-        Ok(x)
+        x
     }
+}
 
 #[cfg(test)]
 mod tests {
+    use std::fs::read;
+
     use super::*;
 
     #[test]
     fn test() {
-        read("./training/mnist_test.csv", 1);
+        let mut reader = InputCsvReader::new("./training/mnist_test.csv");
+        let _ = reader.read_and_skip_header_line();
+        let v = reader.read_and_parse_data_line();
+
+        assert_eq!(v.len(), 785);
     }
 }
