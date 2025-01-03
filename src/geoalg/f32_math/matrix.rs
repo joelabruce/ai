@@ -156,11 +156,52 @@ impl Matrix {
         }
     }
 
+    pub fn mul_using_transpose(&self, rhs: &Matrix) -> Matrix {
+        assert_eq!(self.columns, rhs.rows);
+
+        let t = rhs.get_transpose();
+        let r_size = rhs.columns * rhs.rows;
+        let mut floats = Vec::with_capacity(r_size);
+
+        for row in 0..self.rows {
+            let offset = row * self.columns;
+            let ls = &self.values[offset..offset + self.columns];
+            for t_row in 0..t.rows {
+                let offset = t_row * t.columns;
+                let rs = &t.values[offset..offset + t.columns];
+
+                let x = dot_product_of_vector_slices(ls, rs);
+                floats.push(x);
+            }
+        }
+
+        Matrix {
+            columns: rhs.columns,
+            rows: self.rows,
+            values: floats
+        }        
+    }
+
     // Getting column vectors proving to be tricky, 
     //  perhaps abandon for now and focus on transposing and only using slices for matrix rows since matrix is row-major?
     // fn column_vector<'a>(&'a mut self, column: usize) -> &[f32] {
     //    self.values.iter().skip(column).step_by(self.columns).cloned().collect()
     // }
+}
+
+/// Dot product of two Vec<f32> slices. Will always assume they are same length (not production ready).
+/// How can this be effectively benchmarked and optimized?
+pub fn dot_product_of_vector_slices(lhs: &[f32], rhs: &[f32]) -> f32 {
+    assert_eq!(lhs.len(), rhs.len());
+    let n = lhs.len();
+
+    let (x, y) = (&lhs[..n], &rhs[..n]);
+    let mut sum = 0f32;
+    for i in 0..n {
+        sum += x[i] * y[i];
+    }
+
+    sum
 }
 
 impl Mul<&Matrix> for Matrix {
@@ -396,6 +437,42 @@ mod tests {
         };
 
         let actual = lhs * &rhs;
+
+        assert!(actual == expected);        
+    }
+
+    #[test]
+    fn matrix_mult_with_transpose() {
+        let lhs = Matrix {
+            rows: 2,
+            columns: 4,
+            values: vec![
+                1.0f32, 2.0f32, 3.0f32, 4.0f32,
+                -1.0f32, -2.0f32, -3.0f32, -4.0f32
+            ]
+        };
+
+        let rhs = Matrix {
+            rows: 4,
+            columns: 2,
+            values: vec![
+                3.0f32, 8.0f32,
+                1.0f32, 1.2f32,
+                0.8f32, 1.9f32,
+                5.0f32, 6.0f32
+            ]
+        };
+
+        let expected = Matrix {
+            rows: 2,
+            columns: 2,
+            values: vec! [
+                27.4f32, 40.1f32,
+                -27.4f32, -40.1f32
+            ]
+        };
+
+        let actual = Matrix::mul_using_transpose(&lhs, &rhs);
 
         assert!(actual == expected);        
     }
