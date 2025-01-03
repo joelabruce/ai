@@ -50,8 +50,6 @@ mod tests {
 
     #[test]
     fn test() {
-        // This test shouldfail if you do not have comparable csv file to test.
-        // The data is larger than 100 MB so could not store in repo.
         let mut reader = InputCsvReader::new("./tests/test.csv");
         let _ = reader.read_and_skip_header_line();
         let v = reader.read_and_parse_data_line();

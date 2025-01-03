@@ -13,8 +13,8 @@ pub fn kronecker_delta_f32<I:Eq>(i: I, j: I) -> f32 {
 /// # Arguments
 /// # Returns
 pub struct IdentityMatrixIterator {
-    i: u64,
-    n: u64
+    i: usize,
+    n: usize
 }
 
 impl Iterator for IdentityMatrixIterator {
@@ -31,31 +31,36 @@ impl Iterator for IdentityMatrixIterator {
     }
 }
 
-/// Row-major matrix.
+/// Mmatrix is implemented as a single dimensional vector of f32s.
+/// This implementation of Matrix is row-major. 
+/// Row-major is specified so certain optimizations and parallelization can be performed.
+/// Column-major is not yet implemented.
 #[derive(PartialEq)]
 #[derive(Debug)]
 pub struct Matrix {
-    cols: u64,
-    rows: u64,
+    columns: usize,
+    rows: usize,
+    //column_vectors: &'a Vec<Vec<f32>>,
     pub values: Vec<f32>
 }
 
 impl Matrix {
-    pub fn new_zeroed(i: u64, j: u64) -> Self {
-        assert!(i > 0);
-        assert!(j > 0);
+    pub fn new_zeroed(columns: usize, rows: usize) -> Self {
+        assert!(columns > 0);
+        assert!(rows > 0);
 
-        let capacity = i * j;
-        let values = (1..=capacity).map(|_| 0.0f32).collect();
+        let capacity = rows * columns;
+        let values = vec![0.0f32; capacity];
 
         Self {
-            cols: i,
-            rows: j,
-            values
+            columns,
+            rows,
+            values: values,
+            //column_vectors: Matrix::gen_column_vectors(rows, columns, &values)
         }
     }
 
-    pub fn new_identity(n: u64) -> Self {
+    pub fn new_identity(n: usize) -> Self {
         assert!(n > 0);
 
         let imi = IdentityMatrixIterator {
@@ -65,19 +70,20 @@ impl Matrix {
 
         let values = imi.collect::<Vec<_>>();
         Self {
-            cols: n,
+            columns: n,
             rows: n,
             values
         }
     }
 
-    pub fn new_identity_alt(n: u64) -> Self {
+    /// Possibly faster way to implement an identity matrix.
+    pub fn new_identity_alt(n: usize) -> Self {
         assert!(n > 0);
 
         let values = (0..n).map(|i| kronecker_delta_f32(i % (n + 1), 0)).collect();
 
         Self {
-            cols: n,
+            columns: n,
             rows: n,
             values
         }
@@ -86,54 +92,74 @@ impl Matrix {
     /// Returns an ixj matrix filled with random values between -1.0 and 1.0 inclusive.
     /// # Arguments
     /// # Returns
-    pub fn new_randomized(i: u64, j: u64) -> Self {
+    pub fn new_randomized(i: usize, j: usize) -> Self {
         assert!(i > 0);
         assert!(j > 0);
 
         let step = Uniform::new_inclusive(-1.0f32, 1.0f32);
         let element_counts = i * j;
         let mut rng = rand::thread_rng();
-        let values = step.sample_iter(&mut rng).take(element_counts as usize).collect();
+        let values = step.sample_iter(&mut rng).take(element_counts).collect();
 
         //let random_range = (1..=element_count).map(|_| )
         Self {
-            cols: i,
+            columns: i,
             rows: j,
-            values
+            values,
+            //column_vectors: Matrix::gen_column_vectors(rows, columns, values)
         }
     }
 
     /// Returns index in vec given row and column.
     /// # Arguments
     /// # Returns
-    pub fn index_for(&self, row: u64, column: u64) -> u64 {
-        row * self.cols + column
+    pub fn index_for(&self, row: usize, column: usize) -> usize {
+        row * self.columns + column
     }
 
     /// Gets reference to value at specified row and column.
     /// # Arguments
     /// # Returns
-    pub fn get(&self, row: u64, column: u64) -> Option<&f32> {
-        self.values.get(self.index_for(row, column) as usize)
+    pub fn get(&self, row: usize, column: usize) -> Option<&f32> {
+        self.values.get(self.index_for(row, column))
     }
 
     /// Returns slice of matrix that is a row of the matrix
     /// # Arguments
     /// # Returns
-    pub fn row_vector(&self, j: u64) -> &[f32] {
-        assert!(j < self.rows);
+    pub fn row_vector(&self, row: usize) -> &[f32] {
+        assert!(row < self.rows);
 
-        let start = (j * self.cols) as usize;
-        let end = start + (self.cols as usize);
+        let start = row * self.columns;
+        let end = start + self.columns;
         &self.values[start..=end]
     }
 
+    pub fn get_transpose(&self) -> Matrix {
+        let capacity = self.rows * self.columns;
+        let mut transposed = Vec::with_capacity(capacity);
 
-    // pub fn col_vector(&self, i: u64) -> &[f32] {
-    //     assert!(i < self.cols);
-    
-    //     let n = self.cols as usize;
-    //     &self.values.iter().skip(n-1).step_by(n)..collect()[..]
+        for i in 0..capacity {
+            let index_to_push = self.columns * (i % self.rows) + i / self.rows;
+
+            // Debug code to print that the transpose calcs are workinf correctly
+            //if i % self.rows == 0 { println!() }
+            //print!("{index_to_push} ");
+
+            transposed.push(self.values[index_to_push]);
+        }
+
+        Matrix {
+            columns: self.rows,
+            rows: self.columns,
+            values: transposed
+        }
+    }
+
+    // Getting column vectors proving to be tricky, 
+    //  perhaps abandon for now and focus on transposing and only using slices for matrix rows since matrix is row-major?
+    // fn column_vector<'a>(&'a mut self, column: usize) -> &[f32] {
+    //    self.values.iter().skip(column).step_by(self.columns).cloned().collect()
     // }
 }
 
@@ -141,16 +167,16 @@ impl Mul<&Matrix> for Matrix {
     type Output = Self;//Result<Self, Error>;
 
     fn mul(self, rhs: &Matrix) -> Self::Output {
-        assert_eq!(self.cols, rhs.rows);
+        assert_eq!(self.columns, rhs.rows);
 
-        let r_size = (rhs.cols * rhs.rows) as usize;
+        let r_size = rhs.columns * rhs.rows;
 
         let mut floats = Vec::with_capacity(r_size);
 
         for c in 0..self.rows {
-            for b in 0..rhs.cols {
+            for b in 0..rhs.columns {
                 let mut accumulator = 0f32;
-                for a in 0..self.cols {
+                for a in 0..self.columns {
                     let x = match self.get(c, a) {
                         Some(r) => r,
                         None => panic!("Out of bounds for matrix lhs")
@@ -168,7 +194,7 @@ impl Mul<&Matrix> for Matrix {
         }
         
         Matrix {
-            cols: rhs.cols,
+            columns: rhs.columns,
             rows: self.rows,
             values: floats
         }
@@ -178,6 +204,35 @@ impl Mul<&Matrix> for Matrix {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn transpose_test() {
+        let m = Matrix {
+            rows: 5,
+            columns: 4,
+            values: vec![
+                0f32, 1f32, 2f32, 3f32,
+                4f32, 5f32, 6f32, 7f32,
+                8f32, 9f32, 10f32, 11f32,
+                12f32, 13f32, 14f32, 15f32,
+                16f32, 17f32, 18f32, 19f32
+            ]
+        };
+
+        let expected = Matrix {
+            rows: 4,
+            columns: 5,
+            values: vec![
+                0f32, 4f32, 8f32, 12f32, 16f32,
+                1f32, 5f32, 9f32, 13f32, 17f32,
+                2f32, 6f32, 10f32, 14f32, 18f32,
+                3f32, 7f32, 11f32, 15f32, 19f32
+            ]
+        };
+        
+        let actual = m.get_transpose();
+        assert_eq!(actual, expected);
+    }
 
     #[test]
     fn identity_1() {
@@ -234,7 +289,7 @@ mod tests {
         let actual = Matrix::new_identity(1);
         let expected = Matrix{
             rows: 1,
-            cols: 1,
+            columns: 1,
             values: vec![1.0f32]
         };
 
@@ -246,7 +301,7 @@ mod tests {
         let actual = Matrix::new_identity(2);
         let expected = Matrix {
             rows: 2,
-            cols: 2,
+            columns: 2,
             values: vec![
                 1.0f32, 0.0f32,
                 0.0f32, 1.0f32]
@@ -260,7 +315,7 @@ mod tests {
         let actual = Matrix::new_identity(3);
         let expected = Matrix {
             rows: 3,
-            cols: 3,
+            columns: 3,
             values: vec![
                 1.0f32, 0.0f32, 0.0f32, 
                 0.0f32, 1.0f32, 0.0f32, 
@@ -275,7 +330,7 @@ mod tests {
         let actual = Matrix::new_identity(4);
         let expected = Matrix {
             rows: 4,
-            cols: 4,
+            columns: 4,
             values: vec![
                 1.0f32, 0.0f32, 0.0f32, 0.0f32,
                 0.0f32, 1.0f32, 0.0f32, 0.0f32,
@@ -297,15 +352,11 @@ mod tests {
 
     #[test]
     fn matrix_index() {
-        let mat = Matrix {
-            cols: 3,
-            rows: 4,
-            values: Vec::with_capacity(12)
-        };
+        let mat = Matrix::new_randomized(4, 7);
 
-        let mut expected: u64 = 0;
+        let mut expected: usize = 0;
         for row in 0..mat.rows {
-            for col in 0..mat.cols {
+            for col in 0..mat.columns {
                 let actual = mat.index_for(row, col);
                 assert_eq!(actual, expected);
                 expected += 1;
@@ -317,7 +368,7 @@ mod tests {
     fn matrix_mult() {
         let lhs = Matrix {
             rows: 2,
-            cols: 4,
+            columns: 4,
             values: vec![
                 1.0f32, 2.0f32, 3.0f32, 4.0f32,
                 -1.0f32, -2.0f32, -3.0f32, -4.0f32
@@ -326,7 +377,7 @@ mod tests {
 
         let rhs = Matrix {
             rows: 4,
-            cols: 2,
+            columns: 2,
             values: vec![
                 3.0f32, 8.0f32,
                 1.0f32, 1.2f32,
@@ -337,7 +388,7 @@ mod tests {
 
         let expected = Matrix {
             rows: 2,
-            cols: 2,
+            columns: 2,
             values: vec! [
                 27.4f32, 40.1f32,
                 -27.4f32, -40.1f32
