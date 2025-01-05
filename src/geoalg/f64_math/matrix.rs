@@ -1,11 +1,11 @@
-use std::ops::{Add, Mul};
+use std::ops::Mul;
 
-use rand::{distributions::{Distribution, Uniform}, Error};
+use rand::distributions::{Distribution, Uniform};
 
 /// Calculates the Kronecker Delta given i and j that are equatable to eachother.
 /// # Arguments
 /// # Returns
-pub fn kronecker_delta_f32<I:Eq>(i: I, j: I) -> f32 {
+pub fn kronecker_delta_f64<I:PartialEq>(i: I, j: I) -> f64 {
     if i == j { 1.0 } else { 0.0 } 
 }
 
@@ -16,35 +16,35 @@ pub struct IdentityMatrixIterator {
 }
 
 impl Iterator for IdentityMatrixIterator {
-    type Item = f32;
+    type Item = f64;
 
     fn next(&mut self) -> Option<Self::Item> {
         self.i += 1;
 
         let p = self.i % (self.n + 1);
-        let r = kronecker_delta_f32(p, 1);
+        let r = kronecker_delta_f64(p, 1);
         let n2 = self.n * self.n;
 
         if self.i <= n2 { Some(r) } else { None }
     }
 }
 
-/// Matrix is implemented as a single dimensional vector of f32s.
+/// Matrix is implemented as a single dimensional vector of f64s.
 /// This implementation of Matrix is row-major. 
 /// Row-major is specified so certain optimizations and parallelization can be performed.
 /// Column-major is not yet implemented.
 #[derive(PartialEq, Debug, Clone)]
 pub struct Matrix {
-    columns: usize,
-    rows: usize,
-    pub values: Vec<f32>
+    pub columns: usize,
+    pub rows: usize,
+    pub values: Vec<f64>
 }
 
 impl Matrix {
     /// Create a matrix from a vector.
     /// # Arguments
     /// # Returns
-    pub fn from(values: Vec<f32>, rows: usize, columns: usize) -> Self {
+    pub fn from_vec(values: Vec<f64>, rows: usize, columns: usize) -> Self {
         assert_eq!(rows * columns, values.len());
         
         Matrix {
@@ -62,7 +62,7 @@ impl Matrix {
         assert!(rows > 0);
 
         let capacity = rows * columns;
-        let values = vec![0.0f32; capacity];
+        let values = vec![0.0f64; capacity];
 
         Self {
             columns,
@@ -94,7 +94,7 @@ impl Matrix {
     pub fn new_identity_alt(n: usize) -> Self {
         assert!(n > 0);
 
-        let values = (0..n).map(|i| kronecker_delta_f32(i % (n + 1), 0)).collect();
+        let values = (0..n).map(|i| kronecker_delta_f64(i % (n + 1), 0)).collect();
 
         Self {
             columns: n,
@@ -110,10 +110,10 @@ impl Matrix {
         assert!(columns > 0);
         assert!(rows > 0);
 
-        let step = Uniform::new_inclusive(-1.0f32, 1.0f32);
-        let element_counts = columns * rows;
         let mut rng = rand::thread_rng();
-        let values = step.sample_iter(&mut rng).take(element_counts).collect();
+        let step = Uniform::new_inclusive(-0.15f64, 0.15f64);
+        let element_count = columns * rows;
+        let values = step.sample_iter(&mut rng).take(element_count).collect();
 
         Self {
             columns,
@@ -135,14 +135,14 @@ impl Matrix {
     /// Gets reference to value at specified row and column.
     /// # Arguments
     /// # Returns
-    pub fn get(&self, row: usize, column: usize) -> Option<&f32> {
+    pub fn get(&self, row: usize, column: usize) -> Option<&f64> {
         self.values.get(self.index_for(row, column))
     }
 
     /// Returns slice of matrix that is a row of the matrix
     /// # Arguments
     /// # Returns
-    pub fn get_row_vector_slice(&self, row: usize) -> &[f32] {
+    pub fn get_row_vector_slice(&self, row: usize) -> &[f64] {
         assert!(row < self.rows);
 
         let start = row * self.columns;
@@ -171,6 +171,22 @@ impl Matrix {
             columns: self.rows,
             rows: self.columns,
             values: transposed
+        }
+    }
+
+    pub fn elementwise_multiply(&self, rhs: &Matrix) -> Matrix {
+        assert_eq!(self.columns, rhs.columns);
+        assert_eq!(self.rows, rhs.rows);
+
+        let values = self.values.iter()
+            .zip(rhs.values.iter())
+            .map(|(x, y)| x * y)
+            .collect();
+
+        Matrix {
+            rows: self.rows,
+            columns: self.columns,
+            values
         }
     }
 
@@ -206,34 +222,29 @@ impl Matrix {
         self.columns * self.rows
     }
 
-    // Getting column vectors proving to be tricky, 
-    //  perhaps abandon for now and focus on transposing and only using slices for matrix rows since matrix is row-major?
-    // fn column_vector<'a>(&'a mut self, column: usize) -> &[f32] {
-    //    self.values.iter().skip(column).step_by(self.columns).cloned().collect()
-    // }
-}
-
-/// Dot product of two Vec<f32> slices. Will always assume they are same length (not production ready).
-/// How can this be effectively benchmarked and optimized?
-/// # Arguments
-/// # Returns
-pub fn dot_product_of_vector_slices(lhs: &[f32], rhs: &[f32]) -> f32 {
-    assert_eq!(lhs.len(), rhs.len());
-    let n = lhs.len();
-
-    let (x, y) = (&lhs[..n], &rhs[..n]);
-    let mut sum = 0f32;
-    for i in 0..n {
-        sum += x[i] * y[i];
+    pub fn map(&mut self, func: impl Fn(&f64) -> f64) -> Matrix {
+        let values = self.values.iter().map(|&val| func(&val)).collect();
+        
+        Matrix {
+            rows: self.rows,
+            columns: self.columns,
+            values: values
+        } 
     }
 
-    sum
-}
+    pub fn sub(&self, rhs: &Matrix) -> Matrix {
+        assert!(self.columns == rhs.columns && self.rows == rhs.rows, "Subtracting matrices of different orders");
 
-impl Add<&Matrix> for Matrix {
-    type Output = Matrix;
+        let values = self.values.iter().zip(rhs.values.iter()).map(|(x, y)| x - y).collect();
 
-    fn add(self, rhs: &Matrix) -> Self::Output {
+        Matrix {
+            columns: rhs.columns,
+            rows: rhs.rows,
+            values
+        }
+    }
+
+    pub fn add(&self, rhs: &Matrix) -> Matrix {
         assert_eq!(self.columns, rhs.columns);
         assert_eq!(self.rows, rhs.rows);
 
@@ -245,6 +256,38 @@ impl Add<&Matrix> for Matrix {
             values
         }
     }
+    // Getting column vectors proving to be tricky, 
+    //  perhaps abandon for now and focus on transposing and only using slices for matrix rows since matrix is row-major?
+    // fn column_vector<'a>(&'a mut self, column: usize) -> &[f64] {
+    //    self.values.iter().skip(column).step_by(self.columns).cloned().collect()
+    // }
+}
+
+impl From<Vec<f64>> for Matrix {
+    fn from(vec: Vec<f64>) -> Self {
+        Matrix {
+            rows: vec.len(),
+            columns: 1,
+            values: vec
+        }
+    }
+}
+
+/// Dot product of two Vec<f64> slices. Will always assume they are same length (not production ready).
+/// How can this be effectively benchmarked and optimized?
+/// # Arguments
+/// # Returns
+pub fn dot_product_of_vector_slices(lhs: &[f64], rhs: &[f64]) -> f64 {
+    assert_eq!(lhs.len(), rhs.len());
+    let n = lhs.len();
+
+    let (x, y) = (&lhs[..n], &rhs[..n]);
+    let mut sum = 0f64;
+    for i in 0..n {
+        sum += x[i] * y[i];
+    }
+
+    sum
 }
 
 impl Mul<&Matrix> for Matrix {
@@ -263,7 +306,7 @@ impl Mul<&Matrix> for Matrix {
 
         for c in 0..self.rows {
             for b in 0..rhs.columns {
-                let mut accumulator = 0f32;
+                let mut accumulator = 0f64;
                 for a in 0..self.columns {
                     let x = match self.get(c, a) {
                         Some(r) => r,
@@ -289,6 +332,21 @@ impl Mul<&Matrix> for Matrix {
     }
 }
 
+impl std::fmt::Display for Matrix {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for row in 0..self.rows {
+            for col in 0..self.columns {
+                write!(f, "{}", self.values[row * self.columns + col])?;
+                if col < self.columns - 1 {
+                    write!(f, ", ")?; // Separate columns with a tab
+                }
+            }
+            writeln!(f)?; // Move to the next line after each row
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -299,9 +357,9 @@ mod tests {
             rows: 3,
             columns: 3,
             values: vec![
-                1f32, 2f32, 3f32,
-                4f32, 5f32, 6f32,
-                7f32, 8f32, 9f32
+                1f64, 2f64, 3f64,
+                4f64, 5f64, 6f64,
+                7f64, 8f64, 9f64
             ]
         };
 
@@ -309,21 +367,21 @@ mod tests {
             rows: 3,
             columns: 3,
             values: vec![
-                -1f32, -2f32, -3f32,
-                -4f32, -5f32, -6f32,
-                -7f32, -8f32, -9f32
+                -1f64, -2f64, -3f64,
+                -4f64, -5f64, -6f64,
+                -7f64, -8f64, -9f64
             ]
         };
 
-        let actual = lhs + &rhs;
+        let actual = lhs.add(&rhs);
 
         let expected = Matrix {
             rows: 3,
             columns: 3,
             values: vec![
-                0f32, 0f32, 0f32,
-                0f32, 0f32, 0f32,
-                0f32, 0f32, 0f32
+                0f64, 0f64, 0f64,
+                0f64, 0f64, 0f64,
+                0f64, 0f64, 0f64
             ]
         };
 
@@ -336,11 +394,11 @@ mod tests {
             rows: 5,
             columns: 4,
             values: vec![
-                0f32, 1f32, 2f32, 3f32,
-                4f32, 5f32, 6f32, 7f32,
-                8f32, 9f32, 10f32, 11f32,
-                12f32, 13f32, 14f32, 15f32,
-                16f32, 17f32, 18f32, 19f32
+                0f64, 1f64, 2f64, 3f64,
+                4f64, 5f64, 6f64, 7f64,
+                8f64, 9f64, 10f64, 11f64,
+                12f64, 13f64, 14f64, 15f64,
+                16f64, 17f64, 18f64, 19f64
             ]
         };
 
@@ -348,10 +406,10 @@ mod tests {
             rows: 4,
             columns: 5,
             values: vec![
-                0f32, 4f32, 8f32, 12f32, 16f32,
-                1f32, 5f32, 9f32, 13f32, 17f32,
-                2f32, 6f32, 10f32, 14f32, 18f32,
-                3f32, 7f32, 11f32, 15f32, 19f32
+                0f64, 4f64, 8f64, 12f64, 16f64,
+                1f64, 5f64, 9f64, 13f64, 17f64,
+                2f64, 6f64, 10f64, 14f64, 18f64,
+                3f64, 7f64, 11f64, 15f64, 19f64
             ]
         };
         
@@ -364,7 +422,7 @@ mod tests {
         let imi = IdentityMatrixIterator { i: 0, n: 1 };
 
         let actual = imi.collect::<Vec<_>>();
-        let expected = vec![1.0f32];
+        let expected = vec![1.0f64];
 
         assert_eq!(actual, expected);
     }
@@ -375,8 +433,8 @@ mod tests {
 
         let actual = imi.collect::<Vec<_>>();
         let expected = vec![
-            1.0f32, 0.0f32,
-            0.0f32, 1.0f32];
+            1.0f64, 0.0f64,
+            0.0f64, 1.0f64];
 
         assert_eq!(actual, expected);
     }
@@ -387,9 +445,9 @@ mod tests {
 
         let actual = imi.collect::<Vec<_>>();
         let expected = vec![
-            1.0f32, 0.0f32, 0.0f32, 
-            0.0f32, 1.0f32, 0.0f32, 
-            0.0f32, 0.0f32, 1.0f32];
+            1.0f64, 0.0f64, 0.0f64, 
+            0.0f64, 1.0f64, 0.0f64, 
+            0.0f64, 0.0f64, 1.0f64];
 
         assert_eq!(actual, expected);
     }
@@ -400,10 +458,10 @@ mod tests {
 
         let actual = imi.collect::<Vec<_>>();
         let expected = vec![
-            1.0f32, 0.0f32, 0.0f32, 0.0f32,
-            0.0f32, 1.0f32, 0.0f32, 0.0f32,
-            0.0f32, 0.0f32, 1.0f32, 0.0f32,
-            0.0f32, 0.0f32, 0.0f32, 1.0f32
+            1.0f64, 0.0f64, 0.0f64, 0.0f64,
+            0.0f64, 1.0f64, 0.0f64, 0.0f64,
+            0.0f64, 0.0f64, 1.0f64, 0.0f64,
+            0.0f64, 0.0f64, 0.0f64, 1.0f64
             ];
 
         assert_eq!(actual, expected);
@@ -415,7 +473,7 @@ mod tests {
         let expected = Matrix{
             rows: 1,
             columns: 1,
-            values: vec![1.0f32]
+            values: vec![1.0f64]
         };
 
         assert_eq!(actual, expected);
@@ -428,8 +486,8 @@ mod tests {
             rows: 2,
             columns: 2,
             values: vec![
-                1.0f32, 0.0f32,
-                0.0f32, 1.0f32]
+                1.0f64, 0.0f64,
+                0.0f64, 1.0f64]
         };
 
         assert_eq!(actual, expected);
@@ -442,9 +500,9 @@ mod tests {
             rows: 3,
             columns: 3,
             values: vec![
-                1.0f32, 0.0f32, 0.0f32, 
-                0.0f32, 1.0f32, 0.0f32, 
-                0.0f32, 0.0f32, 1.0f32]
+                1.0f64, 0.0f64, 0.0f64, 
+                0.0f64, 1.0f64, 0.0f64, 
+                0.0f64, 0.0f64, 1.0f64]
         };
 
         assert_eq!(actual, expected);
@@ -457,10 +515,10 @@ mod tests {
             rows: 4,
             columns: 4,
             values: vec![
-                1.0f32, 0.0f32, 0.0f32, 0.0f32,
-                0.0f32, 1.0f32, 0.0f32, 0.0f32,
-                0.0f32, 0.0f32, 1.0f32, 0.0f32,
-                0.0f32, 0.0f32, 0.0f32, 1.0f32]
+                1.0f64, 0.0f64, 0.0f64, 0.0f64,
+                0.0f64, 1.0f64, 0.0f64, 0.0f64,
+                0.0f64, 0.0f64, 1.0f64, 0.0f64,
+                0.0f64, 0.0f64, 0.0f64, 1.0f64]
         };
 
         assert_eq!(actual, expected);
@@ -495,8 +553,8 @@ mod tests {
             rows: 2,
             columns: 4,
             values: vec![
-                1.0f32, 2.0f32, 3.0f32, 4.0f32,
-                -1.0f32, -2.0f32, -3.0f32, -4.0f32
+                1.0f64, 2.0f64, 3.0f64, 4.0f64,
+                -1.0f64, -2.0f64, -3.0f64, -4.0f64
             ]
         };
 
@@ -504,10 +562,10 @@ mod tests {
             rows: 4,
             columns: 2,
             values: vec![
-                3.0f32, 8.0f32,
-                1.0f32, 1.2f32,
-                0.8f32, 1.9f32,
-                5.0f32, 6.0f32
+                3.0f64, 8.0f64,
+                1.0f64, 1.2f64,
+                0.8f64, 1.9f64,
+                5.0f64, 6.0f64
             ]
         };
 
@@ -515,8 +573,8 @@ mod tests {
             rows: 2,
             columns: 2,
             values: vec! [
-                27.4f32, 40.1f32,
-                -27.4f32, -40.1f32
+                27.4f64, 40.1f64,
+                -27.4f64, -40.1f64
             ]
         };
 
@@ -531,19 +589,19 @@ mod tests {
             rows: 4,
             columns: 3,
             values: vec![
-                1f32, 2f32, 3f32,
-                4f32, 5f32, 6f32,
-                7f32, 8f32, 9f32,
-                10f32, 11f32, 12f32]
+                1f64, 2f64, 3f64,
+                4f64, 5f64, 6f64,
+                7f64, 8f64, 9f64,
+                10f64, 11f64, 12f64]
         };
 
         let rhs = Matrix {
             rows: 3,
             columns: 5,
             values: vec![
-                1f32, 2f32, 3f32, 4f32, 5f32,
-                6f32, 7f32, 8f32, 9f32, 10f32,
-                11f32, 12f32, 13f32, 14f32, 15f32
+                1f64, 2f64, 3f64, 4f64, 5f64,
+                6f64, 7f64, 8f64, 9f64, 10f64,
+                11f64, 12f64, 13f64, 14f64, 15f64
             ]
         };
 
@@ -552,10 +610,10 @@ mod tests {
             rows: 4,
             columns: 5,
             values: vec! [
-                46f32, 52f32, 58f32, 64f32, 70f32,
-                100f32, 115f32, 130f32, 145f32, 160f32,
-                154f32, 178f32, 202f32, 226f32, 250f32,
-                208f32, 241f32, 274f32, 307f32, 340f32
+                46f64, 52f64, 58f64, 64f64, 70f64,
+                100f64, 115f64, 130f64, 145f64, 160f64,
+                154f64, 178f64, 202f64, 226f64, 250f64,
+                208f64, 241f64, 274f64, 307f64, 340f64
             ]
         };
 
