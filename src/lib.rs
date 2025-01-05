@@ -2,7 +2,9 @@ pub mod cost_functions;
 pub mod geoalg;
 pub mod partitions;
 
-pub mod file_inputs;
+pub mod input_csv_reader;
+
+pub mod nn;
 
 use crate::partitions::*;
 

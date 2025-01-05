@@ -10,8 +10,6 @@ pub fn kronecker_delta_f32<I:Eq>(i: I, j: I) -> f32 {
 }
 
 /// Used to create an identity matrix of size n.
-/// # Arguments
-/// # Returns
 pub struct IdentityMatrixIterator {
     i: usize,
     n: usize
@@ -40,11 +38,21 @@ impl Iterator for IdentityMatrixIterator {
 pub struct Matrix {
     columns: usize,
     rows: usize,
-    //column_vectors: &'a Vec<Vec<f32>>,
-    pub values: Vec<f32>
+    values: Vec<f32>
 }
 
 impl Matrix {
+    pub fn from(values: Vec<f32>, rows: usize, columns: usize) -> Self {
+        Matrix {
+            rows,
+            columns,
+            values
+        }
+    }
+
+    /// Creates a matrix with columns * size elements where every element is zero
+    /// # Arguments
+    /// # Returns
     pub fn new_zeroed(columns: usize, rows: usize) -> Self {
         assert!(columns > 0);
         assert!(rows > 0);
@@ -60,6 +68,9 @@ impl Matrix {
         }
     }
 
+    /// Constructor for defining an identity matrix with n dimensions.
+    /// # Arguments
+    /// # Returns
     pub fn new_identity(n: usize) -> Self {
         assert!(n > 0);
 
@@ -101,12 +112,10 @@ impl Matrix {
         let mut rng = rand::thread_rng();
         let values = step.sample_iter(&mut rng).take(element_counts).collect();
 
-        //let random_range = (1..=element_count).map(|_| )
         Self {
             columns: i,
             rows: j,
             values,
-            //column_vectors: Matrix::gen_column_vectors(rows, columns, values)
         }
     }
 
@@ -114,6 +123,9 @@ impl Matrix {
     /// # Arguments
     /// # Returns
     pub fn index_for(&self, row: usize, column: usize) -> usize {
+        assert!(row < self.rows);
+        assert!(column < self.columns);
+
         row * self.columns + column
     }
 
@@ -127,14 +139,17 @@ impl Matrix {
     /// Returns slice of matrix that is a row of the matrix
     /// # Arguments
     /// # Returns
-    pub fn row_vector(&self, row: usize) -> &[f32] {
+    pub fn get_row_vector(&self, row: usize) -> &[f32] {
         assert!(row < self.rows);
 
         let start = row * self.columns;
         let end = start + self.columns;
-        &self.values[start..=end]
+        &self.values[start..end]
     }
 
+    /// Returns a newly allocated matrix that is the transpose of the matrix operated on.
+    /// # Arguments
+    /// # Returns
     pub fn get_transpose(&self) -> Matrix {
         let capacity = self.rows * self.columns;
         let mut transposed = Vec::with_capacity(capacity);
@@ -156,19 +171,20 @@ impl Matrix {
         }
     }
 
+    /// Multiplies two matrices using transpose operation for efficiency.
+    /// # Arguments
+    /// # Returns
     pub fn mul_using_transpose(&self, rhs: &Matrix) -> Matrix {
         assert_eq!(self.columns, rhs.rows);
-
-        let t = rhs.get_transpose();
-        let r_size = rhs.columns * rhs.rows;
+        let r_size = rhs.columns * self.rows;
         let mut floats = Vec::with_capacity(r_size);
 
+        let t = rhs.get_transpose();
+
         for row in 0..self.rows {
-            let offset = row * self.columns;
-            let ls = &self.values[offset..offset + self.columns];
+            let ls = self.get_row_vector(row);
             for t_row in 0..t.rows {
-                let offset = t_row * t.columns;
-                let rs = &t.values[offset..offset + t.columns];
+                let rs = t.get_row_vector(t_row);
 
                 let x = dot_product_of_vector_slices(ls, rs);
                 floats.push(x);
@@ -182,6 +198,11 @@ impl Matrix {
         }        
     }
 
+    /// Returns size of underlying vector.
+    pub fn get_element_count(&self) -> usize {
+        self.columns * self.rows
+    }
+
     // Getting column vectors proving to be tricky, 
     //  perhaps abandon for now and focus on transposing and only using slices for matrix rows since matrix is row-major?
     // fn column_vector<'a>(&'a mut self, column: usize) -> &[f32] {
@@ -191,6 +212,8 @@ impl Matrix {
 
 /// Dot product of two Vec<f32> slices. Will always assume they are same length (not production ready).
 /// How can this be effectively benchmarked and optimized?
+/// # Arguments
+/// # Returns
 pub fn dot_product_of_vector_slices(lhs: &[f32], rhs: &[f32]) -> f32 {
     assert_eq!(lhs.len(), rhs.len());
     let n = lhs.len();
@@ -207,6 +230,10 @@ pub fn dot_product_of_vector_slices(lhs: &[f32], rhs: &[f32]) -> f32 {
 impl Mul<&Matrix> for Matrix {
     type Output = Self;//Result<Self, Error>;
 
+    /// Naive implementation of matrix multiplication.
+    /// Does not take advantage of any optimizations.
+    /// # Arguments
+    /// # Returns
     fn mul(self, rhs: &Matrix) -> Self::Output {
         assert_eq!(self.columns, rhs.rows);
 
@@ -444,31 +471,34 @@ mod tests {
     #[test]
     fn matrix_mult_with_transpose() {
         let lhs = Matrix {
-            rows: 2,
-            columns: 4,
+            rows: 4,
+            columns: 3,
             values: vec![
-                1.0f32, 2.0f32, 3.0f32, 4.0f32,
-                -1.0f32, -2.0f32, -3.0f32, -4.0f32
-            ]
+                1f32, 2f32, 3f32,
+                4f32, 5f32, 6f32,
+                7f32, 8f32, 9f32,
+                10f32, 11f32, 12f32]
         };
 
         let rhs = Matrix {
-            rows: 4,
-            columns: 2,
+            rows: 3,
+            columns: 5,
             values: vec![
-                3.0f32, 8.0f32,
-                1.0f32, 1.2f32,
-                0.8f32, 1.9f32,
-                5.0f32, 6.0f32
+                1f32, 2f32, 3f32, 4f32, 5f32,
+                6f32, 7f32, 8f32, 9f32, 10f32,
+                11f32, 12f32, 13f32, 14f32, 15f32
             ]
         };
 
+        // Resultant matrix needs to have aas many rows as lhs, and as many columns as rhs.
         let expected = Matrix {
-            rows: 2,
-            columns: 2,
+            rows: 4,
+            columns: 5,
             values: vec! [
-                27.4f32, 40.1f32,
-                -27.4f32, -40.1f32
+                46f32, 52f32, 58f32, 64f32, 70f32,
+                100f32, 115f32, 130f32, 145f32, 160f32,
+                154f32, 178f32, 202f32, 226f32, 250f32,
+                208f32, 241f32, 274f32, 307f32, 340f32
             ]
         };
 

@@ -6,5 +6,3 @@ edition = "2021"
 [dependencies]
 rand = "0.8.5"
 colored = "2"
-flate2 = "1.0"
-ndarray = "0.16"
