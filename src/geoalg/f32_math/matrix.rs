@@ -1,4 +1,4 @@
-use std::ops::Mul;
+use std::ops::{Add, Mul};
 
 use rand::{distributions::{Distribution, Uniform}, Error};
 
@@ -29,20 +29,24 @@ impl Iterator for IdentityMatrixIterator {
     }
 }
 
-/// Mmatrix is implemented as a single dimensional vector of f32s.
+/// Matrix is implemented as a single dimensional vector of f32s.
 /// This implementation of Matrix is row-major. 
 /// Row-major is specified so certain optimizations and parallelization can be performed.
 /// Column-major is not yet implemented.
-#[derive(PartialEq)]
-#[derive(Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Matrix {
     columns: usize,
     rows: usize,
-    values: Vec<f32>
+    pub values: Vec<f32>
 }
 
 impl Matrix {
+    /// Create a matrix from a vector.
+    /// # Arguments
+    /// # Returns
     pub fn from(values: Vec<f32>, rows: usize, columns: usize) -> Self {
+        assert_eq!(rows * columns, values.len());
+        
         Matrix {
             rows,
             columns,
@@ -63,8 +67,7 @@ impl Matrix {
         Self {
             columns,
             rows,
-            values: values,
-            //column_vectors: Matrix::gen_column_vectors(rows, columns, &values)
+            values: values
         }
     }
 
@@ -103,18 +106,18 @@ impl Matrix {
     /// Returns an ixj matrix filled with random values between -1.0 and 1.0 inclusive.
     /// # Arguments
     /// # Returns
-    pub fn new_randomized(i: usize, j: usize) -> Self {
-        assert!(i > 0);
-        assert!(j > 0);
+    pub fn new_randomized(columns: usize, rows: usize) -> Self {
+        assert!(columns > 0);
+        assert!(rows > 0);
 
         let step = Uniform::new_inclusive(-1.0f32, 1.0f32);
-        let element_counts = i * j;
+        let element_counts = columns * rows;
         let mut rng = rand::thread_rng();
         let values = step.sample_iter(&mut rng).take(element_counts).collect();
 
         Self {
-            columns: i,
-            rows: j,
+            columns,
+            rows,
             values,
         }
     }
@@ -139,7 +142,7 @@ impl Matrix {
     /// Returns slice of matrix that is a row of the matrix
     /// # Arguments
     /// # Returns
-    pub fn get_row_vector(&self, row: usize) -> &[f32] {
+    pub fn get_row_vector_slice(&self, row: usize) -> &[f32] {
         assert!(row < self.rows);
 
         let start = row * self.columns;
@@ -182,9 +185,9 @@ impl Matrix {
         let t = rhs.get_transpose();
 
         for row in 0..self.rows {
-            let ls = self.get_row_vector(row);
+            let ls = self.get_row_vector_slice(row);
             for t_row in 0..t.rows {
-                let rs = t.get_row_vector(t_row);
+                let rs = t.get_row_vector_slice(t_row);
 
                 let x = dot_product_of_vector_slices(ls, rs);
                 floats.push(x);
@@ -227,8 +230,25 @@ pub fn dot_product_of_vector_slices(lhs: &[f32], rhs: &[f32]) -> f32 {
     sum
 }
 
+impl Add<&Matrix> for Matrix {
+    type Output = Matrix;
+
+    fn add(self, rhs: &Matrix) -> Self::Output {
+        assert_eq!(self.columns, rhs.columns);
+        assert_eq!(self.rows, rhs.rows);
+
+        let values = self.values.iter().zip(rhs.values.iter()).map(|(x, y)| x + y).collect();
+
+        Matrix {
+            columns: rhs.columns,
+            rows: rhs.rows,
+            values
+        }
+    }
+}
+
 impl Mul<&Matrix> for Matrix {
-    type Output = Self;//Result<Self, Error>;
+    type Output = Self;
 
     /// Naive implementation of matrix multiplication.
     /// Does not take advantage of any optimizations.
@@ -272,6 +292,43 @@ impl Mul<&Matrix> for Matrix {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_matrix_add() {
+        let lhs = Matrix {
+            rows: 3,
+            columns: 3,
+            values: vec![
+                1f32, 2f32, 3f32,
+                4f32, 5f32, 6f32,
+                7f32, 8f32, 9f32
+            ]
+        };
+
+        let rhs = Matrix {
+            rows: 3,
+            columns: 3,
+            values: vec![
+                -1f32, -2f32, -3f32,
+                -4f32, -5f32, -6f32,
+                -7f32, -8f32, -9f32
+            ]
+        };
+
+        let actual = lhs + &rhs;
+
+        let expected = Matrix {
+            rows: 3,
+            columns: 3,
+            values: vec![
+                0f32, 0f32, 0f32,
+                0f32, 0f32, 0f32,
+                0f32, 0f32, 0f32
+            ]
+        };
+
+        assert_eq!(actual, expected);
+    }
 
     #[test]
     fn transpose_test() {
