@@ -109,6 +109,22 @@ impl Matrix {
         &self.values[start..end]
     }
 
+    /// Given a specified row, return it transposed as a column.
+    /// # Arguments
+    /// # Returns
+    pub fn get_row_transposed_as_column(&self, row: usize) -> Matrix {
+        assert!(row < self.rows);
+
+        let start = row * self.columns;
+        let end = start + self.columns;
+
+        Matrix {
+            columns: 1,
+            rows: self.columns,
+            values: self.values[start..end].to_vec()
+        }
+    }
+
     /// Returns a newly allocated matrix that is the transpose of the matrix operated on.
     /// # Arguments
     /// # Returns
@@ -213,6 +229,7 @@ impl Matrix {
         }
     }
 
+    /// Adds two matrices together. Efficient and easy because both matrices same order.
     pub fn add(&self, rhs: &Matrix) -> Matrix {
         assert_eq!(self.columns, rhs.columns);
         assert_eq!(self.rows, rhs.rows);
@@ -225,6 +242,27 @@ impl Matrix {
             values
         }
     }
+
+    /// Adds a Matrix of shape 1xn to every column. Each matrix must have same number of rows and rhs must have exactly 1 column.
+    pub fn add_column_vector(&self, rhs: &Matrix) -> Matrix {
+        assert_eq!(rhs.columns, 1);
+        assert_eq!(self.rows, rhs.rows);
+
+        let mut r = Vec::with_capacity(self.get_element_count());
+        
+        for row in 0..self.rows {
+            let lhs_row = self.get_row_vector_slice(row);
+            let new_row = lhs_row.iter().map(|f| f + rhs.values[row]);
+            r.extend(new_row);
+        }
+
+        Matrix {
+            columns: self.columns,
+            rows: self.rows,
+            values: r
+        }
+    }
+
     // Getting column vectors proving to be tricky, 
     //  perhaps abandon for now and focus on transposing and only using slices for matrix rows since matrix is row-major?
     // fn column_vector<'a>(&'a mut self, column: usize) -> &[f64] {
@@ -277,6 +315,42 @@ impl std::fmt::Display for Matrix {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_add_column() {
+        let lhs = Matrix {
+            rows: 3,
+            columns: 3,
+            values: vec![
+                1f64, 2f64, 3f64,
+                4f64, 5f64, 6f64,
+                7f64, 8f64, 9f64
+            ]
+        };
+
+        let rhs = Matrix {
+            rows: 3,
+            columns: 1,
+            values: vec![
+                10.0,
+                20.0,
+                30.0
+            ]
+        };
+
+        let expected = Matrix {
+            rows: 3,
+            columns: 3,
+            values: vec![
+                11.0, 12.0, 13.0,
+                24.0, 25.0, 26.0,
+                37.0, 38.0, 39.0
+            ]
+        };
+
+        let actual = lhs.add_column_vector(&rhs);
+        assert_eq!(actual, expected);
+    }
 
     #[test]
     fn test_matrix_add() {
@@ -407,7 +481,7 @@ mod tests {
 
         let r = m28x28.values.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", ");
 
-        println!("{r}");
+        //println!("{r}");
     }
 
     #[test]

@@ -99,7 +99,7 @@ impl Network {
 mod tests {
     use super::*;
 
-    #[ignore = "reason"]
+    #[ignore = "long running"]
     #[test]
     fn test() {
         let inputs = vec![
@@ -113,9 +113,9 @@ mod tests {
             vec![0f64], vec![1f64], vec![1f64], vec![0f64]
         ];
 
-        let mut network = Network::new(vec![2,3,1], RELU, 0.01f64);
+        let mut network = Network::new(vec![2,2,1], SIGMOID, 0.5f64);
 
-        network.train(inputs, targets, 100000);
+        network.train(inputs, targets, 500);
 
         println!("{:?}", network.feed_forward(Matrix::from(vec![0.0f64, 0.0f64])));
         println!("{:?}", network.feed_forward(Matrix::from(vec![0.0f64, 1.0f64])));
