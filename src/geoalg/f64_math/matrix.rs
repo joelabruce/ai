@@ -1,5 +1,3 @@
-use std::ops::Mul;
-
 use rand::distributions::{Distribution, Uniform};
 
 /// Calculates the Kronecker Delta given i and j that are equatable to eachother.
@@ -7,26 +5,6 @@ use rand::distributions::{Distribution, Uniform};
 /// # Returns
 pub fn kronecker_delta_f64<I:PartialEq>(i: I, j: I) -> f64 {
     if i == j { 1.0 } else { 0.0 } 
-}
-
-/// Used to create an identity matrix of size n.
-pub struct IdentityMatrixIterator {
-    i: usize,
-    n: usize
-}
-
-impl Iterator for IdentityMatrixIterator {
-    type Item = f64;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.i += 1;
-
-        let p = self.i % (self.n + 1);
-        let r = kronecker_delta_f64(p, 1);
-        let n2 = self.n * self.n;
-
-        if self.i <= n2 { Some(r) } else { None }
-    }
 }
 
 /// Matrix is implemented as a single dimensional vector of f64s.
@@ -71,30 +49,11 @@ impl Matrix {
         }
     }
 
-    /// Constructor for defining an identity matrix with n dimensions.
-    /// # Arguments
-    /// # Returns
+    /// Possibly faster way to implement an identity matrix.
     pub fn new_identity(n: usize) -> Self {
         assert!(n > 0);
 
-        let imi = IdentityMatrixIterator {
-            i: 0,
-            n
-        };
-
-        let values = imi.collect::<Vec<_>>();
-        Self {
-            columns: n,
-            rows: n,
-            values
-        }
-    }
-
-    /// Possibly faster way to implement an identity matrix.
-    pub fn new_identity_alt(n: usize) -> Self {
-        assert!(n > 0);
-
-        let values = (0..n).map(|i| kronecker_delta_f64(i % (n + 1), 0)).collect();
+        let values = (0..n*n).map(|i| kronecker_delta_f64(i % (n + 1), 0)).collect();
 
         Self {
             columns: n,
@@ -193,7 +152,7 @@ impl Matrix {
     /// Multiplies two matrices using transpose operation for efficiency.
     /// # Arguments
     /// # Returns
-    pub fn mul_using_transpose(&self, rhs: &Matrix) -> Matrix {
+    pub fn mul(&self, rhs: &Matrix) -> Matrix {
         assert_eq!(self.columns, rhs.rows);
         let r_size = rhs.columns * self.rows;
         let mut floats = Vec::with_capacity(r_size);
@@ -222,7 +181,17 @@ impl Matrix {
         self.columns * self.rows
     }
 
-    pub fn map(&mut self, func: impl Fn(&f64) -> f64) -> Matrix {
+    pub fn map_with_capture(&mut self, func: impl Fn(&f64) -> f64) -> Matrix {
+        let values = self.values.iter().map(|&val| func(&val)).collect();
+        
+        Matrix {
+            rows: self.rows,
+            columns: self.columns,
+            values: values
+        } 
+    }
+
+    pub fn map(&mut self, func: fn(&f64) -> f64) -> Matrix {
         let values = self.values.iter().map(|&val| func(&val)).collect();
         
         Matrix {
@@ -288,48 +257,6 @@ pub fn dot_product_of_vector_slices(lhs: &[f64], rhs: &[f64]) -> f64 {
     }
 
     sum
-}
-
-impl Mul<&Matrix> for Matrix {
-    type Output = Self;
-
-    /// Naive implementation of matrix multiplication.
-    /// Does not take advantage of any optimizations.
-    /// # Arguments
-    /// # Returns
-    fn mul(self, rhs: &Matrix) -> Self::Output {
-        assert_eq!(self.columns, rhs.rows);
-
-        let r_size = rhs.columns * rhs.rows;
-
-        let mut floats = Vec::with_capacity(r_size);
-
-        for c in 0..self.rows {
-            for b in 0..rhs.columns {
-                let mut accumulator = 0f64;
-                for a in 0..self.columns {
-                    let x = match self.get(c, a) {
-                        Some(r) => r,
-                        None => panic!("Out of bounds for matrix lhs")
-                    };
-                    let y = match rhs.get(a, b) {
-                        Some(r)  => r,
-                        None => panic!("Out of bounds for matrix rhs")
-                        
-                    };
-                    let v = x * y;
-                    accumulator += v;
-                }
-                floats.push(accumulator);
-            }
-        }
-        
-        Matrix {
-            columns: rhs.columns,
-            rows: self.rows,
-            values: floats
-        }
-    }
 }
 
 impl std::fmt::Display for Matrix {
@@ -419,56 +346,6 @@ mod tests {
 
     #[test]
     fn identity_1() {
-        let imi = IdentityMatrixIterator { i: 0, n: 1 };
-
-        let actual = imi.collect::<Vec<_>>();
-        let expected = vec![1.0f64];
-
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn identity_2() {
-        let imi = IdentityMatrixIterator { i: 0, n: 2 };
-
-        let actual = imi.collect::<Vec<_>>();
-        let expected = vec![
-            1.0f64, 0.0f64,
-            0.0f64, 1.0f64];
-
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn identity_3() {
-        let imi = IdentityMatrixIterator { i: 0, n: 3 };
-
-        let actual = imi.collect::<Vec<_>>();
-        let expected = vec![
-            1.0f64, 0.0f64, 0.0f64, 
-            0.0f64, 1.0f64, 0.0f64, 
-            0.0f64, 0.0f64, 1.0f64];
-
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn identity_4() {
-        let imi = IdentityMatrixIterator { i: 0, n: 4 };
-
-        let actual = imi.collect::<Vec<_>>();
-        let expected = vec![
-            1.0f64, 0.0f64, 0.0f64, 0.0f64,
-            0.0f64, 1.0f64, 0.0f64, 0.0f64,
-            0.0f64, 0.0f64, 1.0f64, 0.0f64,
-            0.0f64, 0.0f64, 0.0f64, 1.0f64
-            ];
-
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn identity_1_alt() {
         let actual = Matrix::new_identity(1);
         let expected = Matrix{
             rows: 1,
@@ -480,7 +357,7 @@ mod tests {
     }
 
     #[test]
-    fn identity_2_alt() {
+    fn identity_2() {
         let actual = Matrix::new_identity(2);
         let expected = Matrix {
             rows: 2,
@@ -494,7 +371,7 @@ mod tests {
     }
 
     #[test]
-    fn identity_3_alt() {
+    fn identity_3() {
         let actual = Matrix::new_identity(3);
         let expected = Matrix {
             rows: 3,
@@ -509,7 +386,7 @@ mod tests {
     }
 
     #[test]
-    fn identity_4_alt() {
+    fn identity_4() {
         let actual = Matrix::new_identity(4);
         let expected = Matrix {
             rows: 4,
@@ -548,43 +425,7 @@ mod tests {
     }
 
     #[test]
-    fn matrix_mult() {
-        let lhs = Matrix {
-            rows: 2,
-            columns: 4,
-            values: vec![
-                1.0f64, 2.0f64, 3.0f64, 4.0f64,
-                -1.0f64, -2.0f64, -3.0f64, -4.0f64
-            ]
-        };
-
-        let rhs = Matrix {
-            rows: 4,
-            columns: 2,
-            values: vec![
-                3.0f64, 8.0f64,
-                1.0f64, 1.2f64,
-                0.8f64, 1.9f64,
-                5.0f64, 6.0f64
-            ]
-        };
-
-        let expected = Matrix {
-            rows: 2,
-            columns: 2,
-            values: vec! [
-                27.4f64, 40.1f64,
-                -27.4f64, -40.1f64
-            ]
-        };
-
-        let actual = lhs * &rhs;
-
-        assert!(actual == expected);        
-    }
-
-    #[test]
-    fn matrix_mult_with_transpose() {
+    fn matrix_mul() {
         let lhs = Matrix {
             rows: 4,
             columns: 3,
@@ -617,7 +458,7 @@ mod tests {
             ]
         };
 
-        let actual = Matrix::mul_using_transpose(&lhs, &rhs);
+        let actual = Matrix::mul(&lhs, &rhs);
 
         assert!(actual == expected);        
     }

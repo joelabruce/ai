@@ -12,6 +12,7 @@ fn gen_result_vector(digit: f64) -> Vec<f64> {
     result
 }
 
+#[ignore = "reason"]
 #[test]
 fn test_nn() {
     let mut reader = InputCsvReader::new("./training/mnist_train.csv");

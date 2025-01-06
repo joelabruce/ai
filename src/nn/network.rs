@@ -36,11 +36,22 @@ impl Network {
         let mut current = inputs;
         self.data = vec![current.clone()];
 
-        for i in 0..self.layers.len() - 1 {
-            current = self.weights[i]
-                .mul_using_transpose(&current)
-                .add(&self.biases[i])
-                .map(self.activation.function);
+        let layers_to_calc = self.layers.len() - 1;
+
+        for i in 0..layers_to_calc {
+            let mut partial =
+                self.weights[i]
+                .mul(&current)
+                .add(&self.biases[i]);
+
+            if i < layers_to_calc - 1 {
+                current = partial
+                    .map_with_capture(self.activation.function);
+            }
+            else {
+                current = partial
+                    .map_with_capture(self.activation.function);
+            }
 
             self.data.push(current.clone());
         }
@@ -51,18 +62,24 @@ impl Network {
     pub fn back_propogate(&mut self, inputs: Matrix, targets: Matrix) {
         let mut errors = targets.sub(&inputs);
 
-        let mut gradients = inputs.clone().map(self.activation.derivative);
+        let mut gradients = inputs.clone().map_with_capture(self.activation.derivative);
 
-        for i in (0..self.layers.len() - 1).rev() {
+        let layers_to_calc = self.layers.len() - 1;
+
+        for i in (0..layers_to_calc).rev() {
             gradients = gradients.elementwise_multiply(&errors)
-                .map(|x| x * self.learning_rate);
+                .map_with_capture(|x| x * self.learning_rate);
 
-            self.weights[i] = self.weights[i].add(&gradients.mul_using_transpose(&self.data[i].get_transpose()));
-
+            self.weights[i] = self.weights[i].add(&gradients.mul(&self.data[i].get_transpose()));
             self.biases[i] = self.biases[i].add(&gradients);
+            errors = self.weights[i].get_transpose().mul(&errors);
 
-            errors = self.weights[i].get_transpose().mul_using_transpose(&errors);
-            gradients = self.data[i].map(self.activation.derivative);
+            if i < layers_to_calc - 1 {
+                gradients = self.data[i].map_with_capture(self.activation.derivative);
+            }
+            else {
+                gradients = self.data[i].map_with_capture(self.activation.derivative);
+            }
         }
     }
 
