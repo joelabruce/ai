@@ -8,8 +8,8 @@ pub struct Activation {
 }
 
 pub const RELU: Activation = Activation {
-    function: |x| if *x <= 0f64 { 0f64 } else { *x },
-    derivative: |x| if *x <= 0f64 { 0f64 } else { 1f64 }
+    function: |x| if *x <= 0.0 { 0.0 } else { *x },
+    derivative: |x| if *x <= 0.0 { 0.0 } else { 1.0 }
 };
 
 pub const SIGMOID: Activation = Activation {
@@ -54,7 +54,7 @@ pub const SOFTMAX: OutputActivation = OutputActivation {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    //use super::*;
 
     #[test]
     fn softmax_tes() {

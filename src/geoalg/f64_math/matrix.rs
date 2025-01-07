@@ -169,7 +169,8 @@ impl Matrix {
     /// # Arguments
     /// # Returns
     pub fn mul(&self, rhs: &Matrix) -> Matrix {
-        assert_eq!(self.columns, rhs.rows);
+        assert_eq!(self.columns, rhs.rows, "When multiplying matrices, lhs columns must equal rhs rows.");
+
         let r_size = rhs.columns * self.rows;
         let mut floats = Vec::with_capacity(r_size);
 
@@ -218,7 +219,7 @@ impl Matrix {
     }
 
     pub fn sub(&self, rhs: &Matrix) -> Matrix {
-        assert!(self.columns == rhs.columns && self.rows == rhs.rows, "Subtracting matrices of different orders");
+        assert!(self.columns == rhs.columns && self.rows == rhs.rows, "Cannot subtract matrices with different orders.");
 
         let values = self.values.iter().zip(rhs.values.iter()).map(|(x, y)| x - y).collect();
 
@@ -231,8 +232,8 @@ impl Matrix {
 
     /// Adds two matrices together. Efficient and easy because both matrices same order.
     pub fn add(&self, rhs: &Matrix) -> Matrix {
-        assert_eq!(self.columns, rhs.columns);
-        assert_eq!(self.rows, rhs.rows);
+        assert_eq!(self.columns, rhs.columns, "Columns of lhs and rhs must be equal when adding matrices.");
+        assert_eq!(self.rows, rhs.rows, "Rows of lhs and rhs must be equal when adding matrices.");
 
         let values = self.values.iter().zip(rhs.values.iter()).map(|(x, y)| x + y).collect();
 
@@ -243,10 +244,21 @@ impl Matrix {
         }
     }
 
+    pub fn div_by_scalar(&self, scalar: f64) -> Matrix {
+        assert_ne!(scalar, 0.0, "Cannot divide matrix elements by zero.");
+        let values = self.values.iter().map(|x| x / scalar).collect();
+
+        Matrix {
+            rows: self.rows,
+            columns: self.columns,
+            values
+        }
+    }
+
     /// Adds a Matrix of shape 1xn to every column. Each matrix must have same number of rows and rhs must have exactly 1 column.
     pub fn add_column_vector(&self, rhs: &Matrix) -> Matrix {
-        assert_eq!(rhs.columns, 1);
-        assert_eq!(self.rows, rhs.rows);
+        assert_eq!(rhs.columns, 1, "Rhs matrix must have 1 column.");
+        assert_eq!(self.rows, rhs.rows, "Lhs and rhs must have equal number of rows.");
 
         let mut r = Vec::with_capacity(self.get_element_count());
         
@@ -479,7 +491,7 @@ mod tests {
     fn random_matrix() {
         let m28x28 = Matrix::new_randomized(28, 28);
 
-        let r = m28x28.values.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", ");
+        let _r =m28x28.values.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", ");
 
         //println!("{r}");
     }
