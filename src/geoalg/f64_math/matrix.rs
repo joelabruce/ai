@@ -8,6 +8,12 @@ pub fn kronecker_delta_f64<I:PartialEq>(i: I, j: I) -> f64 {
     if i == j { 1.0 } else { 0.0 } 
 }
 
+pub fn one_hot_encode(label: f64, bounds: usize) -> Vec<f64> {
+    (0..bounds)
+        .map(|x| kronecker_delta_f64(label, x as f64))
+        .collect()
+}
+
 /// Matrix is implemented as a single dimensional vector of f64s.
 /// This implementation of Matrix is row-major. 
 /// Row-major is specified so certain optimizations and parallelization can be performed.

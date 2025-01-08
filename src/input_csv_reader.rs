@@ -67,10 +67,10 @@ mod tests {
 
         let (v, tag) = reader.read_and_parse_data_line(784);
         assert_eq!(v.len(), 784);
-        assert_eq!(tag, 7f64);
+        assert_eq!(tag, 7.0);
 
         let (v, tag) = reader.read_and_parse_data_line(784);
         assert_eq!(v.len(), 784);
-        assert_eq!(tag, 2f64);
+        assert_eq!(tag, 2.0);
     }
 }

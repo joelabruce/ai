@@ -101,23 +101,28 @@ impl HiddenLayer {
 #[cfg(test)]
 mod tests {
      use super::*;
-     use crate::nn::activation_functions::*;
+     use crate::{input_csv_reader::InputCsvReader, nn::activation_functions::*};
 
-    #[test]
+    //#[ignore = "not finished"]
+    //#[test]
     fn test() {
-        let input_count = 2;
+        let mut reader = InputCsvReader::new("./training/mnist_train.csv");
+        let _ = reader.read_and_skip_header_line();
 
-        let raw_inputs = vec![
-            vec![0.5; 784]
-            , vec![0.5; 784]
-        ];
+        let mut target_ohes = vec![];
+        let mut raw_inputs = vec![];
+        let input_count = 32;
+
+        for _sample in 0..input_count {
+            let (v, label) = reader.read_and_parse_data_line(784);
+            raw_inputs.push(v);
+            target_ohes.extend(one_hot_encode(label, 10));
+        }
 
         let targets = Matrix {
             rows: input_count,
             columns: 10,
-            values: vec![
-                1.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0,
-                0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0]
+            values: target_ohes
         };
 
         // Create Layers in network
@@ -162,6 +167,6 @@ mod tests {
         // Will implement adam optimization later. Whew
         let dvalues3 = dense2.backward(&dvalues4, &fcalc3);
         let dvalues2 = RELU.backward(&dvalues3, &fcalc2);
-        let dvalues1 = dense1.backward(&dvalues2, &fcalc1);
+        let _dvalues1 = dense1.backward(&dvalues2, &fcalc1);
     }
 }
