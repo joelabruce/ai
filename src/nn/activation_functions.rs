@@ -1,29 +1,54 @@
 use std::f64::consts::E;
-
 use crate::geoalg::f64_math::matrix::Matrix;
+use crate::nn::layers::*;
 
 pub struct Activation {
-    pub function: fn(&f64) -> f64,
-    pub derivative: fn(&f64) -> f64
+    pub f: fn(&f64) -> f64,
+    pub d: fn(&f64) -> f64
 }
 
-pub const RELU: Activation = Activation {
-    function: |x| if *x <= 0.0 { 0.0 } else { *x },
-    derivative: |x| if *x <= 0.0 { 0.0 } else { 1.0 }
-};
+impl Activation {
+    pub fn forward(&self, layer: &HiddenLayer, inputs: &Matrix) -> Matrix {
+        layer.weights
+            .mul(&inputs)
+            .add_column_vector(&layer.biases)
+    }
+
+    pub fn backward<'a>(&self, inputs: &'a Matrix) -> Matrix {
+        inputs.clone()
+    }
+}
 
 pub const SIGMOID: Activation = Activation {
-    function: |x| 1f64 / (1f64 - E.powf(-(x))),
-    derivative: |x| (x) * (1f64 - (x))
+    f: |x| 1.0 / (1.0 - E.powf(-(x))),
+    d: |x| (x) * (1.0 - (x))
 };
 
-pub struct OutputActivation {
-    pub function: fn(&Matrix) -> Matrix,
-    pub derivative: fn(&Matrix) -> Matrix
+pub const RELU: Activation = Activation {
+    f: |x| if *x <= 0.0 { 0.0 } else { *x },
+    d: |x| if *x <= 0.0 { 0.0 } else { 1.0 }
+};
+
+pub const H_SWISH: Activation = Activation {
+    f: |x| {
+        if *x <= -3.0                   { 0.0 }
+        else if -3.0 < *x && *x < 3.0   { x * (x + 3.0) / 6.0 }
+        else                            { *x }
+    },
+    d: |x| {
+        if *x <= -3.0                   { 0.0 }
+        else if -3.0 < *x && *x < 3.0   { (2.0 * x + 3.0) / 6.0 }
+        else                            { 1.0 }  
+    }
+};
+
+pub struct FoldActivation {
+    pub f: fn(&Matrix) -> Matrix,
+    pub d: fn(&Matrix) -> Matrix
 }
 
-pub const SOFTMAX: OutputActivation = OutputActivation {
-    function: |m| {
+pub const SOFTMAX: FoldActivation = FoldActivation {
+    f: |m| {
         let t_mat = m.get_transpose();
 
         let mut r = Vec::with_capacity(m.get_element_count());
@@ -46,7 +71,7 @@ pub const SOFTMAX: OutputActivation = OutputActivation {
 
         r.get_transpose()
     },
-    derivative: |v| {
+    d: |v| {
         //v.to_vec()
         Matrix::new_zeroed(v.columns, v.rows)
     }

@@ -39,18 +39,18 @@ impl Network {
         let layers_to_calc = self.layers.len() - 1;
 
         for i in 0..layers_to_calc {
-            let mut partial =
+            let partial =
                 self.weights[i]
                 .mul(&current)
                 .add(&self.biases[i]);
 
             if i < layers_to_calc - 1 {
                 current = partial
-                    .map_with_capture(self.activation.function);
+                    .map_with_capture(self.activation.f);
             }
             else {
                 current = partial
-                    .map_with_capture(self.activation.function);
+                    .map_with_capture(self.activation.f);
             }
 
             self.data.push(current.clone());
@@ -62,7 +62,7 @@ impl Network {
     pub fn back_propogate(&mut self, inputs: Matrix, targets: Matrix) {
         let mut errors = targets.sub(&inputs);
 
-        let mut gradients = inputs.clone().map_with_capture(self.activation.derivative);
+        let mut gradients = inputs.clone().map_with_capture(self.activation.d);
 
         let layers_to_calc = self.layers.len() - 1;
 
@@ -75,10 +75,10 @@ impl Network {
             errors = self.weights[i].get_transpose().mul(&errors);
 
             if i < layers_to_calc - 1 {
-                gradients = self.data[i].map_with_capture(self.activation.derivative);
+                gradients = self.data[i].map_with_capture(self.activation.d);
             }
             else {
-                gradients = self.data[i].map_with_capture(self.activation.derivative);
+                gradients = self.data[i].map_with_capture(self.activation.d);
             }
         }
     }

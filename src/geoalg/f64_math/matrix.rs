@@ -198,7 +198,24 @@ impl Matrix {
         self.columns * self.rows
     }
 
-    pub fn map_with_capture(&mut self, func: impl Fn(&f64) -> f64) -> Matrix {
+    /// Useful for applying an activation function to the entire matrix.
+    /// *Allows to map capturing a variable outside of the closure.
+    /// # Arguments
+    /// # Returns
+    pub fn map_with_capture(&self, func: impl Fn(&f64) -> f64) -> Matrix {
+        let values = self.values.iter().map(|val| func(val)).collect();
+        
+        Matrix {
+            rows: self.rows,
+            columns: self.columns,
+            values: values
+        } 
+    }
+
+    /// Useful for applying an activation function to the entire matrix.
+    /// # Arguments
+    /// # Returns
+    pub fn map(&self, func: fn(&f64) -> f64) -> Matrix {
         let values = self.values.iter().map(|&val| func(&val)).collect();
         
         Matrix {
@@ -208,16 +225,9 @@ impl Matrix {
         } 
     }
 
-    pub fn map(&mut self, func: fn(&f64) -> f64) -> Matrix {
-        let values = self.values.iter().map(|&val| func(&val)).collect();
-        
-        Matrix {
-            rows: self.rows,
-            columns: self.columns,
-            values: values
-        } 
-    }
-
+    /// Elementwise difference of two matrices.
+    /// # Arguments
+    /// # Returns
     pub fn sub(&self, rhs: &Matrix) -> Matrix {
         assert!(self.columns == rhs.columns && self.rows == rhs.rows, "Cannot subtract matrices with different orders.");
 
@@ -230,7 +240,7 @@ impl Matrix {
         }
     }
 
-    /// Adds two matrices together. Efficient and easy because both matrices same order.
+    /// Adds two matrices together. Efficient and easy because both matrices must have same order.
     pub fn add(&self, rhs: &Matrix) -> Matrix {
         assert_eq!(self.columns, rhs.columns, "Columns of lhs and rhs must be equal when adding matrices.");
         assert_eq!(self.rows, rhs.rows, "Rows of lhs and rhs must be equal when adding matrices.");
@@ -244,6 +254,9 @@ impl Matrix {
         }
     }
 
+    /// Elementwise division of matrix by scalar.
+    /// # Arguments
+    /// # Returns
     pub fn div_by_scalar(&self, scalar: f64) -> Matrix {
         assert_ne!(scalar, 0.0, "Cannot divide matrix elements by zero.");
         let values = self.values.iter().map(|x| x / scalar).collect();
