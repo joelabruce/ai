@@ -122,7 +122,7 @@ impl Matrix {
     /// # Arguments
     /// # Returns
     pub fn get_row_vector_slice(&self, row: usize) -> &[f64] {
-        assert!(row < self.rows);
+        assert!(row < self.rows, "Tried to get a row that was out of bounds.");
 
         let start = row * self.columns;
         let end = start + self.columns;
@@ -170,8 +170,8 @@ impl Matrix {
     }
 
     pub fn elementwise_multiply(&self, rhs: &Matrix) -> Matrix {
-        assert_eq!(self.columns, rhs.columns);
-        assert_eq!(self.rows, rhs.rows);
+        assert_eq!(self.columns, rhs.columns, "Columns must match for elementwise multiply.");
+        assert_eq!(self.rows, rhs.rows, "Rows must match for elementwise multiply.");
 
         let values = self.values.iter()
             .zip(rhs.values.iter())
@@ -304,6 +304,28 @@ impl Matrix {
         Matrix {
             columns: self.columns,
             rows: self.rows,
+            values: r
+        }
+    }
+
+    /// Adds a given row to each row in lhs matrix.
+    pub fn add_row_vector(&self, rhs: &Matrix) -> Matrix {
+        assert_eq!(rhs.rows, 1, "Rhs matrix must have 1 row.");
+        assert_eq!(self.columns, rhs.columns, "Lhs and rhs must have equal number of columns.");
+
+        let mut r = Vec::with_capacity(self.get_element_count());
+        for row in 0..self.rows{
+            let x = self.get_row_vector_slice(row);
+            let y = rhs.get_row_vector_slice(0);
+
+            let xplusy = x.iter().zip(y.iter()).map(|(a, b)| a + b).collect::<Vec<f64>>();
+
+            r.extend(xplusy);
+        }
+
+        Matrix {
+            rows: self.rows,
+            columns: self.columns,
             values: r
         }
     }

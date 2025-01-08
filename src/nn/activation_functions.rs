@@ -1,6 +1,5 @@
 use std::f64::consts::E;
 use crate::geoalg::f64_math::matrix::Matrix;
-use crate::nn::layers::*;
 
 pub struct Activation {
     pub f: fn(&f64) -> f64,
@@ -8,16 +7,26 @@ pub struct Activation {
 }
 
 impl Activation {
-    pub fn forward(&self, layer: &HiddenLayer, inputs: &Matrix) -> Matrix {
-        layer.weights
-            .mul(&inputs)
-            .add_column_vector(&layer.biases)
+    pub fn forward(&self, inputs: &Matrix) -> Matrix {
+        inputs.map(self.f)
     }
 
-    pub fn backward<'a>(&self, mut layer: &'a HiddenLayer, inputs: &'a Matrix, dvalues: &'a Matrix) -> Matrix {
-        let t = inputs.get_transpose();
+    pub fn backward<'a>(&self, dvalues: &'a Matrix, inputs: &'a Matrix) -> Matrix {
+        assert_eq!(dvalues.rows, inputs.rows, "Backpropagation RELU needs inputs and dvalues to have same rows.");
+        assert_eq!(dvalues.columns, inputs.columns, "Backpropagation RELU needs inputs and dvalues to have same columns.");
         
-        inputs.clone()
+        let values = dvalues.values
+            .iter()
+            .zip(inputs.values.clone())
+            .map(|(x, y)| {
+                if y <= 0.0 { 0.0 } else { *x }
+            }).collect();
+
+        Matrix {
+            rows: dvalues.rows,
+            columns: dvalues.columns,
+            values
+        }
     }
 }
 
@@ -44,6 +53,27 @@ pub const H_SWISH: Activation = Activation {
     }
 };
 
+/// Calculates the cross-entropy (used with softmax) for each input sample.
+pub fn forward_categorical_cross_entropy_loss(predictions: &Matrix, expected: &Matrix) -> Matrix {
+    let t: Matrix = predictions.elementwise_multiply(expected);//.get_transpose();
+    let mut r = Vec::with_capacity(t.rows);
+    for row in 0..t.rows {
+        let loss = -t.get_row_vector_slice(row).iter().sum::<f64>().log10();
+        r.push(loss);
+    }
+
+    Matrix {
+        rows: 1,
+        columns: t.rows,
+        values: r
+    }
+}
+
+/// Error, same as softmax derivative??
+pub fn backward_categorical_cross_entropy_loss_wrt_softmax(predictions: &Matrix, expected: &Matrix) -> Matrix {
+    predictions.sub(&expected)
+}
+
 pub struct FoldActivation {
     pub f: fn(&Matrix) -> Matrix,
     pub d: fn(&Matrix) -> Matrix
@@ -51,12 +81,12 @@ pub struct FoldActivation {
 
 pub const SOFTMAX: FoldActivation = FoldActivation {
     f: |m| {
-        let t_mat = m.get_transpose();
+        //let t_mat = m;
 
         let mut r = Vec::with_capacity(m.get_element_count());
 
-        for row in 0..t_mat.rows {
-            let v = t_mat.get_row_vector_slice(row).to_vec();
+        for row in 0..m.rows {
+            let v = m.get_row_vector_slice(row).to_vec();
             let max = v.iter().max_by(|x, y| x.total_cmp(y)).unwrap();
 
             let exp: Vec<f64> = v.iter().map(|x| E.powf(*x - max)).collect();
@@ -66,42 +96,18 @@ pub const SOFTMAX: FoldActivation = FoldActivation {
         }
 
         let r = Matrix {
-            rows: m.columns,
-            columns: m.rows,
+            rows: m.rows,
+            columns: m.columns,
             values: r
         };
 
-        r.get_transpose()
+        r
     },
     d: |v| {
         //v.to_vec()
         Matrix::new_zeroed(v.columns, v.rows)
     }
 };
-
-/// Calculates the cross-entropy (used with softmax) for each input sample.
-pub fn forward_categorical_cross_entropy_loss(predictions: &Matrix, expected: &Matrix) -> Vec<f64> {
-    let t = expected.get_transpose();
-
-    let mut r = Vec::with_capacity(t.rows);
-    for row in 0..t.rows {
-        let (index, _) = t.get_row_vector_slice(row)
-            .iter()
-            .enumerate()
-            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap()).unwrap();
-
-        let loss = -predictions.get(index, row).unwrap().log10();
-
-        r.push(loss);
-    }
-
-    r
-}
-
-/// Error, same as softmax derivative??
-pub fn backward_categorical_cross_entropy_loss(predictions: &Matrix, expected: &Matrix, samples: usize) -> Matrix {
-    predictions.sub(&expected).div_by_scalar(samples as f64)
-}
 
 #[cfg(test)]
 mod tests {
