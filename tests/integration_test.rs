@@ -3,7 +3,7 @@ use ai::input_csv_reader::*;
 use ai::geoalg::f64_math::matrix::*;
 use ai::nn::activation_functions::*;
 
-fn gen_result_vector(digit: f64) -> Vec<f64> {
+fn one_hot_encode(digit: f64) -> Vec<f64> {
     let mut result = vec![0.0f64; 10];
     result[digit as usize] = 1.0f64;
 
@@ -24,7 +24,7 @@ fn test_nn() {
     for _sample in 0..400 {
         let (v, tag) = reader.read_and_parse_data_line(784);
         inputs.push(v);
-        targets.push(gen_result_vector(tag));
+        targets.push(one_hot_encode(tag));
     }
 
     let mut network = Network::new(vec![784, 128, 10], SIGMOID, 0.001f64);

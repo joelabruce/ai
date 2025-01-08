@@ -14,7 +14,9 @@ impl Activation {
             .add_column_vector(&layer.biases)
     }
 
-    pub fn backward<'a>(&self, inputs: &'a Matrix) -> Matrix {
+    pub fn backward<'a>(&self, mut layer: &'a HiddenLayer, inputs: &'a Matrix, dvalues: &'a Matrix) -> Matrix {
+        let t = inputs.get_transpose();
+        
         inputs.clone()
     }
 }
@@ -57,10 +59,10 @@ pub const SOFTMAX: FoldActivation = FoldActivation {
             let v = t_mat.get_row_vector_slice(row).to_vec();
             let max = v.iter().max_by(|x, y| x.total_cmp(y)).unwrap();
 
-            let nums: Vec<f64> = v.iter().map(|x| E.powf(*x - max)).collect();
-            let den: f64 = nums.iter().sum();
+            let exp: Vec<f64> = v.iter().map(|x| E.powf(*x - max)).collect();
+            let den: f64 = exp.iter().sum();
             
-            r.extend(nums.iter().map(|x| x / den));
+            r.extend(exp.iter().map(|x| x / den));
         }
 
         let r = Matrix {
@@ -76,6 +78,30 @@ pub const SOFTMAX: FoldActivation = FoldActivation {
         Matrix::new_zeroed(v.columns, v.rows)
     }
 };
+
+/// Calculates the cross-entropy (used with softmax) for each input sample.
+pub fn forward_categorical_cross_entropy_loss(predictions: &Matrix, expected: &Matrix) -> Vec<f64> {
+    let t = expected.get_transpose();
+
+    let mut r = Vec::with_capacity(t.rows);
+    for row in 0..t.rows {
+        let (index, _) = t.get_row_vector_slice(row)
+            .iter()
+            .enumerate()
+            .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap()).unwrap();
+
+        let loss = -predictions.get(index, row).unwrap().log10();
+
+        r.push(loss);
+    }
+
+    r
+}
+
+/// Error, same as softmax derivative??
+pub fn backward_categorical_cross_entropy_loss(predictions: &Matrix, expected: &Matrix, samples: usize) -> Matrix {
+    predictions.sub(&expected).div_by_scalar(samples as f64)
+}
 
 #[cfg(test)]
 mod tests {

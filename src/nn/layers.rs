@@ -1,3 +1,5 @@
+use rand::distributions::Uniform;
+
 use crate::geoalg::f64_math::matrix::*;
 use crate::nn::activation_functions::*;
 
@@ -14,7 +16,8 @@ pub struct InputLayer {
 /// Should be created beginning with InputLayer to ensure shapes are correct.
 pub struct HiddenLayer {
     pub biases: Matrix,
-    pub weights: Matrix
+    pub weights: Matrix,
+    //internal_state: Matrix
 }
 
 impl InputLayer {
@@ -44,7 +47,8 @@ impl InputLayer {
     pub fn new_hidden_layer(&self, neuron_count: usize) -> HiddenLayer {
         assert!(self.values.get_element_count() > 0);
 
-        let weights = Matrix::new_randomized(self.values.rows, neuron_count);
+        let uniform = Uniform::new_inclusive(-0.1, 0.1);
+        let weights = Matrix::new_randomized_uniform(self.values.rows, neuron_count, uniform);
         let biases = Matrix::from_vec(vec![0f64; neuron_count], neuron_count, 1);
         
         HiddenLayer {
@@ -96,34 +100,11 @@ impl HiddenLayer {
         (activation.f)(&inputs)
     }
 
-    pub fn backward<'a>(&self) {
-
+    pub fn backward<'a>(&mut self, dvalues: &Matrix, inputs: &Matrix) {
+        let t = inputs.get_transpose();
+        t.mul(dvalues);
     }
 }
-
-    /// Calculates the cross-entropy (used with softmax) for each input sample.
-    pub fn cross_entropy_loss(predictions: &Matrix, expected: &Matrix) -> Vec<f64> {
-        let t = expected.get_transpose();
-
-        let mut r = Vec::with_capacity(t.rows);
-        for row in 0..t.rows {
-            let (index, _) = t.get_row_vector_slice(row)
-                .iter()
-                .enumerate()
-                .max_by(|(_, a), (_, b)| a.partial_cmp(b).unwrap()).unwrap();
-
-            let loss = -predictions.get(index, row).unwrap().log10();
-
-            r.push(loss);
-        }
-
-        r
-    }
-
-    /// Error, same as softmax derivative??
-    pub fn derivative_cross_entropy_loss_wrt_softmax(predictions: &Matrix, expected: &Matrix, samples: usize) -> Matrix {
-        predictions.sub(&expected).div_by_scalar(samples as f64)
-    }
 
 #[cfg(test)]
 mod tests {
@@ -131,53 +112,12 @@ mod tests {
 
     #[test]
     fn test() {
+        let input_count = 2;
+
         let raw_inputs = vec![
             vec![0.0; 784]
             , vec![0.0; 784]
         ];
-
-        let input_count = 2;
-
-        // Create Layers in network
-        // When doing calculations, we get transposed row to make it a column for calculations
-        let il = InputLayer::from_vec(raw_inputs);
-        assert_eq!(il.values.columns, input_count);
-        assert_eq!(il.values.rows, 784);
-        assert_eq!(il.values.get_element_count(), 784 * input_count);
-
-        let hl1 = il.new_hidden_layer(128);
-        //println!("{:?}", hl1.weights);
-        assert_eq!(hl1.weights.columns, 784);
-        assert_eq!(hl1.weights.rows, 128);
-        assert_eq!(hl1.weights.get_element_count(), 100352);
-
-        let hl2 = hl1.new_hidden_layer(20);
-        //println!("{:?}", hl2.weights);
-        assert_eq!(hl2.weights.columns, 128);
-        assert_eq!(hl2.weights.rows, 20);
-        assert_eq!(hl2.weights.get_element_count(), 2560);
-
-        let outlayer = hl2.new_hidden_layer(10);
-        //println!("{:?}", ol.weights);
-        assert_eq!(outlayer.weights.columns, 20);
-        assert_eq!(outlayer.weights.rows, 10);
-        assert_eq!(outlayer.weights.get_element_count(), 200);
-
-        // Sanity check to make sure the output shapes are correct.
-        let inputs1 = il.forward(&hl1);
-        assert_eq!(inputs1.columns, input_count);
-        assert_eq!(inputs1.rows, 128);
-
-        let inputs2 = hl1.forward(&RELU, &inputs1);
-        let inputs3 = RELU.forward(&hl2, &inputs2);
-
-        let inputs4 = hl2.forward(&RELU, &inputs3);
-        let inputs5 = RELU.forward(&outlayer, &inputs4);
-        
-        let predictions = outlayer.forward_fold(&SOFTMAX, &inputs5);
-        println!("{:?}", predictions);
-        assert_eq!(predictions.columns, input_count);
-        assert_eq!(predictions.rows, 10);
 
         let targets = Matrix {
             rows: 10,
@@ -195,9 +135,41 @@ mod tests {
                 0.0, 0.0]
         };
 
-        let loss = cross_entropy_loss(&predictions, &targets);
+        // Create Layers in network
+        let il = InputLayer::from_vec(raw_inputs);
+        assert_eq!(il.values.columns, input_count);
+        assert_eq!(il.values.rows, 784);
+        assert_eq!(il.values.get_element_count(), 784 * input_count);
+
+        let dense1 = il.new_hidden_layer(128);
+        assert_eq!(dense1.weights.columns, 784);
+        assert_eq!(dense1.weights.rows, 128);
+        assert_eq!(dense1.weights.get_element_count(), 100352);
+
+        // This is also the output layer
+        let mut dense2 = dense1.new_hidden_layer(10);
+        assert_eq!(dense2.weights.columns, 128);
+        assert_eq!(dense2.weights.rows, 10);
+        assert_eq!(dense2.weights.get_element_count(), 1280);
+
+        // Sanity check to make sure the output shapes are correct.
+        // Forward propagation should not be able to mutate anything, only backpropagation can do that.
+        let fcalc1 = il.forward(&dense1);
+        let fcalc2 = dense1.forward(&RELU, &fcalc1);
+        let fcalc3 = RELU.forward(&dense2, &fcalc2);
+        
+        let predictions = dense2.forward_fold(&SOFTMAX, &fcalc3);
+        println!("Predictions: {predictions}");
+        assert_eq!(predictions.columns, input_count);
+        assert_eq!(predictions.rows, 10);
+
+        let loss = forward_categorical_cross_entropy_loss(&predictions, &targets);
         println!("Loss vector: {:?}", loss);
 
+        let gradient = backward_categorical_cross_entropy_loss(&predictions, &targets, input_count);
+        println!("Gradient: {gradient}");
+
+        dense2.backward(&gradient, &fcalc3);
         //let errors = OutputLayer::derivative_cross_entropy_loss_wrt_softmax(&predictions, &targets, input_count);
     }
 }

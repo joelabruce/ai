@@ -1,4 +1,5 @@
 use rand::distributions::{Distribution, Uniform};
+use std::fmt::{Display, Formatter, Result};
 
 /// Calculates the Kronecker Delta given i and j that are equatable to eachother.
 /// # Arguments
@@ -70,7 +71,26 @@ impl Matrix {
         assert!(rows > 0);
 
         let mut rng = rand::thread_rng();
-        let step = Uniform::new_inclusive(-0.15f64, 0.15f64);
+        let step = Uniform::new_inclusive(-1.0, 1.0);
+        let element_count = columns * rows;
+        let values = step.sample_iter(&mut rng).take(element_count).collect();
+
+        Self {
+            columns,
+            rows,
+            values,
+        }
+    }
+
+    /// Returns an ixj matrix filled with random values specified by uniform distribution.
+    /// # Arguments
+    /// # Returns
+    pub fn new_randomized_uniform(columns: usize, rows: usize, uniform: Uniform<f64>) -> Self {
+        assert!(columns > 0);
+        assert!(rows > 0);
+
+        let mut rng = rand::thread_rng();
+        let step = uniform;// Uniform::new_inclusive(-0.15f64, 0.15f64);
         let element_count = columns * rows;
         let values = step.sample_iter(&mut rng).take(element_count).collect();
 
@@ -322,8 +342,8 @@ pub fn dot_product_of_vector_slices(lhs: &[f64], rhs: &[f64]) -> f64 {
     sum
 }
 
-impl std::fmt::Display for Matrix {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl Display for Matrix {
+    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
         for row in 0..self.rows {
             for col in 0..self.columns {
                 write!(f, "{}", self.values[row * self.columns + col])?;
