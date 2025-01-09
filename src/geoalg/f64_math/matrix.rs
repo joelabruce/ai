@@ -1,5 +1,4 @@
 use rand::distributions::{Distribution, Uniform};
-use std::fmt::{Display, Formatter, Result};
 
 /// Calculates the Kronecker Delta given i and j that are equatable to eachother.
 /// # Arguments
@@ -20,8 +19,8 @@ pub fn one_hot_encode(label: f64, bounds: usize) -> Vec<f64> {
 /// Column-major is not yet implemented.
 #[derive(PartialEq, Debug, Clone)]
 pub struct Matrix {
-    pub columns: usize,
     pub rows: usize,
+    pub columns: usize,
     pub values: Vec<f64>
 }
 
@@ -42,7 +41,7 @@ impl Matrix {
     /// Creates a matrix with columns * size elements where every element is zero
     /// # Arguments
     /// # Returns
-    pub fn new_zeroed(columns: usize, rows: usize) -> Self {
+    pub fn new_zeroed(rows: usize, columns: usize) -> Self {
         assert!(columns > 0);
         assert!(rows > 0);
 
@@ -72,7 +71,7 @@ impl Matrix {
     /// Returns an ixj matrix filled with random values between -1.0 and 1.0 inclusive.
     /// # Arguments
     /// # Returns
-    pub fn new_randomized(columns: usize, rows: usize) -> Self {
+    pub fn new_randomized_z(columns: usize, rows: usize) -> Self {
         assert!(columns > 0);
         assert!(rows > 0);
 
@@ -91,7 +90,7 @@ impl Matrix {
     /// Returns an ixj matrix filled with random values specified by uniform distribution.
     /// # Arguments
     /// # Returns
-    pub fn new_randomized_uniform(columns: usize, rows: usize, uniform: Uniform<f64>) -> Self {
+    pub fn new_randomized_uniform(rows: usize, columns: usize, uniform: Uniform<f64>) -> Self {
         assert!(columns > 0);
         assert!(rows > 0);
 
@@ -336,6 +335,40 @@ impl Matrix {
         }
     }
 
+    /// Sums each row in self, and outputs a new matrix that is 1 column.
+    pub fn shrink_rows_by_add(&self) -> Matrix {
+        let mut v = Vec::with_capacity(self.columns);
+
+        let t = self.get_transpose();
+        for row in 0..t.rows {
+            let x = t.get_row_vector_slice(row).iter().sum();
+            v.push(x);
+        }
+
+        Matrix {
+            rows: 1,
+            columns: self.columns,
+            values: v
+        }
+    }
+
+    /// Scales matrix by scalar.
+    pub fn scale(&self, scalar: f64) -> Matrix {
+        let values = self.values.iter().map(|x| x * scalar).collect();
+
+        Matrix {
+            rows: self.rows,
+            columns: self.columns,
+            values
+        }
+    }
+
+    pub fn shape(&self) -> String {
+        let rows = self.rows;
+        let columns = self.columns;
+        format!("{rows} x {columns}")
+    }
+
     // Getting column vectors proving to be tricky, 
     //  perhaps abandon for now and focus on transposing and only using slices for matrix rows since matrix is row-major?
     // fn column_vector<'a>(&'a mut self, column: usize) -> &[f64] {
@@ -368,21 +401,6 @@ pub fn dot_product_of_vector_slices(lhs: &[f64], rhs: &[f64]) -> f64 {
     }
 
     sum
-}
-
-impl Display for Matrix {
-    fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-        for row in 0..self.rows {
-            for col in 0..self.columns {
-                write!(f, "{}", self.values[row * self.columns + col])?;
-                if col < self.columns - 1 {
-                    write!(f, ", ")?; // Separate columns with a tab
-                }
-            }
-            writeln!(f)?; // Move to the next line after each row
-        }
-        Ok(())
-    }
 }
 
 #[cfg(test)]
@@ -550,7 +568,7 @@ mod tests {
 
     #[test]
     fn random_matrix() {
-        let m28x28 = Matrix::new_randomized(28, 28);
+        let m28x28 = Matrix::new_randomized_z(28, 28);
 
         let _r =m28x28.values.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", ");
 
@@ -559,7 +577,7 @@ mod tests {
 
     #[test]
     fn matrix_index() {
-        let mat = Matrix::new_randomized(4, 7);
+        let mat = Matrix::new_randomized_z(7, 4);
 
         let mut expected: usize = 0;
         for row in 0..mat.rows {

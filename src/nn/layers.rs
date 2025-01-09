@@ -2,6 +2,10 @@ use rand::distributions::Uniform;
 
 use crate::geoalg::f64_math::matrix::*;
 
+pub fn learning_rate() -> f64 {
+    0.5
+}
+
 /// Expected values for training of inputs.
 pub struct Targets {
     pub values: Matrix
@@ -22,19 +26,18 @@ impl InputLayer {
     /// Creates input layer based on inputs supplied.
     /// Allows for automatic shaping of succeeding layer generation.
     pub fn from_vec(values: Vec<Vec<f64>>) -> InputLayer {
-        let rows = values.len();
+        let rows = values.len();    // Number of samples in batch
         let flat_v: Vec<f64> = values.into_iter().flat_map(|v| v).collect();
+        let columns = flat_v.len() / rows;  // Number of features.
 
-        let columns = flat_v.len() / rows;  // Should be 784 for images
-
-        let mat = Matrix {
+        let values = Matrix {
             rows,
             columns,
             values: flat_v
         };
 
         InputLayer {
-            values: mat
+            values
         }
     } 
 
@@ -45,7 +48,7 @@ impl InputLayer {
         assert!(self.values.get_element_count() > 0);
 
         let uniform = Uniform::new_inclusive(-0.1, 0.1);
-        let weights = Matrix::new_randomized_uniform(neuron_count, self.values.columns, uniform);
+        let weights = Matrix::new_randomized_uniform(self.values.columns, neuron_count, uniform);
         let biases = Matrix::from_vec(vec![0f64; neuron_count], 1, neuron_count);
         
         HiddenLayer {
@@ -71,7 +74,7 @@ impl HiddenLayer {
         assert!(self.weights.get_element_count() > 0);
 
         let uniform = Uniform::new_inclusive(-0.1, 0.1);
-        let weights = Matrix::new_randomized_uniform(neuron_count, self.weights.columns, uniform);
+        let weights = Matrix::new_randomized_uniform(self.weights.columns, neuron_count, uniform);
         let biases = Matrix::from_vec(vec![0.0; neuron_count], 1, neuron_count);
 
         HiddenLayer {
@@ -81,6 +84,7 @@ impl HiddenLayer {
     }
 
     /// Forward propagates by performing weights dot inputs + biases.
+    /// Z
     pub fn forward<'a>(&self, inputs: &'a Matrix) -> Matrix {
         let r = inputs
             .mul(&self.weights)
@@ -89,12 +93,33 @@ impl HiddenLayer {
     }
 
     /// In progress to support ADAM optimization
-     pub fn backward<'a>(&self, dvalues: &Matrix, _inputs: &Matrix) -> Matrix {
-        //let t = inputs.get_transpose();
-        
-        //let dweights = t.mul(dvalues);
-        //let dbiases = dvalues
-        dvalues.mul(&self.weights.get_transpose())
+    pub fn backward<'a>(& mut self, dvalues: &Matrix, inputs: &Matrix) -> Matrix {
+        let shape_inputs = inputs.shape();
+        let shape_dvalues = dvalues.shape();
+        println!("X: {shape_inputs}, dZ: {shape_dvalues}");
+
+        let shape_weights = self.weights.shape();
+        let dweights = inputs.get_transpose().mul(dvalues);
+        let shape_dweights = dweights.shape();
+        println!("W: {shape_weights}, dW: {shape_dweights}");
+
+        // Mutate the weights
+        self.weights = self.weights.sub(&dweights).scale(learning_rate());
+
+        let dbiases = dvalues.shrink_rows_by_add();
+        let db_shape = dbiases.shape();
+        let biases_shape = self.biases.shape();
+        println!("biases: {biases_shape}, db_shape: {db_shape}");
+
+        // Mutate the biases
+        self.biases = self.biases.sub(&dbiases).scale(learning_rate());
+
+        let x= dvalues.mul(&self.weights.get_transpose());
+        let x_shape = x.shape();
+        println!("X: {x_shape}");
+        println!();
+
+        x
     }
 }
 
@@ -103,15 +128,15 @@ mod tests {
      use super::*;
      use crate::{input_csv_reader::InputCsvReader, nn::activation_functions::*};
 
-    //#[ignore = "not finished"]
-    //#[test]
+    #[ignore = "not finished"]
+    #[test]
     fn test() {
         let mut reader = InputCsvReader::new("./training/mnist_train.csv");
         let _ = reader.read_and_skip_header_line();
 
         let mut target_ohes = vec![];
         let mut raw_inputs = vec![];
-        let input_count = 32;
+        let input_count = 5;
 
         for _sample in 0..input_count {
             let (v, label) = reader.read_and_parse_data_line(784);
@@ -127,6 +152,8 @@ mod tests {
 
         // Create Layers in network
         let il = InputLayer::from_vec(raw_inputs);
+        let shape_il = il.values.shape();
+        println!("input layer shape: {shape_il}");
         assert_eq!(il.values.rows, input_count);
         assert_eq!(il.values.columns, 784);
         assert_eq!(il.values.get_element_count(), 784 * input_count);
@@ -150,23 +177,23 @@ mod tests {
         let fcalc3 = dense2.forward(&fcalc2);               // dense2 -> 
         let predictions = (SOFTMAX.f)(&fcalc3);                     // softmax ->
 
-        println!("Predictions: {predictions}");
+        //println!("Predictions: {:?}", predictions);
         assert_eq!(predictions.columns, 10);
         assert_eq!(predictions.rows, input_count);
 
         // Used to calculate accuracy and if progress is being made.
-        let loss = forward_categorical_cross_entropy_loss(&predictions, &targets);
-        println!("Loss vector: {:?}", loss);
+        // Not being used yet.
+        let _loss = forward_categorical_cross_entropy_loss(&predictions, &targets);
+        //println!("Loss vector: {:?}", loss);
 
         // Start backpropagating.
         let dvalues4 = backward_categorical_cross_entropy_loss_wrt_softmax(&predictions, &targets); // loss ->
-        let scaled_dv4 = dvalues4.div_by_scalar(input_count as f64);
-        println!("Dvalues for back cross_entropy wrt softmax: {scaled_dv4}");        
+        let dvalues4 = dvalues4.div_by_scalar(input_count as f64);   // Don't forget to scale by batch size
 
         // Can use simple gradient descent now! Woohoo!
         // Will implement adam optimization later. Whew
-        let dvalues3 = dense2.backward(&dvalues4, &fcalc3);
-        let dvalues2 = RELU.backward(&dvalues3, &fcalc2);
-        let _dvalues1 = dense1.backward(&dvalues2, &fcalc1);
+        let dvalues3 = dense2.backward(&dvalues4, &fcalc2);
+        let dvalues2 = RELU.backward(&dvalues3, &fcalc1);
+        let _dvalues1 = dense1.backward(&dvalues2, &il.values);
     }
 }

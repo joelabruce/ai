@@ -55,7 +55,7 @@ pub const H_SWISH: Activation = Activation {
 
 /// Calculates the cross-entropy (used with softmax) for each input sample.
 pub fn forward_categorical_cross_entropy_loss(predictions: &Matrix, expected: &Matrix) -> Matrix {
-    let t: Matrix = predictions.elementwise_multiply(expected);//.get_transpose();
+    let t: Matrix = predictions.elementwise_multiply(expected);
     let mut r = Vec::with_capacity(t.rows);
     for row in 0..t.rows {
         let loss = -t.get_row_vector_slice(row).iter().sum::<f64>().log10();
@@ -69,7 +69,7 @@ pub fn forward_categorical_cross_entropy_loss(predictions: &Matrix, expected: &M
     }
 }
 
-/// Error, same as softmax derivative??
+/// Softmax with categorical cross entropy loss derivative 
 pub fn backward_categorical_cross_entropy_loss_wrt_softmax(predictions: &Matrix, expected: &Matrix) -> Matrix {
     predictions.sub(&expected)
 }
@@ -81,18 +81,16 @@ pub struct FoldActivation {
 
 pub const SOFTMAX: FoldActivation = FoldActivation {
     f: |m| {
-        //let t_mat = m;
-
         let mut r = Vec::with_capacity(m.get_element_count());
 
         for row in 0..m.rows {
-            let v = m.get_row_vector_slice(row).to_vec();
+            let v = m.get_row_vector_slice(row);
             let max = v.iter().max_by(|x, y| x.total_cmp(y)).unwrap();
 
-            let exp: Vec<f64> = v.iter().map(|x| E.powf(*x - max)).collect();
-            let den: f64 = exp.iter().sum();
+            let exp_numerators: Vec<f64> = v.iter().map(|x| E.powf(*x - max)).collect();
+            let denominator: f64 = exp_numerators.iter().sum();
             
-            r.extend(exp.iter().map(|x| x / den));
+            r.extend(exp_numerators.iter().map(|x| x / denominator));
         }
 
         let r = Matrix {
@@ -105,7 +103,7 @@ pub const SOFTMAX: FoldActivation = FoldActivation {
     },
     d: |v| {
         //v.to_vec()
-        Matrix::new_zeroed(v.columns, v.rows)
+        Matrix::new_zeroed(v.rows, v.columns)
     }
 };
 
