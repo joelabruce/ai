@@ -41,7 +41,7 @@ impl InputCsvReader {
             else {
                 let float_value = retrieved_value.parse::<f64>();
                 let value_to_push = match float_value {
-                    Ok(r) => r / 255.0f64,
+                    Ok(r) => r / 255.0,
                     Err(e) => { // This should only error for header.
                         println!("ERROR!!!!!!!!!!!!!!!!!! {e} -> {retrieved_value} (will assume 0.0f64)");
                         0.0f64
