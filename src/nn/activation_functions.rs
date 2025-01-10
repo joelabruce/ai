@@ -1,5 +1,6 @@
 use std::f64::consts::E;
 use crate::geoalg::f64_math::matrix::Matrix;
+use crate::nn::layers::*;
 
 pub struct Activation {
     pub f: fn(&f64) -> f64,
@@ -7,11 +8,14 @@ pub struct Activation {
 }
 
 impl Activation {
-    pub fn forward(&self, inputs: &Matrix) -> Matrix {
+
+}
+
+impl Propagates for Activation {
+    fn forward(&self, inputs: &Matrix) -> Matrix {
         inputs.map(self.f)
     }
-
-    pub fn backward<'a>(&self, dvalues: &'a Matrix, inputs: &'a Matrix) -> Matrix {
+    fn backward<'a>(&mut self, dvalues: &'a Matrix, inputs: &'a Matrix) -> Matrix {
         assert_eq!(dvalues.rows, inputs.rows, "Backpropagation RELU needs inputs and dvalues to have same rows.");
         assert_eq!(dvalues.columns, inputs.columns, "Backpropagation RELU needs inputs and dvalues to have same columns.");
         

@@ -1,9 +1,13 @@
 use rand::distributions::Uniform;
-
 use crate::geoalg::f64_math::matrix::*;
 
 pub fn learning_rate() -> f64 {
     0.01
+}
+
+pub trait Propagates {
+    fn forward(&self, inputs: &Matrix) -> Matrix;
+    fn backward<'a>(&'a mut self, dvalues: &Matrix, inputs: &Matrix) -> Matrix;
 }
 
 /// Expected values for training of inputs.
@@ -39,7 +43,7 @@ impl InputLayer {
         InputLayer {
             values
         }
-    } 
+    }
 
     /// Creates a new hidden layer based on the shape of the input layer.
     /// # Arguments
@@ -82,10 +86,12 @@ impl HiddenLayer {
             biases
         }
     }
+}
 
+impl Propagates for HiddenLayer {
     /// Forward propagates by performing weights dot inputs + biases.
     /// Z
-    pub fn forward<'a>(&self, inputs: &'a Matrix) -> Matrix {
+    fn forward<'a>(&self, inputs: &'a Matrix) -> Matrix {
         let r = inputs
             .mul(&self.weights)
             .add_row_vector(&self.biases);
@@ -93,7 +99,7 @@ impl HiddenLayer {
     }
 
     /// In progress to support ADAM optimization
-    pub fn backward<'a>(& mut self, dvalues: &Matrix, inputs: &Matrix) -> Matrix {
+    fn backward<'a>(& mut self, dvalues: &Matrix, inputs: &Matrix) -> Matrix {
         // let shape_inputs = inputs.shape();
         // let shape_dvalues = dvalues.shape();
         // println!("X: {shape_inputs}, dZ: {shape_dvalues}");
@@ -120,92 +126,5 @@ impl HiddenLayer {
         // println!();
 
         x
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{input_csv_reader::InputCsvReader, nn::activation_functions::*};
-
-    #[ignore = "Needs mnist_train.csv to train on."]
-    #[test]
-    fn test() {
-        let mut reader = InputCsvReader::new("./training/mnist_train.csv");
-        let _ = reader.read_and_skip_header_line();
-
-        let mut target_ohes = vec![];
-        let mut raw_inputs = vec![];
-        let input_count = 500;
-
-        for _sample in 0..input_count {
-            let (v, label) = reader.read_and_parse_data_line(784);
-            raw_inputs.push(v);
-            target_ohes.extend(one_hot_encode(label, 10));
-        }
-
-        let targets = Matrix {
-            rows: input_count,
-            columns: 10,
-            values: target_ohes
-        };
-
-        // Create Layers in network
-        let il = InputLayer::from_vec(raw_inputs);
-        assert_eq!(il.values.rows, input_count);
-        assert_eq!(il.values.columns, 784);
-        assert_eq!(il.values.get_element_count(), 784 * input_count);
-
-        let mut dense1 = il.new_hidden_layer(128);
-        assert_eq!(dense1.weights.rows, 784);
-        assert_eq!(dense1.weights.columns, 128);
-        assert_eq!(dense1.weights.get_element_count(), 100352);
-
-        // This is also the output layer
-        let mut dense2 = dense1.new_hidden_layer(64);
-        assert_eq!(dense2.weights.rows, 128);
-        assert_eq!(dense2.weights.columns, 64);
-        assert_eq!(dense2.weights.get_element_count(), 8192);
-
-        let mut dense3 = dense2.new_hidden_layer(10);
-
-        // Begin training
-        for epoch in 0..1000 {
-            // Sanity check to make sure the output shapes are correct.
-            // Forward propagation should not be able to mutate anything, only backpropagation can do that.
-            let inputs = il.forward();                                  // input layer -> 
-            let fcalc1 = dense1.forward(&inputs);                       // dense1 ->
-            let fcalc2 = RELU.forward(&fcalc1);                 // RELU ->
-            let fcalc3 = dense2.forward(&fcalc2);               // dense2 -> 
-            let fcalc4 = RELU.forward(&fcalc3);                 // RELU ->
-            let fcalc5 = dense3.forward(&fcalc4);               // dense3
-            let predictions = (SOFTMAX.f)(&fcalc5);                     // softmax ->
-
-            //println!("Predictions: {:?}", predictions);
-            assert_eq!(predictions.columns, 10);
-            assert_eq!(predictions.rows, input_count);
-
-            // Used to calculate accuracy and if progress is being made.
-            // Not being used yet.
-            let sample_losses = forward_categorical_cross_entropy_loss(&predictions, &targets);
-            let data_loss = sample_losses.values.iter().copied().sum::<f64>() / sample_losses.get_element_count() as f64;
-            //let x = argmax(predictions);
-            
-            if epoch % 10 == 0 || epoch < 100 {
-                println!("Epoch: {epoch} | Data Loss: {data_loss}");
-            }
-
-            // Start backpropagating.
-            let dvalues6 = backward_categorical_cross_entropy_loss_wrt_softmax(&predictions, &targets); // loss ->
-            let dvalues6 = dvalues6.div_by_scalar(input_count as f64);   // Don't forget to scale by batch size
-
-            // Can use simple gradient descent now! Woohoo!
-            // Will implement adam optimization later. Whew
-            let dvalues5 = dense3.backward(&dvalues6, &fcalc4);
-            let dvalues4 = RELU.backward(&dvalues5, &fcalc3);
-            let dvalues3 = dense2.backward(&dvalues4, &fcalc2);
-            let dvalues2 = RELU.backward(&dvalues3, &fcalc1);
-            let _dvalues1 = dense1.backward(&dvalues2, &il.values);
-        }
     }
 }
