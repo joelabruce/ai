@@ -4,9 +4,8 @@ use crate::geoalg::f64_math::matrix::*;
 use crate::input_csv_reader::*;
 
 pub struct Neural {
-
+    pub nodes: Vec<Node>
 }
-
 
 pub enum Node {
     HiddenLayer(HiddenLayer),
@@ -14,35 +13,40 @@ pub enum Node {
 }
 
 impl Neural {
-    pub fn import_inputs(file_path: &str) -> (Vec<Vec<f64>>, usize, Matrix) {
+    pub fn import_inputs(file_path: &str, batch_size: usize) -> (Vec<Vec<f64>>, Matrix) {
         // Open file for reading to create training data.
         let mut reader = InputCsvReader::new(file_path);
-        let _ = reader.read_and_skip_header_line();     // Discard header
+        let _ = reader.read_and_skip_header_line();          // Discard header
 
-        let mut target_ohes = vec![];         // One-hot encoding of the targets
-        let mut normalized_inputs = vec![];     // Normalized data 
-        let input_count = 100;
+        let mut target_ohes = vec![];              // One-hot encoding of the targets
+        let mut normalized_inputs = vec![];   // Normalized data
 
-        for _sample in 0..input_count {
+        for _sample in 0..batch_size {
             let (v, label) = reader.read_and_parse_data_line(784);
             normalized_inputs.push(v);
             target_ohes.extend(one_hot_encode(label, 10));
         }
 
         let targets = Matrix {
-            rows: input_count,
+            rows: batch_size,
             columns: 10,
             values: target_ohes
         };
 
-        (normalized_inputs, input_count, targets)
+        (normalized_inputs, targets)
     }
 
-    pub fn forward(il: &InputLayer, nodes: &Vec<Node>) -> Vec<Matrix> {
-        let mut forward_stack = Vec::with_capacity(nodes.len() + 1);
+    pub fn get_next_batch() {
 
-        let inputs = forward_stack.push(il.forward());
-        for node in nodes.iter() {
+    }
+
+    /// Forward propagates the inputs through the layers.
+    /// Calculates a Vec of matrices to be used for backpropagation.
+    pub fn forward(with_input: &InputLayer, to_nodes: &mut Vec<Node>) -> Vec<Matrix> {
+        let mut forward_stack = Vec::with_capacity(to_nodes.len() + 1);
+
+        forward_stack.push(with_input.forward());
+        for node in to_nodes.iter() {
             match node {
                 Node::Activation(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
                 Node::HiddenLayer(n) => forward_stack.push(n.forward(forward_stack.last().unwrap()))
@@ -52,41 +56,52 @@ impl Neural {
         forward_stack
     }
 
-    pub fn backward(nodes: &mut Vec<Node>, dz: &Matrix, fcalcs: &mut Vec<Matrix>) {
-        let dvalues = dz;
+    /// Applies backpropagation.
+    /// Pops the items off of fcalcs, but keeps nodes in the Vec so we can do the next forward pass.
+    pub fn backward(from_nodes: &mut Vec<Node>, dz: &Matrix, fcalcs: &mut Vec<Matrix>) {
+        let mut dvalues = dz.clone();
         
-        for node in nodes.iter_mut().rev() {
-            let dvalues = match node {
-                Node::Activation(n) => {
-                    let fcalc = fcalcs.pop().unwrap();
-                    n.backward(&dvalues, &fcalc)
-                },
-                Node::HiddenLayer(n) => {
-                    let fcalc = fcalcs.pop().unwrap();
+        for i in (0..from_nodes.len()).rev() {
+            let node_opt = from_nodes.get_mut(i);
 
-                    println!("unwrapped fcalc!");
-                    n.backward(&dvalues, &fcalc)
-                }
+            if let Some(node) = node_opt {
+                match node {
+                    Node::Activation(n) => {
+                        let fcalc = fcalcs.pop().unwrap();
+                        dvalues = n.backward(&dvalues, &fcalc);
+                    },
+                    Node::HiddenLayer(n) => {
+                        let fcalc = fcalcs.pop().unwrap();
+                        dvalues = n.backward(&dvalues, &fcalc);
+                    }
+                };
             };
-        }
+       }
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use core::f64;
+
     use super::*;
 
     #[ignore = "Needs mnist_train.csv to train on."]
     #[test]
     fn test() {
-        // Read from specified file for creating neural network
-        let (normalized_inputs, input_count, targets) = Neural::import_inputs("./training/mnist_train.csv");
+        // Read from specified files for creating neural network
+        let batch_size = 100;
+        let (normalized_inputs, targets) = Neural::import_inputs("./training/mnist_train.csv", batch_size);
+        let (validation_inputs, validation_tagets) = Neural::import_inputs("./training/mnist_test.csv", 200);
 
         // Create Layers in network
         let il = InputLayer::from_vec(normalized_inputs);
-        assert_eq!(il.values.rows, input_count);
+        assert_eq!(il.values.rows, batch_size);
         assert_eq!(il.values.columns, 784);
-        assert_eq!(il.values.get_element_count(), 784 * input_count);
+        assert_eq!(il.values.get_element_count(), 784 * batch_size);
+
+        // Since this is an input layer also, can use instead of normalized_inputs when calculating validation loss
+        let vl = InputLayer::from_vec(validation_inputs);
 
         // Hidden layer 1
         let mut dense1 = il.new_hidden_layer(128);
@@ -103,67 +118,44 @@ mod tests {
         // Output layer
         let mut dense3 = dense2.new_hidden_layer(10);
 
-        let mut nodes: Vec<Node> = Vec::new();
-        // nodes.push(Node::HiddenLayer(dense1));
-        // nodes.push(Node::Activation(RELU));
-        // nodes.push(Node::HiddenLayer(dense2));
-        // nodes.push(Node::Activation(RELU));
-        // nodes.push(Node::HiddenLayer(dense3)); 
+        // Add layers to the network for forward and backward propagation.
+        let mut training_nodes: Vec<Node> = Vec::new();
+        //training_nodes.push(Node::InputLayer(il));
+        training_nodes.push(Node::HiddenLayer(dense1));
+        training_nodes.push(Node::Activation(RELU));
+        training_nodes.push(Node::HiddenLayer(dense2));
+        training_nodes.push(Node::Activation(RELU));
+        training_nodes.push(Node::HiddenLayer(dense3));
 
         // Begin training
-        for epoch in 0..400 {
-            // Sanity check to make sure the output shapes are correct.
-            // Forward propagation should not be able to mutate anything, only backpropagation can do that.
-            // let inputs = il.forward();                                  // input layer -> 
-            // let fcalc1 = dense1.forward(&inputs);                       // dense1 ->
-            // let fcalc2 = RELU.forward(&fcalc1);                 // RELU ->
-            // let fcalc3 = dense2.forward(&fcalc2);               // dense2 -> 
-            // let fcalc4 = RELU.forward(&fcalc3);                 // RELU ->
-            // let fcalc5 = dense3.forward(&fcalc4);               // dense3
-            // let predictions = (SOFTMAX.f)(&fcalc5);                     // softmax ->
-
-            let mut forward_stack = Vec::new();//Neural::forward(&il, &nodes);// Vec::new();
-            forward_stack.push(il.forward());
-            forward_stack.push(dense1.forward(forward_stack.last().unwrap()));
-            forward_stack.push(RELU.forward(forward_stack.last().unwrap()));
-            forward_stack.push(dense2.forward(forward_stack.last().unwrap()));
-            forward_stack.push(RELU.forward(forward_stack.last().unwrap()));
-            forward_stack.push(dense3.forward(forward_stack.last().unwrap()));
-
+        
+        let mut lowest_loss = f64::INFINITY;
+        for epoch in 0..1000 {
+            // Forward pass on training data
+            let mut forward_stack = Neural::forward(&il, &mut training_nodes);
             let predictions = &(SOFTMAX.f)(&forward_stack.pop().unwrap());
-            //println!("Predictions: {:?}", predictions);
-            assert_eq!(predictions.columns, 10);
-            assert_eq!(predictions.rows, input_count);
-
-            // Used to calculate accuracy and if progress is being made.
-            // Not being used yet.
             let sample_losses = forward_categorical_cross_entropy_loss(&predictions, &targets);
-            let data_loss = sample_losses.values.iter().copied().sum::<f64>() / sample_losses.get_element_count() as f64;
-            //let x = argmax(predictions);
-            
-            if epoch % 10 == 0 || epoch < 100 {
-                println!("Epoch: {epoch} | Data Loss: {data_loss}");
+            let data_loss = sample_losses.values.iter().copied().sum::<f64>() / sample_losses.get_element_count() as f64;            
+            let dvalues6 = backward_categorical_cross_entropy_loss_wrt_softmax(&predictions, &targets).div_by_scalar(batch_size as f64);
+            Neural::backward(&mut training_nodes, &dvalues6, &mut forward_stack);
+
+            // Validate updated neural network against validation inputs it hasn't been trained on.
+            forward_stack = Neural::forward(&vl, &mut training_nodes);
+            let v_predictions = &(SOFTMAX.f)(&forward_stack.pop().unwrap());
+            let v_sample_losses = forward_categorical_cross_entropy_loss(&v_predictions, &validation_tagets);
+            let v_data_loss = v_sample_losses.values.iter().copied().sum::<f64>() / v_sample_losses.get_element_count() as f64;
+
+            if epoch % 10 == 0 || epoch < 10 {
+                println!("Epoch: {epoch} | Data Loss: {data_loss} | Validation Loss: {v_data_loss}");
+                if v_data_loss < lowest_loss {
+                    lowest_loss = v_data_loss
+                }
+                else {
+                    // The validation loss has increased which indicates overfitting on training data. 
+                    println!("Finished!, consider training on next batch");
+                    break;
+                }
             }
-
-            // Start backpropagating.
-            let dvalues6 = backward_categorical_cross_entropy_loss_wrt_softmax(&predictions, &targets); // loss ->
-            let dvalues6 = dvalues6.div_by_scalar(input_count as f64);   // Don't forget to scale by batch size
-
-            // Can use simple gradient descent now! Woohoo!
-            // Will implement adam optimization later. Whew
-            // let dvalues5 = dense3.backward(&dvalues6, &fcalc4);
-            // let dvalues4 = RELU.backward(&dvalues5, &fcalc3);
-            // let dvalues3 = dense2.backward(&dvalues4, &fcalc2);
-            // let dvalues2 = RELU.backward(&dvalues3, &fcalc1);
-            // let _dvalues1 = dense1.backward(&dvalues2, &inputs);
-
-            //let _ = Neural::backward(&mut nodes, &dvalues6, &mut forward_stack);
-
-            let dvalues5 = dense3.backward(&dvalues6, &forward_stack.pop().unwrap());
-            let dvalues4 = RELU.backward(&dvalues5, &forward_stack.pop().unwrap());
-            let dvalues3 = dense2.backward(&dvalues4, &forward_stack.pop().unwrap());
-            let dvalues2 = RELU.backward(&dvalues3, &forward_stack.pop().unwrap());
-            let dvalues1 = dense1.backward(&dvalues2, &forward_stack.pop().unwrap());
         }
     }
 }
