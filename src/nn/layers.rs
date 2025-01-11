@@ -1,4 +1,4 @@
-use rand::distributions::Uniform;
+use rand::{distributions::Uniform, random};
 use crate::geoalg::f64_math::matrix::*;
 
 pub fn learning_rate() -> f64 {
@@ -45,22 +45,6 @@ impl InputLayer {
         }
     }
 
-    /// Creates a new hidden layer based on the shape of the input layer.
-    /// # Arguments
-    /// # Returns
-    pub fn new_hidden_layer(&self, neuron_count: usize) -> HiddenLayer {
-        assert!(self.values.get_element_count() > 0);
-
-        let uniform = Uniform::new_inclusive(-0.5, 0.5);
-        let weights = Matrix::new_randomized_uniform(self.values.columns, neuron_count, uniform);
-        let biases = Matrix::new_zeroed(1,neuron_count);
-        
-        HiddenLayer {
-            biases,
-            weights
-        }
-    }
-
     // Input layer always forwards to first hidden layer and not to an activation function.
     // # Arguments
     // # Returns
@@ -71,20 +55,28 @@ impl InputLayer {
 }
 
 impl HiddenLayer {
-    /// Instantiates and returns a new Hidden Layer.
-    /// # Arguments
-    /// # Returns
-    pub fn new_hidden_layer(&self, neuron_count: usize) -> HiddenLayer {
-        assert!(self.weights.get_element_count() > 0);
-
+    fn random_weight_biases(neuron_count: usize, prev_layer_input_count: usize) -> (Matrix, Matrix) {
         let uniform = Uniform::new_inclusive(-0.5, 0.5);
-        let weights = Matrix::new_randomized_uniform(self.weights.columns, neuron_count, uniform);
+        let weights = Matrix::new_randomized_uniform(prev_layer_input_count, neuron_count, uniform);
         let biases = Matrix::from_vec(vec![0.0; neuron_count], 1, neuron_count);
 
+        (weights, biases)
+    }
+
+    pub fn new(input_size: usize, neuron_count: usize) -> HiddenLayer {
+        let (weights, biases) = HiddenLayer::random_weight_biases(neuron_count, input_size);
         HiddenLayer {
             weights,
             biases
         }
+    }
+
+    /// Instantiates and returns a new Hidden Layer based off self's shape.
+    pub fn calulated_hidden_layer(&self, neuron_count: usize) -> HiddenLayer {
+        assert!(self.weights.get_element_count() > 0);
+        assert!(self.biases.get_element_count() > 0);
+
+        HiddenLayer::new(self.biases.get_element_count(), neuron_count)
     }
 }
 
