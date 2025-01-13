@@ -1,4 +1,5 @@
-use rand::{distributions::Uniform, random};
+extern crate rand;
+use rand::distributions::Uniform;
 use crate::geoalg::f64_math::matrix::*;
 
 pub fn learning_rate() -> f64 {

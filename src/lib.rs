@@ -3,13 +3,11 @@ pub mod geoalg;
 pub mod partitions;
 
 pub mod input_csv_reader;
+pub mod output_bin_writer;
 
 pub mod nn;
 
 use crate::partitions::*;
-
-//use std::io;
-//use rand::Rng;
 use colored::*;
 
 fn _main() {

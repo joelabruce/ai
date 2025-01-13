@@ -1,6 +1,6 @@
 struct ConvolutionKernel {
-    i: u32,
-    j: u32,
+    rows: usize,
+    columns: usize,
 
     data: Vec<f64>
 }

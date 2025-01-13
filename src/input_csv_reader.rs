@@ -7,7 +7,7 @@ pub struct InputCsvReader {
 
 impl InputCsvReader {
     pub fn new(file_path: &str) -> InputCsvReader {
-        let file = File::open(file_path).unwrap();
+        let file = File::open(file_path).expect("File should exist for training and testing network.");
         let reader = BufReader::new(file);
 
         InputCsvReader {

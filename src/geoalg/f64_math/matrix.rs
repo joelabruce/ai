@@ -76,7 +76,7 @@ impl Matrix {
         }
     }
 
-    /// Returns an ixj matrix filled with random values between -1.0 and 1.0 inclusive.
+    /// Returns an row x column matrix filled with random values between -1.0 and 1.0 inclusive.
     /// # Arguments
     /// # Returns
     pub fn new_randomized_z(columns: usize, rows: usize) -> Self {
