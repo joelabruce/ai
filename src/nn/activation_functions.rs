@@ -113,21 +113,37 @@ pub const SOFTMAX: FoldActivation = FoldActivation {
 
 #[cfg(test)]
 mod tests {
-    //use super::*;
+    use super::*;
 
     #[test]
     fn softmax_tes() {
-        // let v = vec![1.0, 2.0, 3.0];
-        // let actual = (SOFTMAX.function)(&v);
+        let v = vec![1.0, 2.0, 3.0];
+        let mat = Matrix::from_vec(v, 1, 3);
+        let actual = (SOFTMAX.f)(&mat);
 
-        // // [2.7182818284590452353602874713527, 7.389056098930650227230427460575, 20.085536923187667740928529654582]
-        // // 30.192874850577363203519244586509
-        // let expected = vec![
-        //     0.09003057317038045799802210148449,
-        //     0.24472847105479765247295961834077,
-        //     0.66524095577482188952901828017475
-        // ];
+        let expected = Matrix {
+            rows: 1,
+            columns: 3,
+            values: vec![
+                0.09003057317038046,
+                0.24472847105479764,
+                0.6652409557748218
+            ]
+        };
 
-        // println!("{:?} v {:?}", actual, expected);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn relu() {
+        let tc1 = -3.0;
+        let actual = (RELU.f)(&tc1);
+        let expected = 0.0;
+        assert_eq!(actual, expected);
+
+        let tc2 = 7.2;
+        let actual = (RELU.f)(&tc2);
+        let expected = 7.2;
+        assert_eq!(actual, expected);
     }
 }
