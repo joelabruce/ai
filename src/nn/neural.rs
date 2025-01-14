@@ -1,7 +1,9 @@
+use crate::digit_image::DigitImage;
 use crate::nn::layers::*;
 use crate::nn::activation_functions::*;
 use crate::geoalg::f64_math::matrix::*;
 use crate::input_csv_reader::*;
+use crate::sample::Sample;
 
 pub struct Neural {
     pub nodes: Vec<Node>
@@ -19,40 +21,15 @@ impl Neural {
         reader
     }
 
-    pub fn get_next_batch_contiguous(reader: &mut InputCsvReader, batch_size: usize) -> (Vec<Vec<f64>>, Matrix) {
-        let mut target_ohes = vec![];              // One-hot encoding of the targets
-        let mut normalized_inputs = vec![];   // Normalized data
-        for _sample in 0..batch_size {
-            let (v, label) = reader.read_and_parse_data_line(784);
-            normalized_inputs.push(v);
-            target_ohes.extend(one_hot_encode(label, 10));
-        }
-
-        let targets = Matrix {
-            rows: batch_size,
-            columns: 10,
-            values: target_ohes
-        };
-
-        (normalized_inputs, targets)
-    }
-
-    pub fn read_all(reader: &mut InputCsvReader, total_size: usize) -> (Vec<Vec<f64>>, Matrix) {
-        let mut target_ohes = vec![];              // One-hot encoding of the targets
-        let mut normalized_inputs = vec![];   // Normalized data
+    /// Creates DigitImage Sample from CVS file
+    pub fn create_sample_digit_images_from_file(reader: &mut InputCsvReader, total_size: usize) -> Sample<DigitImage> {
+        let mut data = vec![];   // Normalized data
         for _sample in 0..total_size {
-            let (v, label) = reader.read_and_parse_data_line(784);
-            normalized_inputs.push(v);
-            target_ohes.extend(one_hot_encode(label, 10));
+            let digit_image = reader.read_and_parse_data_line(784);
+            data.push(digit_image);
         }
 
-        let targets = Matrix {
-            rows: total_size,
-            columns: 10,
-            values: target_ohes
-        };
-
-        (normalized_inputs, targets)
+        Sample::create_sample(data)
     }
 
     /// Forward propagates the inputs through the layers.
@@ -117,22 +94,23 @@ pub fn handwritten_digits() {
     let mut lowest_loss = f64::INFINITY;
 
     // Validtion setup
-    let mut read_testing = Neural::open_for_importing("./training/mnist_test.csv");
-    let _ = read_testing.read_and_skip_header_line();
-    let (validation_inputs, validation_tagets) = Neural::get_next_batch_contiguous(&mut read_testing, v_batch_size);
-    let vl = InputLayer::from_vec(validation_inputs);
+    let mut testing_reader = Neural::open_for_importing("./training/mnist_test.csv");
+    let _ = testing_reader.read_and_skip_header_line();
+    let mut testing_sample = Neural::create_sample_digit_images_from_file(&mut testing_reader, 10000);
+    let (vl, validation_tagets) = InputLayer::from_sample_digit_images(&mut testing_sample, v_batch_size);//, requested_batch_size)  InputLayer::from_vec(validation_inputs);
 
     // Training setup
-    let mut read_training = Neural::open_for_importing("./training/mnist_train.csv");
-    let _ = read_training.read_and_skip_header_line();
-    let (normalized_inputs, targets) = Neural::get_next_batch_contiguous(&mut read_training, batch_size);
+    let mut training_reader = Neural::open_for_importing("./training/mnist_train.csv");
+    let _ = training_reader.read_and_skip_header_line();
+    let mut training_sample = Neural::create_sample_digit_images_from_file(&mut training_reader, training_sample);
 
     // Create Layers in network
-    let mut il = InputLayer::from_vec(normalized_inputs);
     let mut forward_stack: Vec<Matrix>;
 
     for epoch in 0..10 {
-        for batch in 0..1 {
+        training_sample.reset();
+        for batch in 0..batches {
+            let (il, targets) = InputLayer::from_sample_digit_images(&mut training_sample, batch_size); //InputLayer::from_vec(normalized_inputs);
             forward_stack = Neural::forward(&il, &mut training_nodes);
  
             // Forward pass on training data btch
@@ -160,7 +138,6 @@ pub fn handwritten_digits() {
         println!("| Validation Loss {v_data_loss}");
         
         if v_data_loss < lowest_loss { lowest_loss = v_data_loss } else { println!("Warning, validation loss increased! Consider stopping training here."); }
-        //(validation_inputs, validation_tagets) = Neural::get_next_batch(&mut read_testing, v_batch_size);
     }
 }
 

@@ -58,3 +58,13 @@ fn _strict_partitions_n_into_5_recursive(n: i128) -> i128 {
 
     accumulator
 }
+
+#[cfg(test)]
+mod tests {
+    //use super::*;
+
+    #[test]
+    fn test() {
+
+    }
+}

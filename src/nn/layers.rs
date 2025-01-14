@@ -1,6 +1,6 @@
 extern crate rand;
 use rand::distributions::Uniform;
-use crate::geoalg::f64_math::matrix::*;
+use crate::{digit_image::DigitImage, geoalg::f64_math::matrix::*, sample::Sample};
 
 pub fn learning_rate() -> f64 {
     0.01
@@ -46,9 +46,34 @@ impl InputLayer {
         }
     }
 
-    // Input layer always forwards to first hidden layer and not to an activation function.
-    // # Arguments
-    // # Returns
+    /// Creates an input layers drawn randomly from a sample.
+    pub fn from_sample_digit_images(sample: &mut Sample<DigitImage>, requested_batch_size: usize) -> (InputLayer, Matrix) {
+        let data_from_sample = sample.random_batch(requested_batch_size);
+
+        let mut pixel_vector = Vec::with_capacity(data_from_sample.len() * 785);
+        let mut taget_vector = Vec::with_capacity(data_from_sample.len() * 10);
+        let rows = data_from_sample.len();
+        for datum in data_from_sample {
+            pixel_vector.extend( datum.pixels.clone());
+            taget_vector.extend(datum.one_hot_encoded_label());
+        }
+
+        (InputLayer {
+            input_matrix: Matrix {
+                columns: 784,
+                rows,
+                values: pixel_vector
+            }
+        }, Matrix {
+            rows,
+            columns: 10,
+            values: taget_vector
+        })
+    }
+
+    /// Input layer always forwards to first hidden layer and not to an activation function.
+    /// # Arguments
+    /// # Returns
     pub fn forward(&self) -> Matrix {
         self.input_matrix.clone()
     }
@@ -86,7 +111,6 @@ impl Propagates for HiddenLayer {
     /// Z
     fn forward<'a>(&self, inputs: &'a Matrix) -> Matrix {
         let r = inputs
-            //.mul(&self.weights)
             .mul_threaded_rowwise(&self.weights)
             .add_row_vector(&self.biases);
         r
@@ -94,35 +118,16 @@ impl Propagates for HiddenLayer {
 
     /// In progress to support ADAM optimization
     fn backward<'a>(& mut self, dvalues: &Matrix, inputs: &Matrix) -> Matrix {
-        // let shape_inputs = inputs.shape();
-        // let shape_dvalues = dvalues.shape();
-        // println!("X: {shape_inputs}, dZ: {shape_dvalues}");
-
-        // let shape_weights = self.weights.shape();
-        //let dweights = inputs.get_transpose().mul(dvalues);
+        // Mutate the weights based on derivative weights
         let dweights = inputs.get_transpose().mul_threaded_rowwise(dvalues);
-        // let shape_dweights = dweights.shape();
-        // println!("W: {shape_weights}, dW: {shape_dweights}");
-
-        // Mutate the weights
         self.weights = self.weights.sub(&dweights.scale(learning_rate()));
 
-        let dbiases = dvalues.shrink_rows_by_add();
-        // let db_shape = dbiases.shape();
-        // let biases_shape = self.biases.shape();
-        // println!("biases: {biases_shape}, db_shape: {db_shape}");
 
-        // Mutate the biases
+        // Mutate the biases based on derivative biases
+        let dbiases = dvalues.shrink_rows_by_add();
         self.biases = self.biases.sub(&dbiases.scale(learning_rate()));
 
-        //let x= dvalues.mul(&self.weights.get_transpose());
-        //let x = dvalues.mul_with_transposed(&self.weights);
         let x = dvalues.mul_with_transposed_threaded_rowwise(&self.weights);
-
-        // let x_shape = x.shape();
-        // println!("X: {x_shape}");
-        // println!();
-
         x
     }
 }

@@ -2,8 +2,10 @@ pub mod cost_functions;
 pub mod geoalg;
 pub mod partitions;
 
+pub mod digit_image;
 pub mod input_csv_reader;
 pub mod output_bin_writer;
+pub mod sample;
 
 pub mod nn;
 

@@ -291,7 +291,7 @@ impl Matrix {
         for thread in thread_join_handles {
             match thread.join() {
                 Ok(r) => { values.extend(r); },
-                Err(e) => { } 
+                Err(_e) => { } 
             }
         }
 
@@ -419,7 +419,7 @@ impl Matrix {
         }
     }
 
-    /// Sums each row in self, and outputs a new matrix that is 1 column.
+    /// Sums each row in self, and outputs a new matrix that is 1 row but same number of columns.
     pub fn shrink_rows_by_add(&self) -> Matrix {
         let mut v = Vec::with_capacity(self.columns);
 
@@ -451,16 +451,6 @@ impl Matrix {
         let rows = self.rows;
         let columns = self.columns;
         format!("{rows} x {columns}")
-    }
-}
-
-impl From<Vec<f64>> for Matrix {
-    fn from(vec: Vec<f64>) -> Self {
-        Matrix {
-            rows: vec.len(),
-            columns: 1,
-            values: vec
-        }
     }
 }
 

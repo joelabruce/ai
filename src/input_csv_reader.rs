@@ -1,11 +1,14 @@
 use std::fs::File;
 use std::io::{self, prelude::*, BufReader};
 
+use crate::digit_image::*;
+
 pub struct InputCsvReader {
     reader: BufReader<File>
 }
 
 impl InputCsvReader {
+    /// Opens file and creates reader.
     pub fn new(file_path: &str) -> InputCsvReader {
         let file = File::open(file_path).expect("File should exist for training and testing network.");
         let reader = BufReader::new(file);
@@ -15,15 +18,17 @@ impl InputCsvReader {
         }
     }
 
+    /// Reads and skips the header line.
     pub fn read_and_skip_header_line(&mut self) -> io::Result<()>{
         let mut line = String::new();
         let _ = self.reader.read_line(&mut line);
         Ok(())
     }
 
-    pub fn read_and_parse_data_line(&mut self, vec_size: usize) -> (Vec<f64>, f64) {
-        let mut result_vector = Vec::with_capacity(vec_size);
-        let mut tag = 0f64;
+    /// Reads a single line after 
+    pub fn read_and_parse_data_line(&mut self, vec_size: usize) -> DigitImage {
+        let mut pixels = Vec::with_capacity(vec_size);
+        let mut label = 0f64;
         let mut line = String::new();
 
         let _len = self.reader.read_line(&mut line);
@@ -33,7 +38,7 @@ impl InputCsvReader {
             let retrieved_value = element.trim();
 
             if i == 0 {
-                tag = retrieved_value.parse::<f64>()
+                label = retrieved_value.parse::<f64>()
                     .expect(format!("Retrieved value should have been a tag, found: [{retrieved_value}].").as_str());
             }
             else if i > vec_size {
@@ -49,13 +54,28 @@ impl InputCsvReader {
                     }
                 };
 
-                result_vector.push(value_to_push);
+                pixels.push(value_to_push);
             }
         }
 
-        (result_vector, tag)
+        DigitImage {
+            label,
+            pixels
+        }
     }
 
+    /// Reads multiple lines from file
+    pub fn read_multi(&mut self, vec_size: usize, lines: usize) -> Vec<DigitImage> {
+        let mut result = Vec::with_capacity(lines);
+        for _ in 0..lines {
+            let digit_image = self.read_and_parse_data_line(vec_size);
+            result.push(digit_image);
+        }
+
+        result
+    }
+
+    /// Rewinds reader to beginning.
     pub fn rewind(&mut self) {
         self.reader.rewind().unwrap();
     }
@@ -70,12 +90,12 @@ mod tests {
         let mut reader = InputCsvReader::new("./tests/test.csv");
         let _ = reader.read_and_skip_header_line();
 
-        let (v, tag) = reader.read_and_parse_data_line(784);
-        assert_eq!(v.len(), 784);
-        assert_eq!(tag, 7.0);
+        let digit_image = reader.read_and_parse_data_line(784);
+        assert_eq!(digit_image.pixels.len(), 784);
+        assert_eq!(digit_image.label, 7.0);
 
-        let (v, tag) = reader.read_and_parse_data_line(784);
-        assert_eq!(v.len(), 784);
-        assert_eq!(tag, 2.0);
+        let digit_image = reader.read_and_parse_data_line(784);
+        assert_eq!(digit_image.pixels.len(), 784);
+        assert_eq!(digit_image.label, 2.0);
     }
 }
