@@ -1,3 +1,5 @@
+use std::thread;
+
 use rand::distributions::{Distribution, Uniform};
 
 /// Calculates the Kronecker Delta given i and j that are equatable to eachother.
@@ -7,7 +9,10 @@ pub fn kronecker_delta_f64<I:PartialEq>(i: I, j: I) -> f64 {
     if i == j { 1.0 } else { 0.0 } 
 }
 
+/// Converts label into a vector
 pub fn one_hot_encode(label: f64, bounds: usize) -> Vec<f64> {
+    assert!((label as usize) < bounds, "When one-hot-encoding, label must be less than speficied bounds");
+
     (0..bounds)
         .map(|x| kronecker_delta_f64(label, x as f64))
         .collect()
@@ -79,7 +84,7 @@ impl Matrix {
     /// Returns an row x column matrix filled with random values between -1.0 and 1.0 inclusive.
     /// # Arguments
     /// # Returns
-    pub fn new_randomized_z(columns: usize, rows: usize) -> Self {
+    pub fn new_randomized_z(rows: usize, columns: usize) -> Self {
         assert!(columns > 0);
         assert!(rows > 0);
 
@@ -168,10 +173,6 @@ impl Matrix {
         for i in 0..capacity {
             let index_to_push = self.columns * (i % self.rows) + i / self.rows;
 
-            // Debug code to print that the transpose calcs are workinf correctly
-            //if i % self.rows == 0 { println!() }
-            //print!("{index_to_push} ");
-
             transposed.push(self.values[index_to_push]);
         }
 
@@ -182,13 +183,14 @@ impl Matrix {
         }
     }
 
+    /// Element-wise multiplication.
     pub fn elementwise_multiply(&self, rhs: &Matrix) -> Matrix {
         assert_eq!(self.columns, rhs.columns, "Columns must match for elementwise multiply.");
         assert_eq!(self.rows, rhs.rows, "Rows must match for elementwise multiply.");
 
         let values = self.values.iter()
             .zip(rhs.values.iter())
-            .map(|(x, y)| x * y)
+            .map(|(&x, &y)| x * y)
             .collect();
 
         Matrix {
@@ -203,27 +205,101 @@ impl Matrix {
     /// # Returns
     pub fn mul(&self, rhs: &Matrix) -> Matrix {
         assert_eq!(self.columns, rhs.rows, "When multiplying matrices, lhs columns must equal rhs rows.");
+        let transposed = rhs.get_transpose();
+        self.mul_with_transposed(&transposed)
+    }
 
-        let r_size = rhs.columns * self.rows;
-        let mut floats = Vec::with_capacity(r_size);
+    /// Will fallback to normal implementation if not enough rows to parallelize operations on
+    pub fn mul_threaded_rowwise(&self, rhs: &Matrix) -> Matrix {
+        assert_eq!(self.columns, rhs.rows, "When multiplying matrices, lhs columns must equal rhs rows.");
+        let transposed = rhs.get_transpose();
+        self.mul_with_transposed_threaded_rowwise(&transposed)
+     }
 
-        let t = rhs.get_transpose();
+    /// Faster multiplcation when you need to multiply the transposed matrix of rhs.
+    /// Avoids calculating the transpose twice.
+    pub fn mul_with_transposed(&self, rhs: &Matrix) -> Matrix {
+        assert_eq!(self.columns, rhs.columns, "When multiplying with transposed, columns must be equal for lhs and rhs.");
+
+        let r_size = self.rows * rhs.rows;
+        let mut values = Vec::with_capacity(r_size);
 
         for row in 0..self.rows {
             let ls = self.get_row_vector_slice(row);
-            for t_row in 0..t.rows {
-                let rs = t.get_row_vector_slice(t_row);
-
-                let x = dot_product_of_vector_slices(ls, rs);
-                floats.push(x);
+            for transposed_row in 0..rhs.rows {
+                let rs = rhs.get_row_vector_slice(transposed_row);
+                let x = dot_product_of_vector_slices(&ls, &rs);
+                values.push(x);
             }
         }
 
         Matrix {
-            columns: rhs.columns,
+            columns: rhs.rows,
             rows: self.rows,
-            values: floats
+            values
         }        
+    }
+
+    /// WIP
+    pub fn mul_with_transposed_threaded_rowwise(&self, rhs: &Matrix) -> Matrix {
+        assert_eq!(self.columns, rhs.columns, "When multiplying with transposed, columns must be equal for lhs and rhs.");
+        let num_cores = thread::available_parallelism().unwrap().get();
+        let rows_per_core = self.rows / num_cores;
+
+        if rows_per_core < 1 {
+        // If there are not enough rows, must use regular multiplication
+        // Otherwise it fails because there is not enough data to parallelize
+            return self.mul_with_transposed(&rhs);
+        }
+
+        let mut thread_join_handles = vec![];
+        let spread = self.rows % num_cores;
+
+        let mut rows_curosr = 0;
+        for core in 0..num_cores {
+            let lhs = self.clone();
+            let rhs = rhs.clone();
+
+            let rows_to_handle = rows_per_core + if core < spread { 1 } else { 0 };
+            let partition_start = rows_curosr;
+            let partition_end = partition_start + rows_to_handle - 1;
+
+            rows_curosr = partition_end + 1;
+            //println!("Core: {core} will operate on {rows_to_handle} rows");
+
+            //let obt_core = core;
+
+            thread_join_handles.push(thread::spawn(move || {
+                //println!("Core #{obt_core} will operate on rows {partition_start} - {partition_end}");                
+                //let columns_to_return = copy_of_self.columns;
+                let mut partition_values: Vec<f64> = Vec::with_capacity(rows_to_handle * rhs.rows);
+
+                for row in partition_start..=partition_end {
+                    let ls = lhs.get_row_vector_slice(row);
+                    for transposed_row in 0..rhs.rows {
+                        let rs = rhs.get_row_vector_slice(transposed_row);
+                        let x = dot_product_of_vector_slices(&ls, &rs);
+                        partition_values.push(x);
+                    }
+                }                
+                
+                partition_values
+            }));
+        }
+
+        let mut values = Vec::with_capacity(self.rows * rhs.rows);
+        for thread in thread_join_handles {
+            match thread.join() {
+                Ok(r) => { values.extend(r); },
+                Err(e) => { } 
+            }
+        }
+
+        Matrix {
+            rows: self.rows,
+            columns: rhs.rows,
+            values
+        }  
     }
 
     /// Returns size of underlying vector.
@@ -376,12 +452,6 @@ impl Matrix {
         let columns = self.columns;
         format!("{rows} x {columns}")
     }
-
-    // Getting column vectors proving to be tricky, 
-    //  perhaps abandon for now and focus on transposing and only using slices for matrix rows since matrix is row-major?
-    // fn column_vector<'a>(&'a mut self, column: usize) -> &[f64] {
-    //    self.values.iter().skip(column).step_by(self.columns).cloned().collect()
-    // }
 }
 
 impl From<Vec<f64>> for Matrix {
@@ -579,8 +649,6 @@ mod tests {
         let m28x28 = Matrix::new_randomized_z(28, 28);
 
         let _r =m28x28.values.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", ");
-
-        //println!("{r}");
     }
 
     #[test]
@@ -589,8 +657,8 @@ mod tests {
 
         let mut expected: usize = 0;
         for row in 0..mat.rows {
-            for col in 0..mat.columns {
-                let actual = mat.index_for(row, col);
+            for column in 0..mat.columns {
+                let actual = mat.index_for(row, column);
                 assert_eq!(actual, expected);
                 expected += 1;
             }
@@ -599,6 +667,7 @@ mod tests {
 
     #[test]
     fn matrix_mul() {
+        // Given
         let lhs = Matrix {
             rows: 4,
             columns: 3,
@@ -619,6 +688,10 @@ mod tests {
             ]
         };
 
+        // When
+        let actual = Matrix::mul(&lhs, &rhs);
+
+        // Then
         // Resultant matrix needs to have aas many rows as lhs, and as many columns as rhs.
         let expected = Matrix {
             rows: 4,
@@ -631,8 +704,20 @@ mod tests {
             ]
         };
 
-        let actual = Matrix::mul(&lhs, &rhs);
+        assert!(actual == expected);
 
-        assert!(actual == expected);        
+        let actual_threaded = Matrix::mul_threaded_rowwise(&lhs, &rhs);
+        assert_eq!(actual_threaded, expected);
+    }
+
+    #[test]
+    fn threaded_mul_equals_regular_mul() {
+        let lhs = Matrix::new_randomized_z(96, 784);
+        let rhs = Matrix::new_randomized_z(128, 784);
+
+        let actual = lhs.mul_with_transposed_threaded_rowwise(&rhs);
+        let expected = lhs.mul_with_transposed(&rhs);
+
+        assert_eq!(actual, expected);
     }
 }

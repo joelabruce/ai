@@ -33,7 +33,8 @@ impl InputCsvReader {
             let retrieved_value = element.trim();
 
             if i == 0 {
-                tag = retrieved_value.parse::<f64>().unwrap();
+                tag = retrieved_value.parse::<f64>()
+                    .expect(format!("Retrieved value should have been a tag, found: [{retrieved_value}].").as_str());
             }
             else if i > vec_size {
                 println!("Line contained more data than expected, possible error");
@@ -53,6 +54,10 @@ impl InputCsvReader {
         }
 
         (result_vector, tag)
+    }
+
+    pub fn rewind(&mut self) {
+        self.reader.rewind().unwrap();
     }
 }
 

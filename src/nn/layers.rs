@@ -18,7 +18,7 @@ pub struct Targets {
 
 /// Allows for creation of succeeding layers based on initial data passed in.
 pub struct InputLayer {
-    pub values: Matrix
+    pub input_matrix: Matrix
 }
 
 /// Should be created beginning with InputLayer to ensure shapes are correct.
@@ -31,18 +31,18 @@ impl InputLayer {
     /// Creates input layer based on inputs supplied.
     /// Allows for automatic shaping of succeeding layer generation.
     pub fn from_vec(values: Vec<Vec<f64>>) -> InputLayer {
-        let rows = values.len();    // Number of samples in batch
-        let flat_v: Vec<f64> = values.into_iter().flat_map(|v| v).collect();
-        let columns = flat_v.len() / rows;  // Number of features.
+        let rows = values.len();                                                // Number of inputs
+        let values: Vec<f64> = values.into_iter().flat_map(|v| v).collect();
+        let columns = values.len() / rows;                                      // Number of features.
 
-        let values = Matrix {
+        let input_matrix = Matrix {
             rows,
             columns,
-            values: flat_v
+            values
         };
 
         InputLayer {
-            values
+            input_matrix
         }
     }
 
@@ -50,7 +50,7 @@ impl InputLayer {
     // # Arguments
     // # Returns
     pub fn forward(&self) -> Matrix {
-        self.values.clone()
+        self.input_matrix.clone()
     }
 
 }
@@ -86,7 +86,8 @@ impl Propagates for HiddenLayer {
     /// Z
     fn forward<'a>(&self, inputs: &'a Matrix) -> Matrix {
         let r = inputs
-            .mul(&self.weights)
+            //.mul(&self.weights)
+            .mul_threaded_rowwise(&self.weights)
             .add_row_vector(&self.biases);
         r
     }
@@ -98,7 +99,8 @@ impl Propagates for HiddenLayer {
         // println!("X: {shape_inputs}, dZ: {shape_dvalues}");
 
         // let shape_weights = self.weights.shape();
-        let dweights = inputs.get_transpose().mul(dvalues);
+        //let dweights = inputs.get_transpose().mul(dvalues);
+        let dweights = inputs.get_transpose().mul_threaded_rowwise(dvalues);
         // let shape_dweights = dweights.shape();
         // println!("W: {shape_weights}, dW: {shape_dweights}");
 
@@ -113,11 +115,22 @@ impl Propagates for HiddenLayer {
         // Mutate the biases
         self.biases = self.biases.sub(&dbiases.scale(learning_rate()));
 
-        let x= dvalues.mul(&self.weights.get_transpose());
+        //let x= dvalues.mul(&self.weights.get_transpose());
+        //let x = dvalues.mul_with_transposed(&self.weights);
+        let x = dvalues.mul_with_transposed_threaded_rowwise(&self.weights);
+
         // let x_shape = x.shape();
         // println!("X: {x_shape}");
         // println!();
 
         x
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn testflow() {
+
     }
 }

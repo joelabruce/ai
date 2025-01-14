@@ -14,8 +14,7 @@ pub enum Node {
 
 impl Neural {
     pub fn open_for_importing(file_path: &str) -> InputCsvReader {
-        let mut reader = InputCsvReader::new(file_path);
-        let _ = reader.read_and_skip_header_line(); 
+        let reader = InputCsvReader::new(file_path);
 
         reader
     }
@@ -31,6 +30,24 @@ impl Neural {
 
         let targets = Matrix {
             rows: batch_size,
+            columns: 10,
+            values: target_ohes
+        };
+
+        (normalized_inputs, targets)
+    }
+
+    pub fn read_all(reader: &mut InputCsvReader, total_size: usize) -> (Vec<Vec<f64>>, Matrix) {
+        let mut target_ohes = vec![];              // One-hot encoding of the targets
+        let mut normalized_inputs = vec![];   // Normalized data
+        for _sample in 0..total_size {
+            let (v, label) = reader.read_and_parse_data_line(784);
+            normalized_inputs.push(v);
+            target_ohes.extend(one_hot_encode(label, 10));
+        }
+
+        let targets = Matrix {
+            rows: total_size,
             columns: 10,
             values: target_ohes
         };
@@ -81,17 +98,7 @@ impl Neural {
 pub fn handwritten_digits() {
     // Hidden layer 1
     let dense1 = HiddenLayer::new(784, 128);
-    assert_eq!(dense1.weights.rows, 784);
-    assert_eq!(dense1.weights.columns, 128);
-    assert_eq!(dense1.weights.get_element_count(), 100352);
-
-    // Hidden layer 2
     let dense2 = dense1.calulated_hidden_layer(64);
-    assert_eq!(dense2.weights.rows, 128);
-    assert_eq!(dense2.weights.columns, 64);
-    assert_eq!(dense2.weights.get_element_count(), 8192);
-
-    // Output layer
     let dense3 = dense2.calulated_hidden_layer(10);
 
     // Add layers to the network for forward and backward propagation.
@@ -102,40 +109,47 @@ pub fn handwritten_digits() {
     training_nodes.push(Node::Activation(RELU));
     training_nodes.push(Node::HiddenLayer(dense3));
 
-    // Begin training
-    let batches = 200;
-    let batch_size = 32;
-    let v_batch_size = batches * batch_size / 5;        
+    // Training hyper-parameters
+    let training_sample = 60000;
+    let batch_size = 96;
+    let batches = training_sample / batch_size;
+    let v_batch_size = std::cmp::min(batches * batch_size / 5, 9999);        
     let mut lowest_loss = f64::INFINITY;
 
+    // Validtion setup
     let mut read_testing = Neural::open_for_importing("./training/mnist_test.csv");
+    let _ = read_testing.read_and_skip_header_line();
     let (validation_inputs, validation_tagets) = Neural::get_next_batch_contiguous(&mut read_testing, v_batch_size);
     let vl = InputLayer::from_vec(validation_inputs);
 
-    for epoch in 0..100 {
-    // Read from specified files for creating neural network
-        let mut read_training = Neural::open_for_importing("./training/mnist_train.csv");
-        let (mut normalized_inputs, mut targets) = Neural::get_next_batch_contiguous(&mut read_training, batch_size);
+    // Training setup
+    let mut read_training = Neural::open_for_importing("./training/mnist_train.csv");
+    let _ = read_training.read_and_skip_header_line();
+    let (normalized_inputs, targets) = Neural::get_next_batch_contiguous(&mut read_training, batch_size);
 
-        // Create Layers in network
-        let mut il = InputLayer::from_vec(normalized_inputs);
-        let mut forward_stack = Neural::forward(&il, &mut training_nodes);
-        for batch in 0..batches {
-            // Forward pass on training data
+    // Create Layers in network
+    let mut il = InputLayer::from_vec(normalized_inputs);
+    let mut forward_stack: Vec<Matrix>;
+
+    for epoch in 0..10 {
+        for batch in 0..1 {
+            forward_stack = Neural::forward(&il, &mut training_nodes);
+ 
+            // Forward pass on training data btch
             let predictions = &(SOFTMAX.f)(&forward_stack.pop().unwrap());
             let sample_losses = forward_categorical_cross_entropy_loss(&predictions, &targets);
             let data_loss = sample_losses.values.iter().copied().sum::<f64>() / sample_losses.get_element_count() as f64;            
             let dvalues6 = backward_categorical_cross_entropy_loss_wrt_softmax(&predictions, &targets).div_by_scalar(batch_size as f64);
+            
+            // Backward pass on training data batch
             Neural::backward(&mut training_nodes, &dvalues6, &mut forward_stack);
 
-            if batch % 10 == 0 {
+            if batch % 100 == 0 {
                 println!("<Checkpoint> Training on batch #{batch} | Data Loss: {data_loss}");
             }
-
-            (normalized_inputs, targets) = Neural::get_next_batch_contiguous(&mut read_training, batch_size);
-            il = InputLayer::from_vec(normalized_inputs);
-            forward_stack = Neural::forward(&il, &mut training_nodes);
         }
+
+        print!("Epoch #{epoch} completed...");
 
         // Validate updated neural network against validation inputs it hasn't been trained on.
         forward_stack = Neural::forward(&vl, &mut training_nodes);
@@ -143,9 +157,9 @@ pub fn handwritten_digits() {
         let v_sample_losses = forward_categorical_cross_entropy_loss(&v_predictions, &validation_tagets);
         let v_data_loss = v_sample_losses.values.iter().copied().sum::<f64>() / v_sample_losses.get_element_count() as f64;
 
-        println!("Epoch #{epoch} completed. | Validation Loss {v_data_loss}");
+        println!("| Validation Loss {v_data_loss}");
         
-        if v_data_loss <= lowest_loss { lowest_loss = v_data_loss } else { println!("Warning, validation loss increased! Consider stopping training here."); }
+        if v_data_loss < lowest_loss { lowest_loss = v_data_loss } else { println!("Warning, validation loss increased! Consider stopping training here."); }
         //(validation_inputs, validation_tagets) = Neural::get_next_batch(&mut read_testing, v_batch_size);
     }
 }
