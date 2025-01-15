@@ -19,7 +19,7 @@ impl Propagates for Activation {
         assert_eq!(dvalues.rows, inputs.rows, "Backpropagation for Activation needs inputs and dvalues to have same rows.");
         assert_eq!(dvalues.columns, inputs.columns, "Backpropagation for Activation needs inputs and dvalues to have same columns.");
 
-        inputs.map(self.d).elementwise_multiply(&dvalues)
+        inputs.map(self.d).elementwise_multiply_threaded(&dvalues)
     }
 }
 
@@ -37,21 +37,21 @@ pub const RELU: Activation = Activation {
 
 /// H-Switsh Activation.
 pub const H_SWISH: Activation = Activation {
-    f: |x| {
-        if *x <= -3.0                   { 0.0 }
-        else if -3.0 < *x && *x < 3.0   { x * (x + 3.0) / 6.0 }
-        else                            { *x }
+    f: |&x| {
+        if x <= -3.0                   { 0.0 }
+        else if -3.0 < x && x < 3.0    { x * (x + 3.0) / 6.0 }
+        else                           { x }
     },
-    d: |x| {
-        if *x <= -3.0                   { 0.0 }
-        else if -3.0 < *x && *x < 3.0   { (2.0 * x + 3.0) / 6.0 }
-        else                            { 1.0 }  
+    d: |&x| {
+        if x <= -3.0                   { 0.0 }
+        else if -3.0 < x && x < 3.0    { (2.0 * x + 3.0) / 6.0 }
+        else                           { 1.0 }  
     }
 };
 
 /// Calculates the cross-entropy (used with softmax) for each input sample.
 pub fn forward_categorical_cross_entropy_loss(predictions: &Matrix, expected: &Matrix) -> Matrix {
-    let t: Matrix = predictions.elementwise_multiply(expected);
+    let t: Matrix = predictions.elementwise_multiply_threaded(expected);
     let mut r = Vec::with_capacity(t.rows);
     for row in 0..t.rows {
         let loss = -t.get_row_vector_slice(row).iter().sum::<f64>().log10();

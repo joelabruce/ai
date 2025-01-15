@@ -1,20 +1,48 @@
+use std::fs::File;
+use std::io::Read;
+
 use crate::digit_image::DigitImage;
 use crate::nn::layers::*;
 use crate::nn::activation_functions::*;
 use crate::geoalg::f64_math::matrix::*;
 use crate::input_csv_reader::*;
+use crate::output_bin_writer::OutputBinWriter;
 use crate::sample::Sample;
 
-pub struct Neural {
-    pub nodes: Vec<Node>
-}
+pub struct NeuralNetwork { }
 
 pub enum Node {
     HiddenLayer(HiddenLayer),
     Activation(Activation)
 }
 
-impl Neural {
+/// Creates an input layers drawn randomly from a sample.
+pub fn from_sample_digit_images(sample: &mut Sample<DigitImage>, requested_batch_size: usize) -> (InputLayer, Matrix) {
+    let data_from_sample = sample.random_batch(requested_batch_size);
+
+    let mut pixel_vector = Vec::with_capacity(data_from_sample.len() * 785);
+    let mut taget_vector = Vec::with_capacity(data_from_sample.len() * 10);
+    let rows = data_from_sample.len();
+    for datum in data_from_sample {
+        pixel_vector.extend( datum.pixels.clone());
+        taget_vector.extend(datum.one_hot_encoded_label());
+    }
+
+    (InputLayer {
+        input_matrix: Matrix {
+            columns: 784,
+            rows,
+            values: pixel_vector
+        }
+    }, Matrix {
+        rows,
+        columns: 10,
+        values: taget_vector
+    })
+}
+
+
+impl NeuralNetwork {
     pub fn open_for_importing(file_path: &str) -> InputCsvReader {
         let reader = InputCsvReader::new(file_path);
 
@@ -70,10 +98,51 @@ impl Neural {
             };
        }
     }
+
+    pub fn save_network(from_nodes: &Vec<Node>, to_writer: &mut OutputBinWriter) {
+        for node in from_nodes {
+            match node {
+                Node::HiddenLayer(n) => {
+                    to_writer.write_slice_f64(&n.weights.values);
+                    to_writer.write_slice_f64(&n.biases.values);
+                }
+                _ => { }
+            }
+        }
+    }
+
+    pub fn attempt_load_network(from_file_path: &str, to_nodes: &mut Vec<Node>) {
+        let mut file = File::open(from_file_path).expect("Could not load neural network training.");
+
+        for node in to_nodes {
+            match node {
+                Node::HiddenLayer(n) => {
+                    // Load weights first
+                    let mut weights_buf = vec![0u8; n.weights.len() * 8];
+                    file.read_exact(&mut weights_buf).expect("Should not error reading in weights for a layer.");
+                    let weights_floats: Vec<f64> = weights_buf
+                        .chunks_exact(8)
+                        .map(|chunk| f64::from_le_bytes(chunk.try_into().unwrap()))
+                        .collect();
+                    n.weights.values = weights_floats;
+
+                    // Load biases next
+                    let mut biases_buf = vec![0u8; n.biases.len() * 8];
+                    file.read_exact(&mut biases_buf).expect("Should not error reading biases for a layer.");
+                    let biases_floats: Vec<f64> = biases_buf
+                        .chunks_exact(8)
+                        .map(|chunk| f64::from_le_bytes(chunk.try_into().unwrap()))
+                        .collect();
+                    n.biases.values = biases_floats;
+               }
+               _ => { }
+            }
+        }
+    }
 }
 
-pub fn handwritten_digits() {
-    // Hidden layer 1
+pub fn handwritten_digits(load_from_file: bool) {
+    // Create dense layers
     let dense1 = HiddenLayer::new(784, 128);
     let dense2 = dense1.calulated_hidden_layer(64);
     let dense3 = dense2.calulated_hidden_layer(10);
@@ -86,6 +155,13 @@ pub fn handwritten_digits() {
     training_nodes.push(Node::Activation(RELU));
     training_nodes.push(Node::HiddenLayer(dense3));
 
+    let trained_model_location = "./tests/network_training.nn";
+    if load_from_file {
+        println!("Trying to load trained neural network...");
+        NeuralNetwork::attempt_load_network(&trained_model_location, &mut training_nodes);
+        println!("Success! Fine tuning model!");
+    }
+
     // Training hyper-parameters
     let total_epochs = 10;
     let training_sample = 60000;
@@ -95,15 +171,15 @@ pub fn handwritten_digits() {
     let mut lowest_loss = f64::INFINITY;
 
     // Validtion setup
-    let mut testing_reader = Neural::open_for_importing("./training/mnist_test.csv");
+    let mut testing_reader = NeuralNetwork::open_for_importing("./training/mnist_test.csv");
     let _ = testing_reader.read_and_skip_header_line();
-    let mut testing_sample = Neural::create_sample_for_digit_images_from_file(&mut testing_reader, 10000);
-    let (vl, validation_tagets) = InputLayer::from_sample_digit_images(&mut testing_sample, v_batch_size);
+    let mut testing_sample = NeuralNetwork::create_sample_for_digit_images_from_file(&mut testing_reader, 10000);
+    let (vl, validation_tagets) = from_sample_digit_images(&mut testing_sample, v_batch_size);
 
     // Training setup
-    let mut training_reader = Neural::open_for_importing("./training/mnist_train.csv");
+    let mut training_reader = NeuralNetwork::open_for_importing("./training/mnist_train.csv");
     let _ = training_reader.read_and_skip_header_line();
-    let mut training_sample = Neural::create_sample_for_digit_images_from_file(&mut training_reader, training_sample);
+    let mut training_sample = NeuralNetwork::create_sample_for_digit_images_from_file(&mut training_reader, training_sample);
 
     // Create Layers in network
     let mut forward_stack: Vec<Matrix>;
@@ -111,8 +187,8 @@ pub fn handwritten_digits() {
     for epoch in 1..=total_epochs {
         training_sample.reset();
         for batch in 0..batches {
-            let (il, targets) = InputLayer::from_sample_digit_images(&mut training_sample, batch_size);
-            forward_stack = Neural::forward(&il, &mut training_nodes);
+            let (il, targets) = from_sample_digit_images(&mut training_sample, batch_size);
+            forward_stack = NeuralNetwork::forward(&il, &mut training_nodes);
  
             // Forward pass on training data btch
             let predictions = &(SOFTMAX.f)(&forward_stack.pop().unwrap());
@@ -121,17 +197,19 @@ pub fn handwritten_digits() {
             let dvalues6 = backward_categorical_cross_entropy_loss_wrt_softmax(&predictions, &targets).div_by_scalar(batch_size as f64);
             
             // Backward pass on training data batch
-            Neural::backward(&mut training_nodes, &dvalues6, &mut forward_stack);
+            NeuralNetwork::backward(&mut training_nodes, &dvalues6, &mut forward_stack);
 
             if batch % 100 == 0 {
-                println!("<Checkpoint> Training on batch #{batch} | Data Loss: {data_loss}");
+                println!("Training to batch #{batch} complete | Data Loss: {data_loss}");
             }
         }
 
-        print!("Epoch #{epoch} completed...");
+        print!("Epoch #{epoch} completed. Saving...");
+        let mut network_saver = OutputBinWriter::new(&format!("{trained_model_location}"));
+        NeuralNetwork::save_network(&training_nodes, &mut network_saver);
 
         // Validate updated neural network against validation inputs it hasn't been trained on.
-        forward_stack = Neural::forward(&vl, &mut training_nodes);
+        forward_stack = NeuralNetwork::forward(&vl, &mut training_nodes);
         let v_predictions = &(SOFTMAX.f)(&forward_stack.pop().unwrap());
         let v_sample_losses = forward_categorical_cross_entropy_loss(&v_predictions, &validation_tagets);
         let v_data_loss = v_sample_losses.values.iter().copied().sum::<f64>() / v_sample_losses.len() as f64;
@@ -149,6 +227,6 @@ mod tests {
     #[ignore = "Needs mnist_train.csv to train on."]
     #[test]
     fn nn_test() {
-        handwritten_digits();
+        handwritten_digits(true);
     }
 }

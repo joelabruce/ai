@@ -141,7 +141,8 @@ impl Matrix {
         assert_eq!(self.columns, rhs.columns, "Columns must match for elementwise multiply.");
         assert_eq!(self.rows, rhs.rows, "Rows must match for elementwise multiply.");
 
-        let values = self.values.iter()
+        let values = self.values
+            .iter()
             .zip(rhs.values.iter())
             .map(|(&x, &y)| x * y)
             .collect();
@@ -153,11 +154,70 @@ impl Matrix {
         }
     }
 
+    /// Row-wise multi-threaded element-wise multiply
     pub fn elementwise_multiply_threaded(&self, rhs: &Matrix) -> Matrix {
         assert_eq!(self.columns, rhs.columns, "Columns must match for elementwise multiply.");
         assert_eq!(self.rows, rhs.rows, "Rows must match for elementwise multiply.");
 
-        Matrix::new_zeroed(1, 1)
+        let num_cores = thread::available_parallelism().unwrap().get();
+        let rows_per_core = self.rows / num_cores;
+
+        if rows_per_core < 1 {
+        // If there are not enough rows, must use regular multiplication
+        // Otherwise it fails because there is not enough data to parallelize
+            return self.elementwise_multiply(&rhs);
+        }
+
+        let mut thread_join_handles = vec![];
+        let spread = self.rows % num_cores;
+
+        let mut rows_curosr = 0;
+        for core in 0..num_cores {
+            let lhs = self.clone(); // How do I do avoid cloning?
+            let rhs = rhs.clone();  // How do I avoid cloning?
+
+            let rows_to_handle = rows_per_core + if core < spread { 1 } else { 0 };
+            let partition_start = rows_curosr;
+            let partition_end = partition_start + rows_to_handle - 1;
+
+            rows_curosr = partition_end + 1;
+
+            thread_join_handles.push(thread::spawn(move || {
+                let mut partition_values: Vec<f64> = Vec::with_capacity(rows_to_handle * rhs.rows);
+
+                for row in partition_start..=partition_end {
+                    //////
+                    // Actual work inside of thread to be done
+                    let ls = lhs.get_row_vector_slice(row);
+                    let rs = rhs.get_row_vector_slice(row);
+                        
+                    let values = ls
+                        .iter()
+                        .zip(rs)
+                        .map(|(&l, &r)| l * r);
+                    // End of actual parallelized work
+                    //////
+
+                    partition_values.extend(values);
+                }                
+                
+                partition_values
+            }));
+        }
+
+        let mut values = Vec::with_capacity(self.rows * rhs.rows);
+        for thread in thread_join_handles {
+            match thread.join() {
+                Ok(r) => { values.extend(r); },
+                Err(_e) => { } 
+            }
+        }
+
+        Matrix {
+            rows: self.rows,
+            columns: self.columns,
+            values
+        }
     }
 
     /// Multiplies two matrices using transpose operation for efficiency.
@@ -225,22 +285,21 @@ impl Matrix {
             let partition_end = partition_start + rows_to_handle - 1;
 
             rows_curosr = partition_end + 1;
-            //println!("Core: {core} will operate on {rows_to_handle} rows");
-
-            //let obt_core = core;
 
             thread_join_handles.push(thread::spawn(move || {
-                //println!("Core #{obt_core} will operate on rows {partition_start} - {partition_end}");                
-                //let columns_to_return = copy_of_self.columns;
-                let mut partition_values: Vec<f64> = Vec::with_capacity(rows_to_handle * rhs.rows);
+                 let mut partition_values: Vec<f64> = Vec::with_capacity(rows_to_handle * rhs.rows);
 
                 for row in partition_start..=partition_end {
+                    //////
+                    // Actual work inside of thread to be done
                     let ls = lhs.get_row_vector_slice(row);
                     for transposed_row in 0..rhs.rows {
                         let rs = rhs.get_row_vector_slice(transposed_row);
                         let x = dot_product_of_vector_slices(&ls, &rs);
                         partition_values.push(x);
                     }
+                    // End of actual parallelized work
+                    //////
                 }                
                 
                 partition_values
@@ -259,7 +318,7 @@ impl Matrix {
             rows: self.rows,
             columns: rhs.rows,
             values
-        }  
+        }
     }
 
     /// Returns size of underlying vector.
@@ -300,7 +359,11 @@ impl Matrix {
     pub fn sub(&self, rhs: &Matrix) -> Matrix {
         assert!(self.columns == rhs.columns && self.rows == rhs.rows, "Cannot subtract matrices with different orders.");
 
-        let values = self.values.iter().zip(rhs.values.iter()).map(|(x, y)| x - y).collect();
+        let values = self.values
+            .iter()
+            .zip(rhs.values.iter())
+            .map(|(x, y)| x - y)
+            .collect();
 
         Matrix {
             columns: rhs.columns,
@@ -314,7 +377,11 @@ impl Matrix {
         assert_eq!(self.columns, rhs.columns, "Columns of lhs and rhs must be equal when adding matrices.");
         assert_eq!(self.rows, rhs.rows, "Rows of lhs and rhs must be equal when adding matrices.");
 
-        let values = self.values.iter().zip(rhs.values.iter()).map(|(x, y)| x + y).collect();
+        let values = self.values
+            .iter()
+            .zip(rhs.values.iter())
+            .map(|(x, y)| x + y)
+            .collect();
 
         Matrix {
             columns: rhs.columns,
@@ -328,7 +395,10 @@ impl Matrix {
     /// # Returns
     pub fn div_by_scalar(&self, scalar: f64) -> Matrix {
         assert_ne!(scalar, 0.0, "Cannot divide matrix elements by zero.");
-        let values = self.values.iter().map(|x| x / scalar).collect();
+        let values = self.values
+            .iter()
+            .map(|x| x / scalar)
+            .collect();
 
         Matrix {
             rows: self.rows,
@@ -728,5 +798,17 @@ mod tests {
         let expected = 300.;
 
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_element_wise_multiply_threaded() {
+        let lhs = Matrix::new_randomized_z(1000, 3001);
+        let rhs = Matrix::new_randomized_z(1000, 3001);
+
+        let expected = lhs.elementwise_multiply(&rhs);
+        let actual = lhs.elementwise_multiply_threaded(&rhs);
+
+        assert_eq!(actual, expected);
+
     }
 }

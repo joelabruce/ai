@@ -1,6 +1,6 @@
 extern crate rand;
 use rand::distributions::Uniform;
-use crate::{digit_image::DigitImage, geoalg::f64_math::matrix::*, sample::Sample};
+use crate::geoalg::f64_math::matrix::*;
 
 pub fn learning_rate() -> f64 {
     0.01
@@ -39,31 +39,6 @@ impl InputLayer {
         InputLayer {
             input_matrix
         }
-    }
-
-    /// Creates an input layers drawn randomly from a sample.
-    pub fn from_sample_digit_images(sample: &mut Sample<DigitImage>, requested_batch_size: usize) -> (InputLayer, Matrix) {
-        let data_from_sample = sample.random_batch(requested_batch_size);
-
-        let mut pixel_vector = Vec::with_capacity(data_from_sample.len() * 785);
-        let mut taget_vector = Vec::with_capacity(data_from_sample.len() * 10);
-        let rows = data_from_sample.len();
-        for datum in data_from_sample {
-            pixel_vector.extend( datum.pixels.clone());
-            taget_vector.extend(datum.one_hot_encoded_label());
-        }
-
-        (InputLayer {
-            input_matrix: Matrix {
-                columns: 784,
-                rows,
-                values: pixel_vector
-            }
-        }, Matrix {
-            rows,
-            columns: 10,
-            values: taget_vector
-        })
     }
 
     /// Input layer always forwards to first hidden layer and not to an activation function.

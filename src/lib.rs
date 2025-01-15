@@ -8,6 +8,7 @@ pub mod output_bin_writer;
 pub mod sample;
 pub mod math;
 pub mod nn;
+pub mod weight_initializers;
 
 use crate::partitions::*;
 use colored::*;
