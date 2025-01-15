@@ -11,11 +11,6 @@ pub trait Propagates {
     fn backward<'a>(&'a mut self, dvalues: &Matrix, inputs: &Matrix) -> Matrix;
 }
 
-/// Expected values for training of inputs.
-pub struct Targets {
-    pub values: Matrix
-}
-
 /// Allows for creation of succeeding layers based on initial data passed in.
 pub struct InputLayer {
     pub input_matrix: Matrix

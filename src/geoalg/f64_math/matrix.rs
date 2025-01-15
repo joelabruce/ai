@@ -2,13 +2,15 @@ use std::thread;
 use rand::distributions::{Distribution, Uniform};
 use crate::math::*;
 
-pub fn argmax(values: &[f64]) -> usize {
-    values
-        .iter()
-        .enumerate()
-        .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
-        .map(|(index, _)| index).unwrap()
-}
+/// To be adapted later.
+/// WIP
+// pub fn argmax(values: &[f64]) -> usize {
+//     values
+//         .iter()
+//         .enumerate()
+//         .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
+//         .map(|(index, _)| index).unwrap()
+// }
 
 /// Matrix is implemented as a single dimensional vector of f64s.
 /// This implementation of Matrix is row-major. 

@@ -18,19 +18,8 @@ impl Propagates for Activation {
     fn backward<'a>(&mut self, dvalues: &'a Matrix, inputs: &'a Matrix) -> Matrix {
         assert_eq!(dvalues.rows, inputs.rows, "Backpropagation for Activation needs inputs and dvalues to have same rows.");
         assert_eq!(dvalues.columns, inputs.columns, "Backpropagation for Activation needs inputs and dvalues to have same columns.");
-        
-        let values = dvalues.values
-            .iter()
-            .zip(inputs.values.clone())
-            .map(|(&x, y)| {
-                if y <= 0.0 { 0.0 } else { x }
-            }).collect();
 
-        Matrix {
-            rows: dvalues.rows,
-            columns: dvalues.columns,
-            values
-        }
+        inputs.map(self.d).elementwise_multiply(&dvalues)
     }
 }
 
@@ -42,8 +31,8 @@ pub const SIGMOID: Activation = Activation {
 
 /// ReLU (Rectified Linear Unit) Activation.
 pub const RELU: Activation = Activation {
-    f: |x| if *x <= 0.0 { 0.0 } else { *x },
-    d: |x| if *x <= 0.0 { 0.0 } else { 1.0 }
+    f: |&x| if x <= 0.0 { 0.0 } else { x },
+    d: |&x| if x <= 0.0 { 0.0 } else { 1.0 }
 };
 
 /// H-Switsh Activation.
@@ -143,9 +132,17 @@ mod tests {
         let expected = 0.0;
         assert_eq!(actual, expected);
 
+        let actual = (RELU.d)(&tc1);
+        let expected = 0.;
+        assert_eq!(actual, expected);
+
         let tc2 = 7.2;
         let actual = (RELU.f)(&tc2);
         let expected = 7.2;
+        assert_eq!(actual, expected);
+
+        let actual = (RELU.d)(&tc2);
+        let expected = 1.;
         assert_eq!(actual, expected);
     }
 }
