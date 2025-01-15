@@ -99,10 +99,10 @@ impl HiddenLayer {
 
     /// Instantiates and returns a new Hidden Layer based off self's shape.
     pub fn calulated_hidden_layer(&self, neuron_count: usize) -> HiddenLayer {
-        assert!(self.weights.get_element_count() > 0);
-        assert!(self.biases.get_element_count() > 0);
+        assert!(self.weights.len() > 0);
+        assert!(self.biases.len() > 0);
 
-        HiddenLayer::new(self.biases.get_element_count(), neuron_count)
+        HiddenLayer::new(self.biases.len(), neuron_count)
     }
 }
 

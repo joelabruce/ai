@@ -16,14 +16,14 @@ impl Propagates for Activation {
         inputs.map(self.f)
     }
     fn backward<'a>(&mut self, dvalues: &'a Matrix, inputs: &'a Matrix) -> Matrix {
-        assert_eq!(dvalues.rows, inputs.rows, "Backpropagation RELU needs inputs and dvalues to have same rows.");
-        assert_eq!(dvalues.columns, inputs.columns, "Backpropagation RELU needs inputs and dvalues to have same columns.");
+        assert_eq!(dvalues.rows, inputs.rows, "Backpropagation for Activation needs inputs and dvalues to have same rows.");
+        assert_eq!(dvalues.columns, inputs.columns, "Backpropagation for Activation needs inputs and dvalues to have same columns.");
         
         let values = dvalues.values
             .iter()
             .zip(inputs.values.clone())
-            .map(|(x, y)| {
-                if y <= 0.0 { 0.0 } else { *x }
+            .map(|(&x, y)| {
+                if y <= 0.0 { 0.0 } else { x }
             }).collect();
 
         Matrix {
@@ -34,16 +34,19 @@ impl Propagates for Activation {
     }
 }
 
+/// Sigmoid Activation.
 pub const SIGMOID: Activation = Activation {
     f: |x| 1.0 / (1.0 - E.powf(-(x))),
     d: |x| (x) * (1.0 - (x))
 };
 
+/// ReLU (Rectified Linear Unit) Activation.
 pub const RELU: Activation = Activation {
     f: |x| if *x <= 0.0 { 0.0 } else { *x },
     d: |x| if *x <= 0.0 { 0.0 } else { 1.0 }
 };
 
+/// H-Switsh Activation.
 pub const H_SWISH: Activation = Activation {
     f: |x| {
         if *x <= -3.0                   { 0.0 }
@@ -85,7 +88,7 @@ pub struct FoldActivation {
 
 pub const SOFTMAX: FoldActivation = FoldActivation {
     f: |m| {
-        let mut r = Vec::with_capacity(m.get_element_count());
+        let mut r = Vec::with_capacity(m.len());
 
         for row in 0..m.rows {
             let v = m.get_row_vector_slice(row);
@@ -106,8 +109,7 @@ pub const SOFTMAX: FoldActivation = FoldActivation {
         r
     },
     d: |v| {
-        //v.to_vec()
-        Matrix::new_zeroed(v.rows, v.columns)
+        v.clone()
     }
 };
 

@@ -22,7 +22,7 @@ impl Neural {
     }
 
     /// Creates DigitImage Sample from CVS file
-    pub fn create_sample_digit_images_from_file(reader: &mut InputCsvReader, total_size: usize) -> Sample<DigitImage> {
+    pub fn create_sample_for_digit_images_from_file(reader: &mut InputCsvReader, total_size: usize) -> Sample<DigitImage> {
         let mut data = vec![];   // Normalized data
         for _sample in 0..total_size {
             let digit_image = reader.read_and_parse_data_line(784);
@@ -87,6 +87,7 @@ pub fn handwritten_digits() {
     training_nodes.push(Node::HiddenLayer(dense3));
 
     // Training hyper-parameters
+    let total_epochs = 10;
     let training_sample = 60000;
     let batch_size = 96;
     let batches = training_sample / batch_size;
@@ -96,27 +97,27 @@ pub fn handwritten_digits() {
     // Validtion setup
     let mut testing_reader = Neural::open_for_importing("./training/mnist_test.csv");
     let _ = testing_reader.read_and_skip_header_line();
-    let mut testing_sample = Neural::create_sample_digit_images_from_file(&mut testing_reader, 10000);
-    let (vl, validation_tagets) = InputLayer::from_sample_digit_images(&mut testing_sample, v_batch_size);//, requested_batch_size)  InputLayer::from_vec(validation_inputs);
+    let mut testing_sample = Neural::create_sample_for_digit_images_from_file(&mut testing_reader, 10000);
+    let (vl, validation_tagets) = InputLayer::from_sample_digit_images(&mut testing_sample, v_batch_size);
 
     // Training setup
     let mut training_reader = Neural::open_for_importing("./training/mnist_train.csv");
     let _ = training_reader.read_and_skip_header_line();
-    let mut training_sample = Neural::create_sample_digit_images_from_file(&mut training_reader, training_sample);
+    let mut training_sample = Neural::create_sample_for_digit_images_from_file(&mut training_reader, training_sample);
 
     // Create Layers in network
     let mut forward_stack: Vec<Matrix>;
 
-    for epoch in 0..10 {
+    for epoch in 1..=total_epochs {
         training_sample.reset();
         for batch in 0..batches {
-            let (il, targets) = InputLayer::from_sample_digit_images(&mut training_sample, batch_size); //InputLayer::from_vec(normalized_inputs);
+            let (il, targets) = InputLayer::from_sample_digit_images(&mut training_sample, batch_size);
             forward_stack = Neural::forward(&il, &mut training_nodes);
  
             // Forward pass on training data btch
             let predictions = &(SOFTMAX.f)(&forward_stack.pop().unwrap());
             let sample_losses = forward_categorical_cross_entropy_loss(&predictions, &targets);
-            let data_loss = sample_losses.values.iter().copied().sum::<f64>() / sample_losses.get_element_count() as f64;            
+            let data_loss = sample_losses.values.iter().copied().sum::<f64>() / sample_losses.len() as f64;            
             let dvalues6 = backward_categorical_cross_entropy_loss_wrt_softmax(&predictions, &targets).div_by_scalar(batch_size as f64);
             
             // Backward pass on training data batch
@@ -133,7 +134,7 @@ pub fn handwritten_digits() {
         forward_stack = Neural::forward(&vl, &mut training_nodes);
         let v_predictions = &(SOFTMAX.f)(&forward_stack.pop().unwrap());
         let v_sample_losses = forward_categorical_cross_entropy_loss(&v_predictions, &validation_tagets);
-        let v_data_loss = v_sample_losses.values.iter().copied().sum::<f64>() / v_sample_losses.get_element_count() as f64;
+        let v_data_loss = v_sample_losses.values.iter().copied().sum::<f64>() / v_sample_losses.len() as f64;
 
         println!("| Validation Loss {v_data_loss}");
         

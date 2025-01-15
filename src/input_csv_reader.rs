@@ -63,22 +63,6 @@ impl InputCsvReader {
             pixels
         }
     }
-
-    /// Reads multiple lines from file
-    pub fn read_multi(&mut self, vec_size: usize, lines: usize) -> Vec<DigitImage> {
-        let mut result = Vec::with_capacity(lines);
-        for _ in 0..lines {
-            let digit_image = self.read_and_parse_data_line(vec_size);
-            result.push(digit_image);
-        }
-
-        result
-    }
-
-    /// Rewinds reader to beginning.
-    pub fn rewind(&mut self) {
-        self.reader.rewind().unwrap();
-    }
 }
 
 #[cfg(test)]

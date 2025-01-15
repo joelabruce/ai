@@ -1,22 +1,6 @@
 use std::thread;
-
 use rand::distributions::{Distribution, Uniform};
-
-/// Calculates the Kronecker Delta given i and j that are equatable to eachother.
-/// # Arguments
-/// # Returns
-pub fn kronecker_delta_f64<I:PartialEq>(i: I, j: I) -> f64 {
-    if i == j { 1.0 } else { 0.0 } 
-}
-
-/// Converts label into a vector
-pub fn one_hot_encode(label: f64, bounds: usize) -> Vec<f64> {
-    assert!((label as usize) < bounds, "When one-hot-encoding, label must be less than speficied bounds");
-
-    (0..bounds)
-        .map(|x| kronecker_delta_f64(label, x as f64))
-        .collect()
-}
+use crate::math::*;
 
 pub fn argmax(values: &[f64]) -> usize {
     values
@@ -119,23 +103,6 @@ impl Matrix {
         }
     }
 
-    /// Returns index in vec given row and column.
-    /// # Arguments
-    /// # Returns
-    pub fn index_for(&self, row: usize, column: usize) -> usize {
-        assert!(row < self.rows);
-        assert!(column < self.columns);
-
-        row * self.columns + column
-    }
-
-    /// Gets reference to value at specified row and column.
-    /// # Arguments
-    /// # Returns
-    pub fn get(&self, row: usize, column: usize) -> Option<&f64> {
-        self.values.get(self.index_for(row, column))
-    }
-
     /// Returns slice of matrix that is a row of the matrix
     /// # Arguments
     /// # Returns
@@ -145,22 +112,6 @@ impl Matrix {
         let start = row * self.columns;
         let end = start + self.columns;
         &self.values[start..end]
-    }
-
-    /// Given a specified row, return it transposed as a column.
-    /// # Arguments
-    /// # Returns
-    pub fn get_row_transposed_as_column(&self, row: usize) -> Matrix {
-        assert!(row < self.rows);
-
-        let start = row * self.columns;
-        let end = start + self.columns;
-
-        Matrix {
-            columns: 1,
-            rows: self.columns,
-            values: self.values[start..end].to_vec()
-        }
     }
 
     /// Returns a newly allocated matrix that is the transpose of the matrix operated on.
@@ -198,6 +149,13 @@ impl Matrix {
             columns: self.columns,
             values
         }
+    }
+
+    pub fn elementwise_multiply_threaded(&self, rhs: &Matrix) -> Matrix {
+        assert_eq!(self.columns, rhs.columns, "Columns must match for elementwise multiply.");
+        assert_eq!(self.rows, rhs.rows, "Rows must match for elementwise multiply.");
+
+        Matrix::new_zeroed(1, 1)
     }
 
     /// Multiplies two matrices using transpose operation for efficiency.
@@ -240,7 +198,7 @@ impl Matrix {
         }        
     }
 
-    /// WIP
+    /// Matrix multiplication using transposed row-wise multi-threading.
     pub fn mul_with_transposed_threaded_rowwise(&self, rhs: &Matrix) -> Matrix {
         assert_eq!(self.columns, rhs.columns, "When multiplying with transposed, columns must be equal for lhs and rhs.");
         let num_cores = thread::available_parallelism().unwrap().get();
@@ -257,8 +215,8 @@ impl Matrix {
 
         let mut rows_curosr = 0;
         for core in 0..num_cores {
-            let lhs = self.clone();
-            let rhs = rhs.clone();
+            let lhs = self.clone(); // How do I do avoid cloning?
+            let rhs = rhs.clone();  // How do I avoid cloning?
 
             let rows_to_handle = rows_per_core + if core < spread { 1 } else { 0 };
             let partition_start = rows_curosr;
@@ -303,7 +261,7 @@ impl Matrix {
     }
 
     /// Returns size of underlying vector.
-    pub fn get_element_count(&self) -> usize {
+    pub fn len(&self) -> usize {
         self.columns * self.rows
     }
 
@@ -382,7 +340,7 @@ impl Matrix {
         assert_eq!(rhs.columns, 1, "Rhs matrix must have 1 column.");
         assert_eq!(self.rows, rhs.rows, "Lhs and rhs must have equal number of rows.");
 
-        let mut r = Vec::with_capacity(self.get_element_count());
+        let mut r = Vec::with_capacity(self.len());
         
         for row in 0..self.rows {
             let lhs_row = self.get_row_vector_slice(row);
@@ -402,7 +360,7 @@ impl Matrix {
         assert_eq!(rhs.rows, 1, "Rhs matrix must have 1 row.");
         assert_eq!(self.columns, rhs.columns, "Lhs and rhs must have equal number of columns.");
 
-        let mut r = Vec::with_capacity(self.get_element_count());
+        let mut r = Vec::with_capacity(self.len());
         for row in 0..self.rows{
             let x = self.get_row_vector_slice(row);
             let y = rhs.get_row_vector_slice(0);
@@ -438,19 +396,13 @@ impl Matrix {
 
     /// Scales matrix by scalar.
     pub fn scale(&self, scalar: f64) -> Matrix {
-        let values = self.values.iter().map(|x| x * scalar).collect();
+        let values = self.values.iter().map(|&x| x * scalar).collect();
 
         Matrix {
             rows: self.rows,
             columns: self.columns,
             values
         }
-    }
-
-    pub fn shape(&self) -> String {
-        let rows = self.rows;
-        let columns = self.columns;
-        format!("{rows} x {columns}")
     }
 }
 
@@ -474,6 +426,25 @@ pub fn dot_product_of_vector_slices(lhs: &[f64], rhs: &[f64]) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_from_vec() {
+        let actual = Matrix::from_vec(vec![
+            1., 2., 3.,
+            4., 5., 6.
+        ], 2, 3);
+
+        let expected = Matrix {
+            rows: 2,
+            columns: 3,
+            values: vec![
+                1., 2., 3.,
+                4., 5., 6.
+            ]
+        };
+
+        assert_eq!(actual, expected);
+    }
 
     #[test]
     fn test_add_column() {
@@ -619,43 +590,13 @@ mod tests {
     }
 
     #[test]
-    fn identity_4() {
-        let actual = Matrix::new_identity(4);
-        let expected = Matrix {
-            rows: 4,
-            columns: 4,
-            values: vec![
-                1.0f64, 0.0f64, 0.0f64, 0.0f64,
-                0.0f64, 1.0f64, 0.0f64, 0.0f64,
-                0.0f64, 0.0f64, 1.0f64, 0.0f64,
-                0.0f64, 0.0f64, 0.0f64, 1.0f64]
-        };
-
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
     fn random_matrix() {
         let m28x28 = Matrix::new_randomized_z(28, 28);
 
         let _r =m28x28.values.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", ");
     }
 
-    #[test]
-    fn matrix_index() {
-        let mat = Matrix::new_randomized_z(7, 4);
-
-        let mut expected: usize = 0;
-        for row in 0..mat.rows {
-            for column in 0..mat.columns {
-                let actual = mat.index_for(row, column);
-                assert_eq!(actual, expected);
-                expected += 1;
-            }
-        }
-    }
-
-    #[test]
+     #[test]
     fn matrix_mul() {
         // Given
         let lhs = Matrix {
@@ -678,10 +619,8 @@ mod tests {
             ]
         };
 
-        // When
         let actual = Matrix::mul(&lhs, &rhs);
 
-        // Then
         // Resultant matrix needs to have aas many rows as lhs, and as many columns as rhs.
         let expected = Matrix {
             rows: 4,
@@ -707,6 +646,84 @@ mod tests {
 
         let actual = lhs.mul_with_transposed_threaded_rowwise(&rhs);
         let expected = lhs.mul_with_transposed(&rhs);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_scale() {
+        let tc = Matrix {
+            rows: 2,
+            columns: 3,
+            values: vec![
+                1., 2., 3.,
+                4., 5., 6.
+            ]
+        };
+
+        let actual = tc.scale(3.);
+        let expected = Matrix {
+            rows: 2,
+            columns: 3,
+            values: vec![
+                3., 6., 9.,
+                12., 15., 18.
+            ]
+        };
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_shrink_rows_by_add() {
+        let tc = Matrix {
+            columns: 3,
+            rows: 3,
+            values: vec![
+                1., 1., 2.,
+                2., 3., 3.,
+                4., 4., 5.
+            ]
+        };
+
+        let actual = tc.shrink_rows_by_add();
+        let expected = Matrix {
+            columns: 3,
+            rows: 1,
+            values: vec![
+                7., 8., 10.
+            ]
+        };
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_get_row_vector_slice() {
+        let tc = Matrix {
+            columns: 3,
+            rows: 4,
+            values: vec![
+                1., 2., 3.,
+                10., 20., 30.,
+                100., 200., 300.,
+                1000., 2000., 3000.
+            ]
+        };
+
+        let actual = tc.get_row_vector_slice(2);
+        let expected = &[100., 200., 300.];
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_dot_product_of_slices() {
+        let lhs = &[1., 2., 3., 4.];
+        let rhs = &[10., 20., 30., 40.];
+
+        let actual = dot_product_of_vector_slices(lhs, rhs);
+        let expected = 300.;
 
         assert_eq!(actual, expected);
     }

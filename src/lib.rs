@@ -6,7 +6,7 @@ pub mod digit_image;
 pub mod input_csv_reader;
 pub mod output_bin_writer;
 pub mod sample;
-
+pub mod math;
 pub mod nn;
 
 use crate::partitions::*;
