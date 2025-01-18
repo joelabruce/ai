@@ -194,9 +194,9 @@ pub fn handwritten_digits(load_from_file: bool) {
             let predictions = &(SOFTMAX.f)(&forward_stack.pop().unwrap());
             let sample_losses = forward_categorical_cross_entropy_loss(&predictions, &targets);
             let data_loss = sample_losses.values.iter().copied().sum::<f64>() / sample_losses.len() as f64;            
-            let dvalues6 = backward_categorical_cross_entropy_loss_wrt_softmax(&predictions, &targets).div_by_scalar(batch_size as f64);
             
             // Backward pass on training data batch
+            let dvalues6 = backward_categorical_cross_entropy_loss_wrt_softmax(&predictions, &targets).div_by_scalar(batch_size as f64);
             NeuralNetwork::backward(&mut training_nodes, &dvalues6, &mut forward_stack);
 
             if batch % 100 == 0 {
@@ -216,7 +216,7 @@ pub fn handwritten_digits(load_from_file: bool) {
 
         println!("| Validation Loss {v_data_loss}");
         
-        if v_data_loss < lowest_loss { lowest_loss = v_data_loss } else { println!("Warning, validation loss increased! Consider stopping training here."); }
+        if v_data_loss < lowest_loss { lowest_loss = v_data_loss } else { println!("Warning, validation has not improved! Consider stopping training here."); }
     }
 }
 

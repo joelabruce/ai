@@ -22,6 +22,12 @@ pub struct HiddenLayer {
     pub weights: Matrix
 }
 
+pub struct ConvolutionalLayer {
+    pub kernel: Matrix,
+    pub biases: Matrix,
+    pub stride: usize
+}
+
 impl InputLayer {
     /// Creates input layer based on inputs supplied.
     /// Allows for automatic shaping of succeeding layer generation.
@@ -74,6 +80,10 @@ impl HiddenLayer {
 
         HiddenLayer::new(self.biases.len(), neuron_count)
     }
+}
+
+impl ConvolutionalLayer {
+    //fn 
 }
 
 impl Propagates for HiddenLayer {

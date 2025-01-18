@@ -58,16 +58,16 @@ mod tests {
         );
 
         for _ in 0..4 {
-            let new_batch = sample.random_batch(2);
+            let _new_batch = sample.random_batch(2);
             
-            println!("batch: {:?}", new_batch);
+            //println!("batch: {:?}", _new_batch);
         }
 
         sample.reset();
         for _ in 0..3 {
-            let new_batch = sample.random_batch(3);
+            let _new_batch = sample.random_batch(3);
             
-            println!("batch: {:?}", new_batch);
+            //println!("batch: {:?}", _new_batch);
         }
     }
 }
