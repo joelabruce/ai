@@ -18,12 +18,20 @@ use crate::math::*;
 /// Column-major is not yet implemented.
 #[derive(PartialEq, Debug, Clone)]
 pub struct Matrix {
-    pub rows: usize,
-    pub columns: usize,
+    rows: usize,
+    columns: usize,
     values: Vec<f64>
 }
 
 impl Matrix {
+    pub fn row_count(&self) -> usize {
+        self.rows
+    }
+
+    pub fn column_count(&self) -> usize {
+        self.columns
+    }
+
     pub fn read_values(&self) -> &[f64] {
         &self.values
     }

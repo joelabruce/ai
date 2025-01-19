@@ -53,27 +53,8 @@ impl Tensor {
 
     /// Performs no bounds checking.
     fn get_at_3(&self, column: usize, row: usize, depth: usize) -> f64 {
-        self.values[column + row * self.shape[0] + depth * self.shape[1]]
+        self.values[column + row * self.shape[0] + depth * self.shape[0] * self.shape[1]]
     }
-
-    // Unstable
-    // Gets a matrix from this tensor at specified depth.
-    // pub fn get_matrix(&self, depth: usize) -> Matrix{
-    //     assert!(depth < self.shape[DEPTH], "Tensor not deep enough to get requested matrix.");
-
-    //     let value_size = self.shape[ROW] * self.shape[COLUMN];
-    //     let start = value_size * depth;
-    //     let end = start + value_size;
-
-    //     let mut r = Matrix {
-    //         values: Vec::with_capacity(value_size),
-    //         rows: self.shape[ROW],
-    //         columns: self.shape[COLUMN]
-    //     };
-
-    //     r.values.copy_from_slice(&self.values[start..end]);
-    //     r
-    // }
 
     /// Simple and naive valid cross correlation implementation with little to no optimizations.
     /// Assumes stride of 1
@@ -92,8 +73,8 @@ impl Tensor {
         ];
 
         let mut value_stream = Vec::with_capacity(new_shape[ROW] * new_shape[COLUMN]);
-        let lhs_dims = self.get_dims();
-        let kernel_dims = kernel.get_dims();
+        //let lhs_dims = self.get_dims();
+        //let kernel_dims = kernel.get_dims();
 
         for row in 0..new_shape[ROW] {
             for column in 0..new_shape[COLUMN] {
@@ -102,8 +83,8 @@ impl Tensor {
                 // Slide kernel window horizontally and then vertically
                 for kernel_row in 0..kernel.shape[ROW] {
                     for kernel_column in 0..kernel.shape[COLUMN] {
-                        let x = self.get_at(vec![row + kernel_row, column + kernel_column, 0]);
-                        let y = kernel.get_at(vec![kernel_row, kernel_column, 0]);                        
+                        let x = self.get_at_3(row + kernel_row, column + kernel_column, 0);
+                        let y = kernel.get_at_3(kernel_row, kernel_column, 0);                        
                         
                         c_accum += x * y;
                     }

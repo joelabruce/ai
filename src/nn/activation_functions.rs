@@ -16,8 +16,8 @@ impl Propagates for Activation {
         inputs.map(self.f)
     }
     fn backward<'a>(&mut self, dvalues: &'a Matrix, inputs: &'a Matrix) -> Matrix {
-        assert_eq!(dvalues.rows, inputs.rows, "Backpropagation for Activation needs inputs and dvalues to have same rows.");
-        assert_eq!(dvalues.columns, inputs.columns, "Backpropagation for Activation needs inputs and dvalues to have same columns.");
+        assert_eq!(dvalues.row_count(), inputs.row_count(), "Backpropagation for Activation needs inputs and dvalues to have same rows.");
+        assert_eq!(dvalues.column_count(), inputs.column_count(), "Backpropagation for Activation needs inputs and dvalues to have same columns.");
 
         inputs.map(self.d).elementwise_multiply_threaded(&dvalues)
     }
@@ -52,13 +52,13 @@ pub const H_SWISH: Activation = Activation {
 /// Calculates the cross-entropy (used with softmax) for each input sample.
 pub fn forward_categorical_cross_entropy_loss(predictions: &Matrix, expected: &Matrix) -> Matrix {
     let t: Matrix = predictions.elementwise_multiply_threaded(expected);
-    let mut r = Vec::with_capacity(t.rows);
-    for row in 0..t.rows {
+    let mut r = Vec::with_capacity(t.row_count());
+    for row in 0..t.row_count() {
         let loss = -t.get_row_vector_slice(row).iter().sum::<f64>().log10();
         r.push(loss);
     }
 
-    Matrix::from_vec(r, 1, t.rows)
+    Matrix::from_vec(r, 1, t.row_count())
 }
 
 /// Softmax with categorical cross entropy loss derivative 
@@ -75,7 +75,7 @@ pub const SOFTMAX: FoldActivation = FoldActivation {
     f: |m| {
         let mut r = Vec::with_capacity(m.len());
 
-        for row in 0..m.rows {
+        for row in 0..m.row_count() {
             let v = m.get_row_vector_slice(row);
             let max = v.iter().max_by(|x, y| x.total_cmp(y)).unwrap();
 
@@ -85,7 +85,7 @@ pub const SOFTMAX: FoldActivation = FoldActivation {
             r.extend(exp_numerators.iter().map(|x| x / denominator));
         }
 
-        Matrix::from_vec(r, m.rows, m.columns)
+        Matrix::from_vec(r, m.row_count(), m.column_count())
     },
     d: |v| {
         v.clone()

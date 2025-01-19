@@ -111,8 +111,8 @@ impl NeuralNetwork {
                 Node::HiddenLayer(n) => {
                     // Load weights first
                     let mut weights_buf = vec![0u8; n.weights.len() * 8];
-                    let mut columns = n.weights.columns;
-                    let mut rows = n.weights.rows;
+                    let mut columns = n.weights.column_count();
+                    let mut rows = n.weights.row_count();
 
                     file.read_exact(&mut weights_buf).expect("Should not error reading in weights for a layer.");
                     let weights_floats: Vec<f64> = weights_buf
@@ -122,8 +122,8 @@ impl NeuralNetwork {
                     n.weights = Matrix::from_vec(weights_floats, rows, columns);
 
                     // Load biases next
-                    columns = n.biases.columns;
-                    rows = n.biases.rows;
+                    columns = n.biases.column_count();
+                    rows = n.biases.row_count();
                     let mut biases_buf = vec![0u8; n.biases.len() * 8];
                     file.read_exact(&mut biases_buf).expect("Should not error reading biases for a layer.");
                     let biases_floats: Vec<f64> = biases_buf
