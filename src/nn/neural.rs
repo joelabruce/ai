@@ -29,16 +29,8 @@ pub fn from_sample_digit_images(sample: &mut Sample<DigitImage>, requested_batch
     }
 
     (InputLayer {
-        input_matrix: Matrix {
-            columns: 784,
-            rows,
-            values: pixel_vector
-        }
-    }, Matrix {
-        rows,
-        columns: 10,
-        values: taget_vector
-    })
+        input_matrix: Matrix::from_vec(pixel_vector, rows, 784)
+    }, Matrix::from_vec(taget_vector, rows, 10))
 }
 
 
@@ -103,8 +95,8 @@ impl NeuralNetwork {
         for node in from_nodes {
             match node {
                 Node::HiddenLayer(n) => {
-                    to_writer.write_slice_f64(&n.weights.values);
-                    to_writer.write_slice_f64(&n.biases.values);
+                    to_writer.write_slice_f64(&n.weights.read_values());
+                    to_writer.write_slice_f64(&n.biases.read_values());
                 }
                 _ => { }
             }
@@ -119,21 +111,26 @@ impl NeuralNetwork {
                 Node::HiddenLayer(n) => {
                     // Load weights first
                     let mut weights_buf = vec![0u8; n.weights.len() * 8];
+                    let mut columns = n.weights.columns;
+                    let mut rows = n.weights.rows;
+
                     file.read_exact(&mut weights_buf).expect("Should not error reading in weights for a layer.");
                     let weights_floats: Vec<f64> = weights_buf
                         .chunks_exact(8)
                         .map(|chunk| f64::from_le_bytes(chunk.try_into().unwrap()))
                         .collect();
-                    n.weights.values = weights_floats;
+                    n.weights = Matrix::from_vec(weights_floats, rows, columns);
 
                     // Load biases next
+                    columns = n.biases.columns;
+                    rows = n.biases.rows;
                     let mut biases_buf = vec![0u8; n.biases.len() * 8];
                     file.read_exact(&mut biases_buf).expect("Should not error reading biases for a layer.");
                     let biases_floats: Vec<f64> = biases_buf
                         .chunks_exact(8)
                         .map(|chunk| f64::from_le_bytes(chunk.try_into().unwrap()))
                         .collect();
-                    n.biases.values = biases_floats;
+                    n.biases = Matrix::from_vec(biases_floats, rows, columns);
                }
                _ => { }
             }
@@ -193,7 +190,7 @@ pub fn handwritten_digits(load_from_file: bool) {
             // Forward pass on training data btch
             let predictions = &(SOFTMAX.f)(&forward_stack.pop().unwrap());
             let sample_losses = forward_categorical_cross_entropy_loss(&predictions, &targets);
-            let data_loss = sample_losses.values.iter().copied().sum::<f64>() / sample_losses.len() as f64;            
+            let data_loss = sample_losses.read_values().iter().copied().sum::<f64>() / sample_losses.len() as f64;            
             
             // Backward pass on training data batch
             let dvalues6 = backward_categorical_cross_entropy_loss_wrt_softmax(&predictions, &targets).div_by_scalar(batch_size as f64);
@@ -212,7 +209,7 @@ pub fn handwritten_digits(load_from_file: bool) {
         forward_stack = NeuralNetwork::forward(&vl, &mut training_nodes);
         let v_predictions = &(SOFTMAX.f)(&forward_stack.pop().unwrap());
         let v_sample_losses = forward_categorical_cross_entropy_loss(&v_predictions, &validation_tagets);
-        let v_data_loss = v_sample_losses.values.iter().copied().sum::<f64>() / v_sample_losses.len() as f64;
+        let v_data_loss = v_sample_losses.read_values().iter().copied().sum::<f64>() / v_sample_losses.len() as f64;
 
         println!("| Validation Loss {v_data_loss}");
         

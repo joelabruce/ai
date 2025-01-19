@@ -20,10 +20,14 @@ use crate::math::*;
 pub struct Matrix {
     pub rows: usize,
     pub columns: usize,
-    pub values: Vec<f64>
+    values: Vec<f64>
 }
 
 impl Matrix {
+    pub fn read_values(&self) -> &[f64] {
+        &self.values
+    }
+
     /// Create a matrix from a vector.
     /// # Arguments
     /// # Returns

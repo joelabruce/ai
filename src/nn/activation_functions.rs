@@ -58,11 +58,7 @@ pub fn forward_categorical_cross_entropy_loss(predictions: &Matrix, expected: &M
         r.push(loss);
     }
 
-    Matrix {
-        rows: 1,
-        columns: t.rows,
-        values: r
-    }
+    Matrix::from_vec(r, 1, t.rows)
 }
 
 /// Softmax with categorical cross entropy loss derivative 
@@ -89,13 +85,7 @@ pub const SOFTMAX: FoldActivation = FoldActivation {
             r.extend(exp_numerators.iter().map(|x| x / denominator));
         }
 
-        let r = Matrix {
-            rows: m.rows,
-            columns: m.columns,
-            values: r
-        };
-
-        r
+        Matrix::from_vec(r, m.rows, m.columns)
     },
     d: |v| {
         v.clone()
@@ -112,15 +102,11 @@ mod tests {
         let mat = Matrix::from_vec(v, 1, 3);
         let actual = (SOFTMAX.f)(&mat);
 
-        let expected = Matrix {
-            rows: 1,
-            columns: 3,
-            values: vec![
-                0.09003057317038046,
-                0.24472847105479764,
-                0.6652409557748218
-            ]
-        };
+        let expected = Matrix::from_vec(vec![
+            0.09003057317038046,
+            0.24472847105479764,
+            0.6652409557748218            
+        ], 1, 3);
 
         assert_eq!(actual, expected);
     }

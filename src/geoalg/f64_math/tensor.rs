@@ -1,24 +1,24 @@
 use super::matrix::Matrix;
 
+// Dimension constants
 const COLUMN:usize = 0;
 const ROW:usize = 1;
 const DEPTH:usize = 2;
 
 #[derive(PartialEq, Debug, Clone)]
 pub struct Tensor {
-    pub values: Vec<f64>,
     pub shape: Vec<usize>,   // Rows, columns, depth. Everything after is arbitrary
-    //dim_size: vec<usize>
+    pub values: Vec<f64>
 }
 
 impl Tensor {
-    pub fn new(values: Vec<f64>, shape: Vec<usize>) -> Tensor {
+    pub fn new(shape: Vec<usize>, values: Vec<f64>, ) -> Tensor {
         let zero = 0;
         let no_zeroes = !shape.contains(&zero);
-        assert!(no_zeroes);
+        assert!(no_zeroes, "Shape cannot have dimensions of zero.");
 
         let len = shape.iter().product();
-        assert_eq!(values.len(), len, "The length of tensor doesn't match its shape.");
+        assert_eq!(values.len(), len, "The length of tensor doesn't match specified shape.");
 
         Tensor {
             values,
@@ -26,49 +26,65 @@ impl Tensor {
         }
     }
 
+    /// Unstable internal
     /// Helps with calculations
-    pub fn get_dims(&self) -> Vec<usize> {
-        //let x = self.shape.clone().iter().rev()
-        let r = Vec::new();
-        //for 
+    fn get_dims(&self) -> Vec<usize> {
+        let mut r = Vec::with_capacity(self.shape.len());
+        r.push(1);
+
+        for i in 0..self.shape.len() {
+            r.push(self.shape[i] * r[i]);
+        }
+
         r
     }
 
     /// Gets a specific value inside tensor.
+    /// Does not check each individual shape's bounds (yet?)
     pub fn get_at(&self, coordinate: Vec<usize>) -> f64 {
         assert_eq!(self.shape.len(), coordinate.len());
 
+        let dims = self.get_dims();
 
-        1.
+        let index: usize = dims.iter().zip(coordinate.iter()).map(|(&a, &b)| a*b).sum();
+
+        self.values[index]
     }
 
-    /// Gets a matrix from this tensor at specified depth
-    pub fn get_matrix(&self, depth: usize) -> Matrix{
-        assert!(depth < self.shape[DEPTH], "Tensor not deep enough to get requested matrix.");
-
-        let value_size = self.shape[ROW] * self.shape[COLUMN];
-        let start = value_size * depth;
-        let end = start + value_size;
-
-        let mut r = Matrix {
-            values: Vec::with_capacity(value_size),
-            rows: self.shape[ROW],
-            columns: self.shape[COLUMN]
-        };
-
-        r.values.copy_from_slice(&self.values[start..end]);
-        r
+    /// Performs no bounds checking.
+    fn get_at_3(&self, column: usize, row: usize, depth: usize) -> f64 {
+        self.values[column + row * self.shape[0] + depth * self.shape[1]]
     }
+
+    // Unstable
+    // Gets a matrix from this tensor at specified depth.
+    // pub fn get_matrix(&self, depth: usize) -> Matrix{
+    //     assert!(depth < self.shape[DEPTH], "Tensor not deep enough to get requested matrix.");
+
+    //     let value_size = self.shape[ROW] * self.shape[COLUMN];
+    //     let start = value_size * depth;
+    //     let end = start + value_size;
+
+    //     let mut r = Matrix {
+    //         values: Vec::with_capacity(value_size),
+    //         rows: self.shape[ROW],
+    //         columns: self.shape[COLUMN]
+    //     };
+
+    //     r.values.copy_from_slice(&self.values[start..end]);
+    //     r
+    // }
 
     /// Simple and naive valid cross correlation implementation with little to no optimizations.
     /// Assumes stride of 1
     /// Values are stored row major, then column, then depth
-    /// So at depth 1, it is stored a 2d data set
+    /// So at depth 1, it is stored as a 2d data set
     /// Will use to verify correctness of optimized versions
     /// Will assume depth of 1 for first pass
     pub fn valid_cross_correlation(&self, kernel: &Tensor) -> Tensor {
         assert!(self.shape[ROW] >= kernel.shape[ROW], "Lhs must have same or more rows than kernel.");
         assert!(self.shape[COLUMN] >= kernel.shape[COLUMN], "Lhs must have same or more columns than kernels.");
+        assert_eq!(self.shape[DEPTH], kernel.shape[DEPTH], "Lhs and kernel must have same depth.");
 
         let new_shape = vec![
             self.shape[ROW] - kernel.shape[ROW] + 1,
@@ -76,16 +92,18 @@ impl Tensor {
         ];
 
         let mut value_stream = Vec::with_capacity(new_shape[ROW] * new_shape[COLUMN]);
+        let lhs_dims = self.get_dims();
+        let kernel_dims = kernel.get_dims();
 
-        // Sliding row window for lhs
         for row in 0..new_shape[ROW] {
-            // Sliding column window for lhs
             for column in 0..new_shape[COLUMN] {
                 let mut c_accum = 0.;
+
+                // Slide kernel window horizontally and then vertically
                 for kernel_row in 0..kernel.shape[ROW] {
                     for kernel_column in 0..kernel.shape[COLUMN] {
-                        let x = self.get_at(vec![row + kernel_row, column + kernel_column]);
-                        let y = kernel.get_at(vec![kernel_row, kernel_column]);                        
+                        let x = self.get_at(vec![row + kernel_row, column + kernel_column, 0]);
+                        let y = kernel.get_at(vec![kernel_row, kernel_column, 0]);                        
                         
                         c_accum += x * y;
                     }
@@ -107,14 +125,79 @@ mod tests {
     use super::*;
 
     #[test]
+    pub fn test_get_at() {
+        let tc = Tensor {
+            shape: vec![4,3,2],
+            values: vec![
+                1., 2., 3., 4.,
+                5., 6., 7., 8.,
+                9., 10., 11., 12.,
+
+                13., 14., 15., 16.,
+                17., 18., 19., 20.,
+                21., 22., 23., 24.
+            ]
+        };
+
+        let actual = tc.get_at(vec![2, 1, 0]);
+        let expected = 7.;
+        assert_eq!(actual, expected);
+
+        let actual = tc.get_at(vec![1,2,1]);
+        let expected = 22.;
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    pub fn test_get_dims() {
+        let tc1 = Tensor {
+            shape: vec![4, 3, 2],
+            values: vec![0.;24]
+        };
+
+        let actual = tc1.get_dims();
+        let expected = vec![1, 4, 12, 24];
+
+        assert_eq!(actual, expected);
+    }
+
+    #[ignore = "reason"]
+    #[test]
     fn test_cross_correlation() {
-        let _lhs = Tensor {
+        let lhs = Tensor {
+            shape: vec![4, 4, 2],
+            values: vec![
+                1., 2., 3., 4., 
+                5., 6., 7., 8.,
+                9., 10., 11., 12.,
+                13., 14., 15., 16.,
+
+                10., 20., 30., 40.,
+                50., 60., 70., 80.,
+                90., 100., 110., 120.,
+                130., 140., 150., 160.
+            ]
+        };
+
+        let kernel = Tensor {
+            shape: vec![3, 3, 2],
             values: vec![
                 0., 0.15, 0.,
                 0.15, 0.4, 0.15,
-                0., 0.15, 0. 
-            ],
-            shape: vec![3, 3, 1]
+                0., 0.15, 0., 
+
+                0., 0.10, 0.,
+                0.10, 0.6, 0.10,
+                0., 0.10, 0., 
+            ]
         };
+
+        let actual = lhs.valid_cross_correlation(&kernel);
+        let expected = Tensor {
+            shape: vec![2, 2, 1],
+            values: vec![]
+        };
+
+        assert_eq!(actual, expected);
     }
 }

@@ -36,14 +36,8 @@ impl InputLayer {
         let values: Vec<f64> = values.into_iter().flat_map(|v| v).collect();
         let columns = values.len() / rows;                                      // Number of features.
 
-        let input_matrix = Matrix {
-            rows,
-            columns,
-            values
-        };
-
         InputLayer {
-            input_matrix
+            input_matrix: Matrix::from_vec(values, rows, columns)
         }
     }
 
