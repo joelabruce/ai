@@ -1,6 +1,6 @@
 use std::thread;
 use rand::distributions::{Distribution, Uniform};
-use crate::math::*;
+use crate::geoalg::f64_math::optimized_functions::*;
 
 /// To be adapted later.
 /// WIP
@@ -233,8 +233,8 @@ impl Matrix {
     }
 
     /// Multiplies two matrices using transpose operation for efficiency.
-    /// # Arguments
-    /// # Returns
+    /// Willing to take performance hit [O(m x n)] for small matrices for creating transposed matrix.
+    /// 
     pub fn mul(&self, rhs: &Matrix) -> Matrix {
         assert_eq!(self.columns, rhs.rows, "When multiplying matrices, lhs columns must equal rhs rows.");
         let transposed = rhs.get_transpose();
@@ -488,23 +488,6 @@ impl Matrix {
             values
         }
     }
-}
-
-/// Dot product of two Vec<f64> slices. Will always assume they are same length (not production ready).
-/// How can this be effectively benchmarked and optimized?
-/// # Arguments
-/// # Returns
-pub fn dot_product_of_vector_slices(lhs: &[f64], rhs: &[f64]) -> f64 {
-    assert_eq!(lhs.len(), rhs.len());
-    let n = lhs.len();
-
-    let (x, y) = (&lhs[..n], &rhs[..n]);
-    let mut sum = 0f64;
-    for i in 0..n {
-        sum += x[i] * y[i];
-    }
-
-    sum
 }
 
 #[cfg(test)]
@@ -797,17 +780,6 @@ mod tests {
 
         let actual = tc.get_row_vector_slice(2);
         let expected = &[100., 200., 300.];
-
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_dot_product_of_slices() {
-        let lhs = &[1., 2., 3., 4.];
-        let rhs = &[10., 20., 30., 40.];
-
-        let actual = dot_product_of_vector_slices(lhs, rhs);
-        let expected = 300.;
 
         assert_eq!(actual, expected);
     }

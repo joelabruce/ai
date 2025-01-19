@@ -1,4 +1,5 @@
-use super::matrix::Matrix;
+use crate::geoalg::f64_math::matrix::*;
+use crate::geoalg::f64_math::optimized_functions::*;
 
 // Dimension constants
 const COLUMN:usize = 0;
@@ -56,6 +57,21 @@ impl Tensor {
         self.values[column + row * self.shape[0] + depth * self.shape[0] * self.shape[1]]
     }
 
+    fn get_row(&self, row:usize, depth: usize) -> &[f64] {
+        let start = row * self.shape[0] + depth * self.shape[0] * self.shape[1];
+        let end = start + self.shape[0];
+        &self.values[start..end]
+    }
+
+    fn get_row_short(&self, row: usize, depth: usize, column_start: usize, len: usize) -> &[f64] {
+        assert!(column_start < len);
+        let start_row = row * self.shape[COLUMN] + depth * self.shape[ROW] * self.shape[COLUMN];
+
+        let start = column_start + start_row;
+        let end = start + len;
+        &self.values[start..end]
+    }
+
     /// Simple and naive valid cross correlation implementation with little to no optimizations.
     /// Assumes stride of 1
     /// Values are stored row major, then column, then depth
@@ -73,21 +89,19 @@ impl Tensor {
         ];
 
         let mut value_stream = Vec::with_capacity(new_shape[ROW] * new_shape[COLUMN]);
-        //let lhs_dims = self.get_dims();
-        //let kernel_dims = kernel.get_dims();
 
-        for row in 0..new_shape[ROW] {
-            for column in 0..new_shape[COLUMN] {
+        let depth = 0;
+
+        for row in 0..new_shape[ROW] - kernel.shape[ROW] {
+            for column in 0..new_shape[COLUMN] - kernel.shape[COLUMN] {
                 let mut c_accum = 0.;
 
                 // Slide kernel window horizontally and then vertically
                 for kernel_row in 0..kernel.shape[ROW] {
-                    for kernel_column in 0..kernel.shape[COLUMN] {
-                        let x = self.get_at_3(row + kernel_row, column + kernel_column, 0);
-                        let y = kernel.get_at_3(kernel_row, kernel_column, 0);                        
-                        
-                        c_accum += x * y;
-                    }
+                    let x = self.get_row_short(row + kernel_row, depth, column, kernel.shape[COLUMN]);
+                    let y = kernel.get_row(kernel_row, depth);
+
+                    c_accum += dot_product_of_vector_slices(x, y)
                 }
 
                 value_stream.push(c_accum);

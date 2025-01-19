@@ -1,4 +1,4 @@
-use crate::math::*;
+use crate::geoalg::f64_math::optimized_functions::*;
 
 /// Converts label into a vector.
 /// If label is greater than bounds, than vector will be zeroes.
