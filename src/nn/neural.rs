@@ -104,36 +104,43 @@ impl NeuralNetwork {
     }
 
     pub fn attempt_load_network(from_file_path: &str, to_nodes: &mut Vec<Node>) {
-        let mut file = File::open(from_file_path).expect("Could not load neural network training.");
+        let file_open_try = File::open(from_file_path);
 
-        for node in to_nodes {
-            match node {
-                Node::HiddenLayer(n) => {
-                    // Load weights first
-                    let mut weights_buf = vec![0u8; n.weights.len() * 8];
-                    let mut columns = n.weights.column_count();
-                    let mut rows = n.weights.row_count();
+        match file_open_try {
+            Ok(mut file) => {   // File could be opened for read
+                for node in to_nodes {
+                    match node {
+                        Node::HiddenLayer(n) => {
+                            // Load weights first
+                            let mut weights_buf = vec![0u8; n.weights.len() * 8];
+                            let mut columns = n.weights.column_count();
+                            let mut rows = n.weights.row_count();
 
-                    file.read_exact(&mut weights_buf).expect("Should not error reading in weights for a layer.");
-                    let weights_floats: Vec<f64> = weights_buf
-                        .chunks_exact(8)
-                        .map(|chunk| f64::from_le_bytes(chunk.try_into().unwrap()))
-                        .collect();
-                    n.weights = Matrix::from_vec(weights_floats, rows, columns);
+                            file.read_exact(&mut weights_buf).expect("Should not error reading in weights for a layer.");
+                            let weights_floats: Vec<f64> = weights_buf
+                                .chunks_exact(8)
+                                .map(|chunk| f64::from_le_bytes(chunk.try_into().unwrap()))
+                                .collect();
+                            n.weights = Matrix::from_vec(weights_floats, rows, columns);
 
-                    // Load biases next
-                    columns = n.biases.column_count();
-                    rows = n.biases.row_count();
-                    let mut biases_buf = vec![0u8; n.biases.len() * 8];
-                    file.read_exact(&mut biases_buf).expect("Should not error reading biases for a layer.");
-                    let biases_floats: Vec<f64> = biases_buf
-                        .chunks_exact(8)
-                        .map(|chunk| f64::from_le_bytes(chunk.try_into().unwrap()))
-                        .collect();
-                    n.biases = Matrix::from_vec(biases_floats, rows, columns);
-               }
-               _ => { }
+                            // Load biases next
+                            columns = n.biases.column_count();
+                            rows = n.biases.row_count();
+                            let mut biases_buf = vec![0u8; n.biases.len() * 8];
+                            file.read_exact(&mut biases_buf).expect("Should not error reading biases for a layer.");
+                            let biases_floats: Vec<f64> = biases_buf
+                                .chunks_exact(8)
+                                .map(|chunk| f64::from_le_bytes(chunk.try_into().unwrap()))
+                                .collect();
+                            n.biases = Matrix::from_vec(biases_floats, rows, columns);
+
+                            println!("Success in loading the neural network!");
+                        }
+                        _ => { }
+                    }
+                }
             }
+            _ => {}
         }
     }
 }
@@ -156,7 +163,6 @@ pub fn handwritten_digits(load_from_file: bool) {
     if load_from_file {
         println!("Trying to load trained neural network...");
         NeuralNetwork::attempt_load_network(&trained_model_location, &mut training_nodes);
-        println!("Success! Fine tuning model!");
     }
 
     // Training hyper-parameters

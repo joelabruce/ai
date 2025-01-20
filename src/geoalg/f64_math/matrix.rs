@@ -2,16 +2,6 @@ use std::thread;
 use rand::distributions::{Distribution, Uniform};
 use crate::geoalg::f64_math::optimized_functions::*;
 
-/// To be adapted later.
-/// WIP
-// pub fn argmax(values: &[f64]) -> usize {
-//     values
-//         .iter()
-//         .enumerate()
-//         .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
-//         .map(|(index, _)| index).unwrap()
-// }
-
 /// Matrix is implemented as a single dimensional vector of f64s.
 /// This implementation of Matrix is row-major. 
 /// Row-major is specified so certain optimizations and parallelization can be performed.
@@ -24,17 +14,14 @@ pub struct Matrix {
 }
 
 impl Matrix {
-    pub fn row_count(&self) -> usize {
-        self.rows
-    }
+    /// Returns number of rows this matrix has.
+    pub fn row_count(&self) -> usize { self.rows }
 
-    pub fn column_count(&self) -> usize {
-        self.columns
-    }
+    /// Returns number of columns this matrix has.
+    pub fn column_count(&self) -> usize { self.columns }
 
-    pub fn read_values(&self) -> &[f64] {
-        &self.values
-    }
+    /// Returns a slice of the values this matrix has.
+    pub fn read_values(&self) -> &[f64] { &self.values }
 
     /// Create a matrix from a vector.
     /// # Arguments
@@ -46,23 +33,6 @@ impl Matrix {
             rows,
             columns,
             values
-        }
-    }
-
-    /// Creates a matrix with columns * size elements where every element is zero
-    /// # Arguments
-    /// # Returns
-    pub fn new_zeroed(rows: usize, columns: usize) -> Self {
-        assert!(columns > 0);
-        assert!(rows > 0);
-
-        let capacity = rows * columns;
-        let values = vec![0.0f64; capacity];
-
-        Self {
-            columns,
-            rows,
-            values: values
         }
     }
 
@@ -419,26 +389,6 @@ impl Matrix {
         }
     }
 
-    /// Adds a Matrix of shape 1xn to every column. Each matrix must have same number of rows and rhs must have exactly 1 column.
-    pub fn add_column_vector(&self, rhs: &Matrix) -> Matrix {
-        assert_eq!(rhs.columns, 1, "Rhs matrix must have 1 column.");
-        assert_eq!(self.rows, rhs.rows, "Lhs and rhs must have equal number of rows.");
-
-        let mut r = Vec::with_capacity(self.len());
-        
-        for row in 0..self.rows {
-            let lhs_row = self.get_row_vector_slice(row);
-            let new_row = lhs_row.iter().map(|f| f + rhs.values[row]);
-            r.extend(new_row);
-        }
-
-        Matrix {
-            columns: self.columns,
-            rows: self.rows,
-            values: r
-        }
-    }
-
     /// Adds a given row to each row in lhs matrix.
     pub fn add_row_vector(&self, rhs: &Matrix) -> Matrix {
         assert_eq!(rhs.rows, 1, "Rhs matrix must have 1 row.");
@@ -514,39 +464,15 @@ mod tests {
     }
 
     #[test]
-    fn test_add_column() {
-        let lhs = Matrix {
-            rows: 3,
-            columns: 3,
-            values: vec![
-                1f64, 2f64, 3f64,
-                4f64, 5f64, 6f64,
-                7f64, 8f64, 9f64
-            ]
+    #[should_panic]
+    fn test_invalid_row_slice() {
+        let tc = Matrix {
+            values: vec![],
+            rows: 1,
+            columns: 3
         };
 
-        let rhs = Matrix {
-            rows: 3,
-            columns: 1,
-            values: vec![
-                10.0,
-                20.0,
-                30.0
-            ]
-        };
-
-        let expected = Matrix {
-            rows: 3,
-            columns: 3,
-            values: vec![
-                11.0, 12.0, 13.0,
-                24.0, 25.0, 26.0,
-                37.0, 38.0, 39.0
-            ]
-        };
-
-        let actual = lhs.add_column_vector(&rhs);
-        assert_eq!(actual, expected);
+        tc.get_row_vector_slice(1);
     }
 
     #[test]
@@ -657,7 +583,7 @@ mod tests {
     }
 
     #[test]
-    fn random_matrix() {
+    fn test_random_matrix() {
         let m28x28 = Matrix::new_randomized_z(28, 28);
 
         let _r =m28x28.values.iter().map(|x| x.to_string()).collect::<Vec<_>>().join(", ");
@@ -707,7 +633,7 @@ mod tests {
     }
 
     #[test]
-    fn threaded_mul_equals_regular_mul() {
+    fn test_threaded_mul_equals_regular_mul() {
         let lhs = Matrix::new_randomized_z(96, 784);
         let rhs = Matrix::new_randomized_z(128, 784);
 

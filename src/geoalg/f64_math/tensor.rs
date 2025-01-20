@@ -1,4 +1,3 @@
-use crate::geoalg::f64_math::matrix::*;
 use crate::geoalg::f64_math::optimized_functions::*;
 
 // Dimension constants
@@ -52,11 +51,6 @@ impl Tensor {
         self.values[index]
     }
 
-    /// Performs no bounds checking.
-    fn get_at_3(&self, column: usize, row: usize, depth: usize) -> f64 {
-        self.values[column + row * self.shape[0] + depth * self.shape[0] * self.shape[1]]
-    }
-
     fn get_row(&self, row:usize, depth: usize) -> &[f64] {
         let start = row * self.shape[0] + depth * self.shape[0] * self.shape[1];
         let end = start + self.shape[0];
@@ -74,37 +68,42 @@ impl Tensor {
 
     /// Simple and naive valid cross correlation implementation with little to no optimizations.
     /// Assumes stride of 1
-    /// Values are stored row major, then column, then depth
+    /// Values are stored row major (column then rows then depth)
     /// So at depth 1, it is stored as a 2d data set
     /// Will use to verify correctness of optimized versions
-    /// Will assume depth of 1 for first pass
     pub fn valid_cross_correlation(&self, kernel: &Tensor) -> Tensor {
         assert!(self.shape[ROW] >= kernel.shape[ROW], "Lhs must have same or more rows than kernel.");
         assert!(self.shape[COLUMN] >= kernel.shape[COLUMN], "Lhs must have same or more columns than kernels.");
         assert_eq!(self.shape[DEPTH], kernel.shape[DEPTH], "Lhs and kernel must have same depth.");
 
+        // For image processing of RGB, depth needs to be 3
         let new_shape = vec![
             self.shape[ROW] - kernel.shape[ROW] + 1,
-            self.shape[COLUMN] - kernel.shape[COLUMN] + 1
+            self.shape[COLUMN] - kernel.shape[COLUMN] + 1,
+            self.shape[DEPTH]
         ];
 
-        let mut value_stream = Vec::with_capacity(new_shape[ROW] * new_shape[COLUMN]);
+        let mut value_stream = Vec::with_capacity(new_shape[ROW] * new_shape[COLUMN] * new_shape[DEPTH]);
 
-        let depth = 0;
+        // For full, we need to do the upper and outer edges
+        // Then left edge, normal, and then right edge
+        // Then bottomand out edges
 
-        for row in 0..new_shape[ROW] - kernel.shape[ROW] {
-            for column in 0..new_shape[COLUMN] - kernel.shape[COLUMN] {
-                let mut c_accum = 0.;
+        for depth in 0..new_shape[DEPTH] {
+            for row in 0..new_shape[ROW] {
+                for column in 0..new_shape[COLUMN] {
+                    let mut c_accum = 0.;
 
-                // Slide kernel window horizontally and then vertically
-                for kernel_row in 0..kernel.shape[ROW] {
-                    let x = self.get_row_short(row + kernel_row, depth, column, kernel.shape[COLUMN]);
-                    let y = kernel.get_row(kernel_row, depth);
+                    // Slide kernel window horizontally and then vertically
+                    for kernel_row in 0..kernel.shape[ROW] {
+                        let x = self.get_row_short(row + kernel_row, depth, column, kernel.shape[COLUMN]);
+                        let y = kernel.get_row(kernel_row, depth);
 
-                    c_accum += dot_product_of_vector_slices(x, y)
+                        c_accum += dot_product_of_vector_slices(x, y)
+                    }
+
+                    value_stream.push(c_accum);
                 }
-
-                value_stream.push(c_accum);
             }
         }
 
@@ -152,6 +151,37 @@ mod tests {
 
         let actual = tc1.get_dims();
         let expected = vec![1, 4, 12, 24];
+
+        assert_eq!(actual, expected);
+    }
+    
+    #[test]
+    fn test_valid_cross_correlation() {
+        let lhs = Tensor {
+            shape: vec![3,3,1],
+            values: vec![
+                1., 6., 2.,
+                5., 3., 1.,
+                7., 0., 4.
+            ]
+        };
+
+        let kernel = Tensor {
+            shape: vec![2,2,1],
+            values: vec![
+                1., 2.,
+                -1., 0.
+            ]
+        };
+
+        let actual = lhs.valid_cross_correlation(&kernel);
+        let expected = Tensor {
+            shape: vec![2,2,1],
+            values: vec![
+                8., 7.,
+                4., 5.
+            ]
+        };
 
         assert_eq!(actual, expected);
     }
