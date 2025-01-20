@@ -17,7 +17,7 @@ pub struct InputLayer {
 }
 
 /// Should be created beginning with InputLayer to ensure shapes are correct.
-pub struct HiddenLayer {
+pub struct DenseLayer {
     pub biases: Matrix,
     pub weights: Matrix
 }
@@ -42,15 +42,13 @@ impl InputLayer {
     }
 
     /// Input layer always forwards to first hidden layer and not to an activation function.
-    /// # Arguments
-    /// # Returns
     pub fn forward(&self) -> Matrix {
         self.input_matrix.clone()
     }
 
 }
 
-impl HiddenLayer {
+impl DenseLayer {
     fn random_weight_biases(neuron_count: usize, prev_layer_input_count: usize) -> (Matrix, Matrix) {
         let uniform = Uniform::new_inclusive(-0.5, 0.5);
         let weights = Matrix::new_randomized_uniform(prev_layer_input_count, neuron_count, uniform);
@@ -59,20 +57,20 @@ impl HiddenLayer {
         (weights, biases)
     }
 
-    pub fn new(input_size: usize, neuron_count: usize) -> HiddenLayer {
-        let (weights, biases) = HiddenLayer::random_weight_biases(neuron_count, input_size);
-        HiddenLayer {
+    pub fn new(input_size: usize, neuron_count: usize) -> DenseLayer {
+        let (weights, biases) = DenseLayer::random_weight_biases(neuron_count, input_size);
+        DenseLayer {
             weights,
             biases
         }
     }
 
     /// Instantiates and returns a new Hidden Layer based off self's shape.
-    pub fn calulated_hidden_layer(&self, neuron_count: usize) -> HiddenLayer {
+    pub fn calulated_dense_layer(&self, neuron_count: usize) -> DenseLayer {
         assert!(self.weights.len() > 0);
         assert!(self.biases.len() > 0);
 
-        HiddenLayer::new(self.biases.len(), neuron_count)
+        DenseLayer::new(self.biases.len(), neuron_count)
     }
 }
 
@@ -80,7 +78,7 @@ impl ConvolutionalLayer {
     //fn 
 }
 
-impl Propagates for HiddenLayer {
+impl Propagates for DenseLayer {
     /// Forward propagates by performing weights dot inputs + biases.
     /// Z
     fn forward<'a>(&self, inputs: &'a Matrix) -> Matrix {

@@ -1,14 +1,11 @@
 use std::f64::consts::E;
 use crate::geoalg::f64_math::matrix::Matrix;
+use crate::geoalg::f64_math::optimized_functions::vector_row_max;
 use crate::nn::layers::*;
 
 pub struct Activation {
     pub f: fn(&f64) -> f64,
     pub d: fn(&f64) -> f64
-}
-
-impl Activation {
-
 }
 
 impl Propagates for Activation {
@@ -73,24 +70,39 @@ pub struct FoldActivation {
 
 pub const SOFTMAX: FoldActivation = FoldActivation {
     f: |m| {
-        let mut r = Vec::with_capacity(m.len());
+        let mut values = Vec::with_capacity(m.len());
 
         for row in 0..m.row_count() {
             let v = m.get_row_vector_slice(row);
             let max = v.iter().max_by(|x, y| x.total_cmp(y)).unwrap();
 
-            let exp_numerators: Vec<f64> = v.iter().map(|x| E.powf(*x - max)).collect();
+            let exp_numerators: Vec<f64> = v.iter().map(|&x| E.powf(x - max)).collect();
             let denominator: f64 = exp_numerators.iter().sum();
             
-            r.extend(exp_numerators.iter().map(|x| x / denominator));
+            values.extend(exp_numerators.iter().map(|x| x / denominator));
         }
 
-        Matrix::from_vec(r, m.row_count(), m.column_count())
+        Matrix::from_vec(values, m.row_count(), m.column_count())
     },
     d: |v| {
         v.clone()
     }
 };
+
+/// Calculats accurace given predicted and expected values
+pub fn accuracy(predicted: &Matrix, expected: &Matrix) -> f64 {
+    assert_eq!(predicted.row_count(), expected.row_count());
+    assert_eq!(predicted.column_count(), expected.column_count());
+
+    let mut matches = 0.;
+    for row in 0..predicted.row_count() {
+        let (actual_i, _) = vector_row_max(predicted.get_row_vector_slice(row));
+        let (expected_i, _) = vector_row_max(expected.get_row_vector_slice(row));
+        if actual_i == expected_i { matches += 1. }
+    }
+
+    matches / predicted.row_count() as f64
+}
 
 #[cfg(test)]
 mod tests {

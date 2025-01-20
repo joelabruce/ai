@@ -12,7 +12,7 @@ use crate::sample::Sample;
 pub struct NeuralNetwork { }
 
 pub enum Node {
-    HiddenLayer(HiddenLayer),
+    HiddenLayer(DenseLayer),
     Activation(Activation)
 }
 
@@ -133,12 +133,13 @@ impl NeuralNetwork {
                                 .map(|chunk| f64::from_le_bytes(chunk.try_into().unwrap()))
                                 .collect();
                             n.biases = Matrix::from_vec(biases_floats, rows, columns);
-
-                            println!("Success in loading the neural network!");
+                            println!("Loaded weights and biases for dense layer.")
                         }
                         _ => { }
                     }
                 }
+
+                println!("Success in loading the neural network!");
             }
             _ => {}
         }
@@ -147,9 +148,9 @@ impl NeuralNetwork {
 
 pub fn handwritten_digits(load_from_file: bool) {
     // Create dense layers
-    let dense1 = HiddenLayer::new(784, 128);
-    let dense2 = dense1.calulated_hidden_layer(64);
-    let dense3 = dense2.calulated_hidden_layer(10);
+    let dense1 = DenseLayer::new(784, 128);
+    let dense2 = dense1.calulated_dense_layer(64);
+    let dense3 = dense2.calulated_dense_layer(10);
 
     // Add layers to the network for forward and backward propagation.
     let mut training_nodes: Vec<Node> = Vec::new();
@@ -194,7 +195,7 @@ pub fn handwritten_digits(load_from_file: bool) {
             forward_stack = NeuralNetwork::forward(&il, &mut training_nodes);
  
             // Forward pass on training data btch
-            let predictions = &(SOFTMAX.f)(&forward_stack.pop().unwrap());
+            let predictions = (SOFTMAX.f)(&forward_stack.pop().unwrap());
             let sample_losses = forward_categorical_cross_entropy_loss(&predictions, &targets);
             let data_loss = sample_losses.read_values().iter().copied().sum::<f64>() / sample_losses.len() as f64;            
             
@@ -203,7 +204,10 @@ pub fn handwritten_digits(load_from_file: bool) {
             NeuralNetwork::backward(&mut training_nodes, &dvalues6, &mut forward_stack);
 
             if batch % 100 == 0 {
-                println!("Training to batch #{batch} complete | Data Loss: {data_loss}");
+                print!("Training to batch #{batch} complete | Data Loss: {data_loss}");
+                
+                let accuracy = accuracy(&predictions, &targets);
+                println!(" | Accuracy: {accuracy}");
             }
         }
 
@@ -217,7 +221,10 @@ pub fn handwritten_digits(load_from_file: bool) {
         let v_sample_losses = forward_categorical_cross_entropy_loss(&v_predictions, &validation_tagets);
         let v_data_loss = v_sample_losses.read_values().iter().copied().sum::<f64>() / v_sample_losses.len() as f64;
 
-        println!("| Validation Loss {v_data_loss}");
+        print!("| Validation Loss: {v_data_loss}");
+
+        let accuracy = accuracy(&v_predictions, &validation_tagets);
+        println!(" | Accuracy: {accuracy}");
         
         if v_data_loss < lowest_loss { lowest_loss = v_data_loss } else { println!("Warning, validation has not improved! Consider stopping training here."); }
     }
