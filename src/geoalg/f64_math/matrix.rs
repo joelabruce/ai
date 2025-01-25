@@ -150,50 +150,50 @@ impl Matrix {
             return self.elementwise_multiply(&rhs);
         }
 
-        let mut thread_join_handles = vec![];
         let spread = self.rows % num_cores;
 
         let mut rows_curosr = 0;
-        for core in 0..num_cores {
-            let lhs = self.clone(); // How do I avoid cloning?
-            let rhs = rhs.clone();  // How do I avoid cloning?
-
-            let rows_to_handle = rows_per_core + if core < spread { 1 } else { 0 };
-            let partition_start = rows_curosr;
-            let partition_end = partition_start + rows_to_handle - 1;
-
-            rows_curosr = partition_end + 1;
-
-            thread_join_handles.push(thread::spawn(move || {
-                let mut partition_values: Vec<f64> = Vec::with_capacity(rows_to_handle * rhs.rows);
-
-                for row in partition_start..=partition_end {
-                    //////
-                    // Actual work inside of thread to be done
-                    let ls = lhs.get_row_vector_slice(row);
-                    let rs = rhs.get_row_vector_slice(row);
-                        
-                    let values = ls
-                        .iter()
-                        .zip(rs)
-                        .map(|(&l, &r)| l * r);
-                    // End of actual parallelized work
-                    //////
-
-                    partition_values.extend(values);
-                }                
-                
-                partition_values
-            }));
-        }
-
         let mut values = Vec::with_capacity(self.rows * rhs.rows);
-        for thread in thread_join_handles {
-            match thread.join() {
-                Ok(r) => { values.extend(r); },
-                Err(_e) => { } 
+
+        thread::scope(|s| {
+            let mut thread_join_handles = Vec::with_capacity(num_cores);
+            for core in 0..num_cores {
+                let rows_to_handle = rows_per_core + if core < spread { 1 } else { 0 };
+                let partition_start = rows_curosr;
+                let partition_end = partition_start + rows_to_handle - 1;
+
+                rows_curosr = partition_end + 1;
+
+                thread_join_handles.push(s.spawn(move || {
+                    let mut partition_values: Vec<f64> = Vec::with_capacity(rows_to_handle * rhs.rows);
+
+                    for row in partition_start..=partition_end {
+                        //////
+                        // Actual work inside of thread to be done
+                        let ls = self.get_row_vector_slice(row);
+                        let rs = rhs.get_row_vector_slice(row);
+                            
+                        let values = ls
+                            .iter()
+                            .zip(rs)
+                            .map(|(&l, &r)| l * r);
+                        // End of actual parallelized work
+                        //////
+
+                        partition_values.extend(values);
+                    }                
+                    
+                    partition_values
+                }));
             }
-        }
+
+            for thread in thread_join_handles {
+                match thread.join() {
+                    Ok(r) => { values.extend(r); },
+                    Err(_e) => { } 
+                }
+            }
+        });
 
         Matrix {
             rows: self.rows,
@@ -249,52 +249,53 @@ impl Matrix {
         let rows_per_core = self.rows / num_cores;
 
         if rows_per_core < 1 {
-        // If there are not enough rows, must use regular multiplication
-        // Otherwise it fails because there is not enough data to parallelize
+        // There are not enough rows, must use regular multiplication
+        // Otherwise it would fail because there is not enough data to parallelize
             return self.mul_with_transposed(&rhs);
         }
 
-        let mut thread_join_handles = vec![];
         let spread = self.rows % num_cores;
 
         let mut rows_curosr = 0;
-        for core in 0..num_cores {
-            let lhs = self.clone(); // How do I avoid cloning?
-            let rhs = rhs.clone();  // How do I avoid cloning?
-
-            let rows_to_handle = rows_per_core + if core < spread { 1 } else { 0 };
-            let partition_start = rows_curosr;
-            let partition_end = partition_start + rows_to_handle - 1;
-
-            rows_curosr = partition_end + 1;
-
-            thread_join_handles.push(thread::spawn(move || {
-                 let mut partition_values: Vec<f64> = Vec::with_capacity(rows_to_handle * rhs.rows);
-
-                for row in partition_start..=partition_end {
-                    //////
-                    // Actual work inside of thread to be done
-                    let ls = lhs.get_row_vector_slice(row);
-                    for transposed_row in 0..rhs.rows {
-                        let rs = rhs.get_row_vector_slice(transposed_row);
-                        let x = dot_product_of_vector_slices(&ls, &rs);
-                        partition_values.push(x);
-                    }
-                    // End of actual parallelized work
-                    //////
-                }                
-                
-                partition_values
-            }));
-        }
-
         let mut values = Vec::with_capacity(self.rows * rhs.rows);
-        for thread in thread_join_handles {
-            match thread.join() {
-                Ok(r) => { values.extend(r); },
-                Err(_e) => { } 
+        
+        thread::scope(|s| {
+            let mut thread_join_handles = Vec::with_capacity(num_cores);
+
+            for core in 0..num_cores {
+                let rows_to_handle = rows_per_core + if core < spread { 1 } else { 0 };
+                let partition_start = rows_curosr;
+                let partition_end = partition_start + rows_to_handle - 1;
+
+                rows_curosr = partition_end + 1;
+
+                thread_join_handles.push(s.spawn(move || {
+                    let mut partition_values: Vec<f64> = Vec::with_capacity(rows_to_handle * rhs.rows);
+
+                    for row in partition_start..=partition_end {
+                        //////
+                        // Actual work inside of thread to be done
+                        let ls = self.get_row_vector_slice(row);
+                        for transposed_row in 0..rhs.rows {
+                            let rs = rhs.get_row_vector_slice(transposed_row);
+                            let x = dot_product_of_vector_slices(&ls, &rs);
+                            partition_values.push(x);
+                        }
+                        // End of actual parallelized work
+                        //////
+                    }                
+                    
+                    partition_values
+                }));
             }
-        }
+
+            for thread in thread_join_handles {
+                match thread.join() {
+                    Ok(r) => { values.extend(r); },
+                    Err(_e) => { } 
+                }
+            }
+        });
 
         Matrix {
             rows: self.rows,
