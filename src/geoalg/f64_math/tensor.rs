@@ -26,8 +26,8 @@ impl Tensor {
         }
     }
 
-    /// Unstable internal
-    /// Helps with calculations
+    /// Unstable internal.
+    /// Helps with calculations.
     fn get_dims(&self) -> Vec<usize> {
         let mut r = Vec::with_capacity(self.shape.len());
         r.push(1);
@@ -64,6 +64,13 @@ impl Tensor {
         let start = column_start + start_row;
         let end = start + len;
         &self.values[start..end]
+    }
+
+    pub fn half_outer_cross_correlation(&self, kernel: &Tensor) -> Tensor {
+        Tensor {
+            shape: vec![],
+            values: vec![]
+        }
     }
 
     /// Simple and naive valid cross correlation implementation with little to no optimizations.

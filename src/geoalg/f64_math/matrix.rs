@@ -6,7 +6,7 @@ use crate::geoalg::f64_math::optimized_functions::*;
 /// This implementation of Matrix is row-major. 
 /// Row-major is specified so certain optimizations and parallelization can be performed.
 /// Column-major is not yet implemented.
-#[derive(PartialEq, Debug, Clone)]
+#[derive(PartialEq, Debug, Clone, Default)]
 pub struct Matrix {
     rows: usize,
     columns: usize,
@@ -155,7 +155,7 @@ impl Matrix {
 
         let mut rows_curosr = 0;
         for core in 0..num_cores {
-            let lhs = self.clone(); // How do I do avoid cloning?
+            let lhs = self.clone(); // How do I avoid cloning?
             let rhs = rhs.clone();  // How do I avoid cloning?
 
             let rows_to_handle = rows_per_core + if core < spread { 1 } else { 0 };
@@ -259,7 +259,7 @@ impl Matrix {
 
         let mut rows_curosr = 0;
         for core in 0..num_cores {
-            let lhs = self.clone(); // How do I do avoid cloning?
+            let lhs = self.clone(); // How do I avoid cloning?
             let rhs = rhs.clone();  // How do I avoid cloning?
 
             let rows_to_handle = rows_per_core + if core < spread { 1 } else { 0 };
@@ -362,7 +362,7 @@ impl Matrix {
         let values = self.values
             .iter()
             .zip(rhs.values.iter())
-            .map(|(x, y)| x + y)
+            .map(|(&x, &y)| x + y)
             .collect();
 
         Matrix {

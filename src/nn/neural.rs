@@ -1,13 +1,16 @@
 use std::fs::File;
 use std::io::Read;
 
+use dense_layer::DenseLayer;
+use input_layer::InputLayer;
+
 use crate::digit_image::DigitImage;
 use crate::nn::layers::*;
 use crate::nn::activation_functions::*;
 use crate::geoalg::f64_math::matrix::*;
 use crate::input_csv_reader::*;
 use crate::output_bin_writer::OutputBinWriter;
-use crate::sample::Sample;
+use crate::statistics::sample::Sample;
 
 pub struct NeuralNetwork { }
 
@@ -16,7 +19,7 @@ pub enum Node {
     Activation(Activation)
 }
 
-/// Creates an input layers drawn randomly from a sample.
+/// Creates an input layer drawn randomly from a sample.
 pub fn from_sample_digit_images(sample: &mut Sample<DigitImage>, requested_batch_size: usize) -> (InputLayer, Matrix) {
     let data_from_sample = sample.random_batch(requested_batch_size);
 
@@ -24,7 +27,7 @@ pub fn from_sample_digit_images(sample: &mut Sample<DigitImage>, requested_batch
     let mut taget_vector = Vec::with_capacity(data_from_sample.len() * 10);
     let rows = data_from_sample.len();
     for datum in data_from_sample {
-        pixel_vector.extend( datum.pixels.clone());
+        pixel_vector.extend(datum.pixels.clone());
         taget_vector.extend(datum.one_hot_encoded_label());
     }
 
@@ -54,10 +57,10 @@ impl NeuralNetwork {
 
     /// Forward propagates the inputs through the layers.
     /// Calculates a Vec of matrices to be used for backpropagation.
-    pub fn forward(with_input: &InputLayer, to_nodes: &mut Vec<Node>) -> Vec<Matrix> {
+    pub fn forward(with_input: InputLayer, to_nodes: &mut Vec<Node>) -> Vec<Matrix> {
         let mut forward_stack = Vec::with_capacity(to_nodes.len() + 1);
 
-        forward_stack.push(with_input.forward());
+        forward_stack.push(with_input.input_matrix);
         for node in to_nodes.iter() {
             match node {
                 Node::Activation(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
@@ -192,12 +195,12 @@ pub fn handwritten_digits(load_from_file: bool) {
         training_sample.reset();
         for batch in 0..batches {
             let (il, targets) = from_sample_digit_images(&mut training_sample, batch_size);
-            forward_stack = NeuralNetwork::forward(&il, &mut training_nodes);
+            forward_stack = NeuralNetwork::forward(il, &mut training_nodes);
  
             // Forward pass on training data btch
             let predictions = (SOFTMAX.f)(&forward_stack.pop().unwrap());
             let sample_losses = forward_categorical_cross_entropy_loss(&predictions, &targets);
-            let data_loss = sample_losses.read_values().iter().copied().sum::<f64>() / sample_losses.len() as f64;            
+            let data_loss = sample_losses.read_values().into_iter().sum::<f64>() / sample_losses.len() as f64;            
             
             // Backward pass on training data batch
             let dvalues6 = backward_categorical_cross_entropy_loss_wrt_softmax(&predictions, &targets).div_by_scalar(batch_size as f64);
@@ -216,10 +219,12 @@ pub fn handwritten_digits(load_from_file: bool) {
         NeuralNetwork::save_network(&training_nodes, &mut network_saver);
 
         // Validate updated neural network against validation inputs it hasn't been trained on.
-        forward_stack = NeuralNetwork::forward(&vl, &mut training_nodes);
+        // Clone the validation layer, so it is not consumed
+        // Better to clone here than cloning for each iteration of the batches being trained on for performance.
+        forward_stack = NeuralNetwork::forward(vl.clone(), &mut training_nodes);
         let v_predictions = &(SOFTMAX.f)(&forward_stack.pop().unwrap());
         let v_sample_losses = forward_categorical_cross_entropy_loss(&v_predictions, &validation_tagets);
-        let v_data_loss = v_sample_losses.read_values().iter().copied().sum::<f64>() / v_sample_losses.len() as f64;
+        let v_data_loss = v_sample_losses.read_values().into_iter().sum::<f64>() / v_sample_losses.len() as f64;
 
         print!("| Validation Loss: {v_data_loss}");
 

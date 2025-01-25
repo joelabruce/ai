@@ -25,7 +25,7 @@ impl InputCsvReader {
         Ok(())
     }
 
-    /// Reads a single line after 
+    /// Reads a single line. Assumes header was already read.
     pub fn read_and_parse_data_line(&mut self, vec_size: usize) -> DigitImage {
         let mut pixels = Vec::with_capacity(vec_size);
         let mut label = 0f64;
@@ -49,7 +49,7 @@ impl InputCsvReader {
                 let value_to_push = match float_value {
                     Ok(r) => r / 255.0,
                     Err(e) => { // This should only error for header.
-                        println!("ERROR!!!!!!!!!!!!!!!!!! {e} -> {retrieved_value} (will assume 0.0f64)");
+                        println!("ERROR! {e} -> {retrieved_value} (will assume 0.0f64)");
                         0.0f64
                     }
                 };
