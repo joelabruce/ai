@@ -170,9 +170,9 @@ pub fn handwritten_digits(load_from_file: bool) {
     }
 
     // Training hyper-parameters
-    let total_epochs = 10;
+    let total_epochs = 3;
     let training_sample = 60000;
-    let batch_size = 96;
+    let batch_size = 500;
     let batches = training_sample / batch_size;
     let v_batch_size = std::cmp::min(batches * batch_size / 5, 9999);        
     let mut lowest_loss = f64::INFINITY;
@@ -206,7 +206,7 @@ pub fn handwritten_digits(load_from_file: bool) {
             let dvalues6 = backward_categorical_cross_entropy_loss_wrt_softmax(&predictions, &targets).div_by_scalar(batch_size as f64);
             NeuralNetwork::backward(&mut training_nodes, &dvalues6, &mut forward_stack);
 
-            if batch % 100 == 0 {
+            if batch % 50 == 0 {
                 print!("Training to batch #{batch} complete | Data Loss: {data_loss}");
                 
                 let accuracy = accuracy(&predictions, &targets);

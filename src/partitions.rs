@@ -1,3 +1,96 @@
+use std::{ops::RangeInclusive, thread};
+
+/// A partition to be used when processing a subset of data
+pub struct Partition {
+    start: usize,
+    end: usize
+}
+
+impl Partition {
+    /// Creates a vector of partitions that can be used to as evenly as possible distribute count amongst partitions.    
+    pub fn create_partitions(count: usize, partition_count: usize) -> Vec<Partition> {
+        let partition_size = count / partition_count;
+
+        let mut partitions = Vec::with_capacity(partition_count);
+        if partition_size < 1 {
+        // Count is not large enough to split into partitions
+            partitions.push(Partition {
+                start: 0,
+                end: count
+            });
+
+            return partitions;
+        }
+
+        let spread = count % partition_count;   // Calculates left over items and distributes remainder
+        let mut cursor = 0;
+        for partition_index in 0..partition_count {
+            let adjusted_partition_size = partition_size + if partition_index < spread { 1 } else { 0 };
+            let start = cursor;
+            let end = start + adjusted_partition_size - 1;
+            cursor = end + 1;
+
+            partitions.push(
+                Partition {
+                    start,
+                    end
+                }
+            );
+        } 
+
+        partitions
+    }
+
+    /// Returns size of the partition.
+    pub fn get_size(&self) -> usize {
+        self.end - self.start
+    }
+
+    /// Returns start of partition.
+    pub fn get_start(&self) -> usize {
+        self.start
+    }
+
+    /// Returns end of partition.
+    pub fn get_end(&self) -> usize {
+        self.end
+    }
+
+    /// Creates a range to work with in a for loop.
+    pub fn get_range(&self) -> RangeInclusive<usize>{
+        self.start..=self.end
+    }
+}
+
+pub fn parallelized<T, F>(partitions: &Vec<Partition>, function: F) -> Vec<T> 
+where
+    F: FnOnce(&Partition) -> Vec<T> + Send + Copy,
+    T : Send
+{
+    let mut values: Vec<T> = Vec::new();
+    thread::scope(|s| {
+        let mut scope_join_handles = Vec::with_capacity(partitions.len());
+
+        for partition in partitions {
+            scope_join_handles.push(s.spawn(move || {
+                let partition_values = function(partition);
+                partition_values
+            }));
+        }
+
+        for scope_join_handle in scope_join_handles {
+            match scope_join_handle.join() {
+                Ok(result) => { 
+                    values.extend(result); 
+                },
+                Err(err) => { }
+            }
+        }
+    });
+
+    values
+}
+
 /// Caclulates strict partitions of n into 3 distinct parts
 /// # Arguments
 /// # Returns
@@ -61,10 +154,24 @@ fn _strict_partitions_n_into_5_recursive(n: i128) -> i128 {
 
 #[cfg(test)]
 mod tests {
-    //use super::*;
+    use super::*;
 
     #[test]
-    fn test() {
+    fn test_partition_sizes() {
+        let tc1_count = 98;
+        let partition_count = 4;
+        let actual = Partition::create_partitions(tc1_count, partition_count);
 
+        assert_eq!(actual[0].start, 0);
+        assert_eq!(actual[0].end, 24);
+
+        assert_eq!(actual[1].start, 25);
+        assert_eq!(actual[1].end, 49);
+
+        assert_eq!(actual[2].start, 50);
+        assert_eq!(actual[2].end, 73);
+
+        assert_eq!(actual[3].start, 74);
+        assert_eq!(actual[3].end, 97);
     }
 }
