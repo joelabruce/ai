@@ -1,6 +1,6 @@
 use std::thread;
 use rand::distributions::{Distribution, Uniform};
-use crate::{geoalg::f64_math::optimized_functions::*, parallelized, partitions, Partition};
+use crate::{geoalg::f64_math::optimized_functions::*, Partitioner, Partition};
 
 /// Matrix is implemented as a single dimensional vector of f64s.
 /// This implementation of Matrix is row-major. 
@@ -23,9 +23,7 @@ impl Matrix {
     /// Returns a slice of the values this matrix has.
     pub fn read_values(&self) -> &[f64] { &self.values }
 
-    /// Create a matrix from a vector.
-    /// # Arguments
-    /// # Returns
+    /// Create a matrix from a vector. Move the values into the matrix.
     pub fn from_vec(values: Vec<f64>, rows: usize, columns: usize) -> Self {
         assert_eq!(rows * columns, values.len());
         
@@ -49,9 +47,7 @@ impl Matrix {
         }
     }
 
-    /// Returns an row x column matrix filled with random values between -1.0 and 1.0 inclusive.
-    /// # Arguments
-    /// # Returns
+    /// Returns a row x column matrix filled with random values between -1.0 and 1.0 inclusive.
     pub fn new_randomized_z(rows: usize, columns: usize) -> Self {
         assert!(columns > 0);
         assert!(rows > 0);
@@ -68,9 +64,7 @@ impl Matrix {
         }
     }
 
-    /// Returns an ixj matrix filled with random values specified by uniform distribution.
-    /// # Arguments
-    /// # Returns
+    /// Returns an rows x column matrix filled with random values specified by uniform distribution.
     pub fn new_randomized_uniform(rows: usize, columns: usize, uniform: Uniform<f64>) -> Self {
         assert!(columns > 0);
         assert!(rows > 0);
@@ -87,9 +81,7 @@ impl Matrix {
         }
     }
 
-    /// Returns slice of matrix that is a row of the matrix
-    /// # Arguments
-    /// # Returns
+    /// Returns a contiguous slice of data representing columns in the matrix.
     pub fn get_row_vector_slice(&self, row: usize) -> &[f64] {
         assert!(row < self.rows, "Tried to get a row that was out of bounds.");
 
@@ -99,8 +91,6 @@ impl Matrix {
     }
 
     /// Returns a newly allocated matrix that is the transpose of the matrix operated on.
-    /// # Arguments
-    /// # Returns
     pub fn get_transpose(&self) -> Matrix {
         let capacity = self.values.len();
         let mut transposed = Vec::with_capacity(capacity);
@@ -203,11 +193,11 @@ impl Matrix {
 
     /// Makes use of supplied partitions to parallelize the operation.
     /// If partitions is cached, can be reused (to hopefully save even more time).
-    pub fn mul_element_wise_partitioned(&self, rhs: &Matrix, partitions: &Vec<Partition>) -> Matrix {
-        let mut values = Vec::with_capacity(self.values.len());
-
+    pub fn mul_element_wise_partitioned(&self, rhs: &Matrix, partitioner: &Partitioner) -> Matrix {
         let inner_process = |partition: &Partition| {
-            let mut partition_values: Vec<f64> = Vec::with_capacity(partition.get_size());
+            // We know in advance the exact capacity of result.
+            // It will always be partition size * number of inner rows.
+            let mut partition_values: Vec<f64> = Vec::with_capacity(partition.get_size() * self.columns);
             for row in partition.get_range() {
                 let ls = self.get_row_vector_slice(row);
                 let rs = rhs.get_row_vector_slice(row);
@@ -220,8 +210,7 @@ impl Matrix {
             partition_values
         };
 
-        values = parallelized(&partitions, inner_process);
-
+        let values = partitioner.parallelized(inner_process);
 
         Matrix {
             rows: self.rows,
@@ -333,24 +322,24 @@ impl Matrix {
     }
 
     /// Computes matrix multiplication and divying up work amongst partitions.
-    pub fn mul_with_transposed_partitioned(&self, rhs: &Matrix, partitions: &Vec<Partition>) -> Matrix {
-        let mut values = Vec::with_capacity(self.rows * rhs.rows);
-
-        let inner_process = |partition: &Partition| {
-            let mut partition_values: Vec<f64> = Vec::with_capacity(partition.get_size() * self.columns);
+    pub fn mul_with_transposed_partitioned(&self, rhs: &Matrix, partitioner: &Partitioner) -> Matrix {
+        let inner_process = move |partition: &Partition| {
+            // We know in advance the exact capacity of result.
+            // It will always be partition size * number of inner rows.
+            let mut partition_values: Vec<f64> = Vec::with_capacity(partition.get_size() * rhs.rows);
             for row in partition.get_range() {
                 let ls = self.get_row_vector_slice(row);
                 for transposed_row in 0..rhs.rows {
                     let rs = rhs.get_row_vector_slice(transposed_row);
-                    let x = dot_product_of_vector_slices(&ls, &rs);
-                    partition_values.push(x);
+                    let dot_product = dot_product_of_vector_slices(&ls, &rs);
+                    partition_values.push(dot_product);
                 }
             }
 
             partition_values
         };
 
-        values = parallelized(partitions, inner_process);
+        let values = partitioner.parallelized(inner_process);
 
         Matrix {
             rows: self.rows,
@@ -498,8 +487,6 @@ impl Matrix {
 
 #[cfg(test)]
 mod tests {
-    use crate::partitions;
-
     use super::*;
 
     #[test]
@@ -700,8 +687,8 @@ mod tests {
 
         let partition_count = thread::available_parallelism().unwrap().get();        
         println!("Parallelism: {partition_count}");
-        let partitions = Partition::create_partitions(lhs.rows, partition_count);
-        let z = lhs.mul_with_transposed_partitioned(&rhs, &partitions);
+        let partitioner = Partitioner::with_partitions(lhs.rows, partition_count);
+        let z = lhs.mul_with_transposed_partitioned(&rhs, &partitioner);
 
         assert_eq!(actual, expected);
         assert_eq!(z, expected);
@@ -784,8 +771,8 @@ mod tests {
 
         let partition_count = thread::available_parallelism().unwrap().get();        
         println!("Parallelism: {partition_count}");
-        let partitions = Partition::create_partitions(lhs.rows, partition_count);
-        let z = lhs.mul_element_wise_partitioned(&rhs, &partitions);
+        let partitioner = Partitioner::with_partitions(lhs.rows, partition_count);
+        let z = lhs.mul_element_wise_partitioned(&rhs, &partitioner);
 
         assert_eq!(actual, expected);
         assert_eq!(z, expected);

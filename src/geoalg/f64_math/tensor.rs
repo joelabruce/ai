@@ -66,7 +66,8 @@ impl Tensor {
         &self.values[start..end]
     }
 
-    pub fn half_outer_cross_correlation(&self, kernel: &Tensor) -> Tensor {
+    /// TODO: 
+    pub fn half_outer_cross_correlation(&self, _kernel: &Tensor) -> Tensor {
         Tensor {
             shape: vec![],
             values: vec![]
