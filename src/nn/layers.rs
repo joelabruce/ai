@@ -11,7 +11,7 @@ pub fn learning_rate() -> f64 {
 }
 
 pub trait Propagates {
-    fn forward(&self, inputs: &Matrix) -> Matrix;
+    fn forward(&mut self, inputs: &Matrix) -> Matrix;
     fn backward<'a>(&'a mut self, dvalues: &Matrix, inputs: &Matrix) -> Matrix;
 }
 

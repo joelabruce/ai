@@ -1,4 +1,4 @@
-use super::Matrix;
+use super::{Matrix, Propagates};
 
 ///
 pub struct ConvolutionalLayer {
@@ -9,4 +9,17 @@ pub struct ConvolutionalLayer {
 
 impl ConvolutionalLayer {
     //fn 
+}
+
+impl Propagates for ConvolutionalLayer {
+    fn forward(&mut self, inputs: &Matrix) -> Matrix {
+        inputs.len();
+        todo!()
+    }
+
+    fn backward<'a>(&'a mut self, dvalues: &Matrix, inputs: &Matrix) -> Matrix {
+        dvalues.len();
+        inputs.len();
+        todo!()
+    }
 }

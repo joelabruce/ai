@@ -1,11 +1,16 @@
+use std::thread;
+
 use rand::distributions::Uniform;
-use crate::geoalg::f64_math::matrix::Matrix;
+use crate::{geoalg::f64_math::matrix::Matrix, partitioner_cache::PartitionerCache};
 use super::*;
 
 /// A fully connected layer.
 pub struct DenseLayer {
     pub biases: Matrix,
-    pub weights: Matrix
+    pub weights: Matrix,
+
+    partitioner_cache: PartitionerCache,
+    parallelism: usize
 }
 
 impl DenseLayer {
@@ -19,9 +24,12 @@ impl DenseLayer {
 
     pub fn new(input_size: usize, neuron_count: usize) -> DenseLayer {
         let (weights, biases) = DenseLayer::random_weight_biases(neuron_count, input_size);
+
         DenseLayer {
             weights,
-            biases
+            biases,
+            partitioner_cache: PartitionerCache::new(),
+            parallelism: thread::available_parallelism().unwrap().get()
         }
     }
 
@@ -36,26 +44,31 @@ impl DenseLayer {
 
 impl Propagates for DenseLayer {
     /// Forward propagates by performing weights dot inputs + biases.
-    /// Z
-    fn forward<'a>(&self, inputs: &'a Matrix) -> Matrix {
+    fn forward<'a>(&mut self, inputs: &'a Matrix) -> Matrix {
+        let partitioner = self.partitioner_cache.get_or_add(inputs.row_count(), self.parallelism);
+
         let r = inputs
-            .mul_threaded_rowwise(&self.weights)
-            .add_row_vector(&self.biases);
+            .mul_with_transposed_partitioned(&self.weights.get_transpose(), partitioner)
+            .add_row_partitioned(&self.biases, partitioner);
         r
     }
 
-    /// In progress to support ADAM optimization
+    /// Back propagates.
+    /// Will return dvalues to be used in next back propagation layer.
     fn backward<'a>(& mut self, dvalues: &Matrix, inputs: &Matrix) -> Matrix {
         // Mutate the weights based on derivative weights
-        let dweights = inputs.get_transpose().mul_threaded_rowwise(dvalues);
-        self.weights = self.weights.sub(&dweights.scale(learning_rate()));
+        let inputs_t = inputs.get_transpose();
+        let inputs_t_partitioner = self.partitioner_cache.get_or_add(inputs_t.row_count(), self.parallelism);
+        let dweights = inputs_t.mul_with_transposed_partitioned(&dvalues.get_transpose(), inputs_t_partitioner);
 
+        self.weights = self.weights.sub(&dweights.scale(learning_rate()));
 
         // Mutate the biases based on derivative biases
         let dbiases = dvalues.shrink_rows_by_add();
         self.biases = self.biases.sub(&dbiases.scale(learning_rate()));
 
-        let x = dvalues.mul_with_transposed_threaded_rowwise(&self.weights);
-        x
+        let dvalues_partitioner = self.partitioner_cache.get_or_add(dvalues.row_count(), self.parallelism);
+        let result = dvalues.mul_with_transposed_partitioned(&self.weights, dvalues_partitioner);
+        result
     }
 }

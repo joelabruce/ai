@@ -9,7 +9,7 @@ pub struct Activation {
 }
 
 impl Propagates for Activation {
-    fn forward(&self, inputs: &Matrix) -> Matrix {
+    fn forward(&mut self, inputs: &Matrix) -> Matrix {
         inputs.map(self.f)
     }
     fn backward<'a>(&mut self, dvalues: &'a Matrix, inputs: &'a Matrix) -> Matrix {

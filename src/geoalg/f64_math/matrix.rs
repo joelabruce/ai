@@ -418,13 +418,17 @@ impl Matrix {
     }
 
     /// Elementwise division of matrix by scalar.
-    /// # Arguments
-    /// # Returns
+    /// Finds reciprocal first and then calls mul_by_scalar.
     pub fn div_by_scalar(&self, scalar: f64) -> Matrix {
-        assert_ne!(scalar, 0.0, "Cannot divide matrix elements by zero.");
+        assert_ne!(scalar, 0., "Cannot divide matrix elements by zero.");
+        self.mul_by_scalar(1. / scalar)
+    }
+
+    /// Elementwise multiplication of matrix by scalar.
+    pub fn mul_by_scalar(&self, scalar: f64) -> Matrix {
         let values = self.values
             .iter()
-            .map(|x| x / scalar)
+            .map(|x| x * scalar)
             .collect();
 
         Matrix {
@@ -453,6 +457,33 @@ impl Matrix {
             rows: self.rows,
             columns: self.columns,
             values: r
+        }
+    }
+
+    pub fn add_row_partitioned(&self, rhs: &Matrix, partitioner: &Partitioner) -> Matrix {
+        assert_eq!(rhs.rows, 1, "Rhs matrix must have 1 row.");
+        assert_eq!(self.columns, rhs.columns, "Lhs and rhs must have equal number of columns.");
+
+        let inner_process = move |partition: &Partition| {
+            let mut partition_values: Vec<f64> = Vec::with_capacity(partition.get_size() * self.columns);
+            let rs = rhs.get_row_vector_slice(0); 
+            for row in partition.get_range() {
+                let ls = self.get_row_vector_slice(row);
+
+                for column in 0..ls.len() {
+                    partition_values.push(ls[column] + rs[column]);
+                }
+            }
+
+            partition_values
+        };
+
+        let values = partitioner.parallelized(inner_process);
+
+        Matrix {
+            rows: self.rows,
+            columns: self.columns,
+            values
         }
     }
 
@@ -776,5 +807,50 @@ mod tests {
 
         assert_eq!(actual, expected);
         assert_eq!(z, expected);
+    }
+
+    #[test]
+    fn test_add_row_vector() {
+        let tc = Matrix {
+            rows: 3,
+            columns: 4,
+            values: vec![
+                0., 0., 0., 0.,
+                1., 1., 1., 1.,
+                2., 2., 2., 2.
+            ]
+        };
+
+        let row_to_add = Matrix {
+            rows: 1,
+            columns: 4,
+            values: vec![10., 20., 30., 40.]
+        };
+
+        let expected = Matrix {
+            rows: 3,
+            columns: 4,
+            values: vec![
+                10., 20., 30., 40.,
+                11., 21., 31., 41.,
+                12., 22., 32., 42.
+            ]
+        };
+
+        let actual = tc.add_row_vector(&row_to_add);
+        assert_eq!(actual, expected);        
+    }
+
+    #[test]
+    fn test_add_row_partitioned() {
+        let lhs = Matrix::new_randomized_z(500, 600);
+        let rhs = &Matrix::new_randomized_z(1, 600);
+
+        let partitioner = Partitioner::with_partitions(500, 16);
+        let actual = lhs.add_row_partitioned(rhs, &partitioner);
+
+        let expected = lhs.add_row_vector(rhs);
+
+        assert_eq!(actual, expected);
     }
 }

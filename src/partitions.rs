@@ -1,6 +1,7 @@
 use std::{ops::RangeInclusive, thread};
 
 /// Partions data to be operated on, and provides for multi-threading.
+#[derive(Hash)]
 pub struct Partitioner {
     partitions: Vec<Partition>
 }
@@ -73,7 +74,7 @@ impl Partitioner {
                     Ok(result) => { 
                         values.extend(result); 
                     },
-                    Err(_err) => { }
+                    Err(_err) => { println!("{:?}", _err); }
                 }
             }
         });
@@ -83,6 +84,7 @@ impl Partitioner {
 }
 
 /// A partition to be used when processing a subset of data
+#[derive(Hash)]
 pub struct Partition {
     start: usize,
     end: usize
@@ -198,7 +200,7 @@ mod tests {
     }
 
     #[test]
-    fn test_parallelizable() {
+    fn test_parallelizable_simple() {
         let tc1 = 1000;
         let tc = Partitioner::with_partitions(tc1, 8);
 
@@ -210,5 +212,23 @@ mod tests {
         let expected:Vec<_> = (0..tc1).collect();
 
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_parallelizable_use_case() {
+        let tc1 = 1000;
+        let tc = Partitioner::with_partitions(tc1, 8);
+
+        let actual = tc.parallelized(|partition| {
+            let mut partition_values = Vec::with_capacity(partition.get_size());
+            for index in partition.get_range() {
+                partition_values.push(2 * index);
+            }
+            partition_values
+        });
+
+        let expected:Vec<_> = (0..tc1).map(|x| x * 2).collect();
+
+        assert_eq!(actual, expected);        
     }
 }

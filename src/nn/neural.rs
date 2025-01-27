@@ -61,7 +61,7 @@ impl NeuralNetwork {
         let mut forward_stack = Vec::with_capacity(to_nodes.len() + 1);
 
         forward_stack.push(with_input.input_matrix);
-        for node in to_nodes.iter() {
+        for node in to_nodes.iter_mut() {
             match node {
                 Node::Activation(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
                 Node::HiddenLayer(n) => forward_stack.push(n.forward(forward_stack.last().unwrap()))
@@ -170,7 +170,7 @@ pub fn handwritten_digits(load_from_file: bool) {
     }
 
     // Training hyper-parameters
-    let total_epochs = 3;
+    let total_epochs = 4;
     let training_sample = 60000;
     let batch_size = 500;
     let batches = training_sample / batch_size;
