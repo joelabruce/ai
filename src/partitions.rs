@@ -1,7 +1,12 @@
 use std::{ops::RangeInclusive, thread};
 
+pub struct Partitioned<T> {
+    pub partitioned: T,
+    pub partitioner: Partitioner
+}
+
 /// Partions data to be operated on, and provides for multi-threading.
-#[derive(Hash)]
+#[derive(Hash, Debug, Clone, PartialEq)]
 pub struct Partitioner {
     partitions: Vec<Partition>
 }
@@ -59,6 +64,11 @@ impl Partitioner {
         F: FnOnce(&Partition) -> Vec<T> + Send + Copy,
         T : Send
     {
+        if self.partitions.len() == 1 {
+        // Since only 1 partition, do not use threading.
+            return function(&self.partitions[0]);
+        }
+
         let mut values: Vec<T> = Vec::new();
         thread::scope(|s| {
             let mut scope_join_handles = Vec::with_capacity(self.partitions.len());
@@ -84,7 +94,7 @@ impl Partitioner {
 }
 
 /// A partition to be used when processing a subset of data
-#[derive(Hash)]
+#[derive(Hash, Debug, Clone, PartialEq)]
 pub struct Partition {
     start: usize,
     end: usize
@@ -93,15 +103,15 @@ pub struct Partition {
 impl Partition {
     /// Returns size of the partition.
     pub fn get_size(&self) -> usize {
-        self.end - self.start
+        self.end - self.start + 1
     }
 
-    /// Returns start of partition.
+    /// Returns start index of partition.
     pub fn get_start(&self) -> usize {
         self.start
     }
 
-    /// Returns end of partition.
+    /// Returns end index of partition.
     pub fn get_end(&self) -> usize {
         self.end
     }
