@@ -203,7 +203,7 @@ pub fn handwritten_digits(load_from_file: bool) {
             let data_loss = sample_losses.read_values().into_iter().sum::<f64>() / sample_losses.len() as f64;            
             
             // Backward pass on training data batch
-            let dvalues6 = backward_categorical_cross_entropy_loss_wrt_softmax(&predictions, &targets).div_by_scalar(batch_size as f64);
+            let dvalues6 = backward_categorical_cross_entropy_loss_wrt_softmax(&predictions, &targets).scale(1. / batch_size as f64);
             NeuralNetwork::backward(&mut training_nodes, &dvalues6, &mut forward_stack);
 
             if batch % 50 == 0 {

@@ -417,27 +417,6 @@ impl Matrix {
         }
     }
 
-    /// Elementwise division of matrix by scalar.
-    /// Finds reciprocal first and then calls mul_by_scalar.
-    pub fn div_by_scalar(&self, scalar: f64) -> Matrix {
-        assert_ne!(scalar, 0., "Cannot divide matrix elements by zero.");
-        self.mul_by_scalar(1. / scalar)
-    }
-
-    /// Elementwise multiplication of matrix by scalar.
-    pub fn mul_by_scalar(&self, scalar: f64) -> Matrix {
-        let values = self.values
-            .iter()
-            .map(|x| x * scalar)
-            .collect();
-
-        Matrix {
-            rows: self.rows,
-            columns: self.columns,
-            values
-        }
-    }
-
     /// Adds a given row to each row in lhs matrix.
     pub fn add_row_vector(&self, rhs: &Matrix) -> Matrix {
         assert_eq!(rhs.rows, 1, "Rhs matrix must have 1 row.");
@@ -504,7 +483,8 @@ impl Matrix {
         }
     }
 
-    /// Scales matrix by scalar.
+    /// Scales matrix by a scalar.
+    /// Instead of making a division operator, please pass. reciprocal of scalar
     pub fn scale(&self, scalar: f64) -> Matrix {
         let values = self.values.iter().map(|&x| x * scalar).collect();
 

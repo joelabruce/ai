@@ -12,6 +12,7 @@ pub mod weight_initializers;
 
 use crate::partitions::*;
 use colored::*;
+use geoalg::f64_math::optimized_functions::{strict_partitions_n_into_3_fast, strict_partitions_n_into_4_experimental, strict_partitions_n_into_4_recursive};
 
 fn _main() {
     //println!("n: ");
