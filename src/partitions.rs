@@ -6,7 +6,7 @@ pub struct Partitioned<T> {
 }
 
 /// Partions data to be operated on, and provides for multi-threading.
-#[derive(Hash, Debug, Clone, PartialEq)]
+#[derive(Hash, Debug, Clone, PartialEq, Default)]
 pub struct Partitioner {
     partitions: Vec<Partition>
 }
