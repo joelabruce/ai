@@ -8,7 +8,7 @@ pub struct Partitioned<T> {
 /// Partions data to be operated on, and provides for multi-threading.
 #[derive(Hash, Debug, Clone, PartialEq, Default)]
 pub struct Partitioner {
-    partitions: Vec<Partition>
+    pub partitions: Vec<Partition>
 }
 
 impl Partitioner {
@@ -50,6 +50,10 @@ impl Partitioner {
 
         Partitioner { partitions }
     }
+
+    // pub fn iter(&self) -> [Partition] {
+    //     self.partitions[..]
+    // }
 
     /// Returns partition if it exists.
     pub fn get_partition(&self, partition_index: usize) -> &Partition {
@@ -94,13 +98,16 @@ impl Partitioner {
 }
 
 /// A partition to be used when processing a subset of data
-#[derive(Hash, Debug, Clone, PartialEq)]
+#[derive(Hash, Debug, Clone, PartialEq, Copy)]
 pub struct Partition {
     start: usize,
     end: usize
 }
 
 impl Partition {
+    pub fn get_start(&self) -> usize { self.start }
+    pub fn get_end(&self) -> usize { self.end }
+
     /// Returns size of the partition.
     pub fn get_size(&self) -> usize { self.end - self.start + 1 }
 

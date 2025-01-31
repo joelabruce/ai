@@ -10,6 +10,8 @@ pub mod nn;
 pub mod partitioner_cache;
 pub mod weight_initializers;
 
+pub mod experimental;
+
 use crate::partitions::*;
 use colored::*;
 use geoalg::f64_math::optimized_functions::{strict_partitions_n_into_3_fast, strict_partitions_n_into_4_experimental, strict_partitions_n_into_4_recursive};
