@@ -280,6 +280,7 @@ impl Matrix {
         Self::from_vec(values, self.row_count(), self.column_count())
     }
 
+    /// TODO: write in new _Matrix.
     /// Elementwise difference of two matrices.
     pub fn sub(&self, rhs: &Matrix) -> Self {
         assert!(self.columns == rhs.columns && self.rows == rhs.rows, "Cannot subtract matrices with different orders.");
@@ -325,6 +326,7 @@ impl Matrix {
         Self::from_vec(values, self.row_count(), self.column_count())
     }
 
+    /// TODO: write in new _Matrix.
     pub fn add_row_partitioned(&self, rhs: &Matrix, partitioner: &Partitioner) -> Self {
         assert_eq!(rhs.rows, 1, "Rhs matrix must have 1 row.");
         assert_eq!(self.columns, rhs.columns, "Lhs and rhs must have equal number of columns.");
@@ -348,6 +350,7 @@ impl Matrix {
         Self::from_vec(values, self.row_count(), self.column_count())
     }
 
+    /// TODO: write in new _Matrix.
     /// Sums each row in self, and outputs a new matrix that is 1 row but same number of columns.
     pub fn shrink_rows_by_add(&self) -> Self {
         let t = self.get_transpose();
@@ -360,6 +363,7 @@ impl Matrix {
         Self::from_vec(values, 1, self.column_count())
     }
 
+    /// TODO: write in new _Matrix.
     /// Scales matrix by a scalar.
     /// Instead of making a division operator, please pass. reciprocal of scalar
     pub fn scale(&self, scalar: f64) -> Self {
