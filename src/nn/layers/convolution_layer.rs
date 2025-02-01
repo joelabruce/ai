@@ -1,4 +1,5 @@
-use super::{Matrix, Propagates};
+use super::Propagates;
+use crate::experimental::*;
 
 ///
 pub struct ConvolutionalLayer {

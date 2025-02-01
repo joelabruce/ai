@@ -15,7 +15,7 @@ impl InputLayer {
         let values: Vec<f64> = values.into_iter().flat_map(|v| v).collect();
 
         InputLayer {
-            input_matrix: Matrix::from_vec(values, rows, columns)
+            input_matrix: Matrix::from(rows, columns, values)
         }
     }
 }

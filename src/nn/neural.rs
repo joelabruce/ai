@@ -7,7 +7,7 @@ use input_layer::InputLayer;
 use crate::digit_image::DigitImage;
 use crate::nn::layers::*;
 use crate::nn::activation_functions::*;
-use crate::geoalg::f64_math::matrix::*;
+//use crate::geoalg::f64_math::matrix::*;
 use crate::experimental::*;
 use crate::input_csv_reader::*;
 use crate::output_bin_writer::OutputBinWriter;
@@ -33,8 +33,8 @@ pub fn from_sample_digit_images(sample: &mut Sample<DigitImage>, requested_batch
     }
 
     (InputLayer {
-        input_matrix: Matrix::from_vec(pixel_vector, rows, 784)
-    }, Matrix::from_vec(taget_vector, rows, 10))
+        input_matrix: Matrix::from(rows, 784, pixel_vector)
+    }, Matrix::from(rows, 10, taget_vector))
 }
 
 
@@ -99,8 +99,8 @@ impl NeuralNetwork {
         for node in from_nodes {
             match node {
                 Node::HiddenLayer(n) => {
-                    to_writer.write_slice_f64(&n.weights.read_values());
-                    to_writer.write_slice_f64(&n.biases.read_values());
+                    to_writer.write_slice_f64(&&n.weights.to_vec());
+                    to_writer.write_slice_f64(&&n.biases.to_vec());
                 }
                 _ => { }
             }
@@ -125,7 +125,7 @@ impl NeuralNetwork {
                                 .chunks_exact(8)
                                 .map(|chunk| f64::from_le_bytes(chunk.try_into().unwrap()))
                                 .collect();
-                            n.weights = Matrix::from_vec(weights_floats, rows, columns);
+                            n.weights = Matrix::from(rows, columns, weights_floats);
 
                             // Load biases next
                             columns = n.biases.column_count();
@@ -136,7 +136,7 @@ impl NeuralNetwork {
                                 .chunks_exact(8)
                                 .map(|chunk| f64::from_le_bytes(chunk.try_into().unwrap()))
                                 .collect();
-                            n.biases = Matrix::from_vec(biases_floats, rows, columns);
+                            n.biases = Matrix::from(rows, columns, biases_floats);
                             println!("Loaded weights and biases for dense layer.")
                         }
                         _ => { }
@@ -201,7 +201,7 @@ pub fn handwritten_digits(load_from_file: bool) {
             // Forward pass on training data btch
             let predictions = (SOFTMAX.f)(&forward_stack.pop().unwrap());
             let sample_losses = forward_categorical_cross_entropy_loss(&predictions, &targets);
-            let data_loss = sample_losses.read_values().into_iter().sum::<f64>() / sample_losses.len() as f64;            
+            let data_loss = sample_losses.to_vec().into_iter().sum::<f64>() / sample_losses.len() as f64;            
             
             // Backward pass on training data batch
             let dvalues6 = backward_categorical_cross_entropy_loss_wrt_softmax(&predictions, &targets).scale(1. / batch_size as f64);
@@ -225,7 +225,7 @@ pub fn handwritten_digits(load_from_file: bool) {
         forward_stack = NeuralNetwork::forward(vl.clone(), &mut training_nodes);
         let v_predictions = &(SOFTMAX.f)(&forward_stack.pop().unwrap());
         let v_sample_losses = forward_categorical_cross_entropy_loss(&v_predictions, &validation_tagets);
-        let v_data_loss = v_sample_losses.read_values().into_iter().sum::<f64>() / v_sample_losses.len() as f64;
+        let v_data_loss = v_sample_losses.to_vec().into_iter().sum::<f64>() / v_sample_losses.len() as f64;
 
         print!("| Validation Loss: {v_data_loss}");
 
@@ -240,7 +240,7 @@ pub fn handwritten_digits(load_from_file: bool) {
 mod tests {
     use super::*;
 
-    #[ignore = "Needs mnist_train.csv to train on."]
+    //#[ignore = "Needs mnist_train.csv to train on."]
     #[test]
     fn nn_test() {
         handwritten_digits(true);

@@ -51,10 +51,6 @@ impl Partitioner {
         Partitioner { partitions }
     }
 
-    // pub fn iter(&self) -> [Partition] {
-    //     self.partitions[..]
-    // }
-
     /// Returns partition if it exists.
     pub fn get_partition(&self, partition_index: usize) -> &Partition {
         assert!(partition_index < self.partitions.len(), "Index for partition out of bounds.");
@@ -75,16 +71,16 @@ impl Partitioner {
 
         let mut values: Vec<T> = Vec::new();
         thread::scope(|s| {
-            let mut scope_join_handles = Vec::with_capacity(self.partitions.len());
+            let mut scoped_join_handles = Vec::with_capacity(self.partitions.len());
 
             for partition in &self.partitions[..] {
-                scope_join_handles.push(s.spawn(move || {
+                scoped_join_handles.push(s.spawn(move || {
                     function(&partition)
                 }));
             }
 
-            for scope_join_handle in scope_join_handles {
-                match scope_join_handle.join() {
+            for scoped_join_handle in scoped_join_handles {
+                match scoped_join_handle.join() {
                     Ok(result) => { 
                         values.extend(result); 
                     },

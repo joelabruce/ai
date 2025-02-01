@@ -3,7 +3,8 @@ pub mod input_layer;
 pub mod convolution_layer;
 
 extern crate rand;
-use crate::geoalg::f64_math::matrix::*;
+//use crate::geoalg::f64_math::matrix::*;
+use crate::experimental::*;
 
 /// Learning rate to affect how layers apply back-propagation.
 pub fn learning_rate() -> f64 {
