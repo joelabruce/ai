@@ -17,7 +17,7 @@ impl DenseLayer {
     fn random_weight_biases(neuron_count: usize, prev_layer_input_count: usize) -> (Matrix, Matrix) {
         let uniform = Uniform::new_inclusive(-0.5, 0.5);
         let weights = Matrix::new_randomized_uniform(prev_layer_input_count, neuron_count, uniform);
-        let biases = Matrix::from_vec(vec![0.0; neuron_count], 1, neuron_count);
+        let biases = Matrix::from(1, neuron_count, vec![0.0; neuron_count]);
 
         (weights, biases)
     }

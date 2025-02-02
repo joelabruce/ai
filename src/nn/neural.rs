@@ -33,8 +33,8 @@ pub fn from_sample_digit_images(sample: &mut Sample<DigitImage>, requested_batch
     }
 
     (InputLayer {
-        input_matrix: Matrix::from_vec(pixel_vector, rows, 784)
-    }, Matrix::from_vec(taget_vector, rows, 10))
+        input_matrix: Matrix::from(rows, 784, pixel_vector)
+    }, Matrix::from(rows, 10, taget_vector))
 }
 
 
@@ -125,7 +125,7 @@ impl NeuralNetwork {
                                 .chunks_exact(8)
                                 .map(|chunk| f64::from_le_bytes(chunk.try_into().unwrap()))
                                 .collect();
-                            n.weights = Matrix::from_vec(weights_floats, rows, columns);
+                            n.weights = Matrix::from(rows, columns, weights_floats);
 
                             // Load biases next
                             columns = n.biases.column_count();
@@ -136,7 +136,7 @@ impl NeuralNetwork {
                                 .chunks_exact(8)
                                 .map(|chunk| f64::from_le_bytes(chunk.try_into().unwrap()))
                                 .collect();
-                            n.biases = Matrix::from_vec(biases_floats, rows, columns);
+                            n.biases = Matrix::from(rows, columns, biases_floats);
                             println!("Loaded weights and biases for dense layer.")
                         }
                         _ => { }
