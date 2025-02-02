@@ -61,7 +61,6 @@ impl Propagates for DenseLayer {
         self.weights = self.weights.sub(&dweights.scale(learning_rate()));
 
         // Mutate the biases based on derivative biases
-        //let dbiases = dvalues.shrink_rows_by_add();
         let dbiases = dvalues.reduce_rows_by_add();
         self.biases = self.biases.sub(&dbiases.scale(learning_rate()));
 

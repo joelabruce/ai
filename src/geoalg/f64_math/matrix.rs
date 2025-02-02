@@ -91,8 +91,7 @@ impl Matrix {
             let mut partition_values = Vec::with_capacity(partition.get_size());
             for i in partition.get_range() {
                 let index_to_read = self.columns * (i % self.rows) + i / self.rows;
-                let value = self.values[index_to_read];                        
-                partition_values.push(value);
+                partition_values.push(self.values[index_to_read]);
             }
 
             partition_values
@@ -116,8 +115,6 @@ impl Matrix {
         };
 
         let inner_process = |partition: &Partition| {
-            // We know in advance the exact capacity of result.
-            // It will always be partition size * number of inner rows.
             let mut partition_values: Vec<f64> = Vec::with_capacity(partition.get_size());
             for i in partition.get_range() {
                 partition_values.push(self.values[i] * rhs.values[i]);
@@ -169,16 +166,9 @@ impl Matrix {
     }
 
     /// Useful for applying an activation function to the entire matrix.
-    pub fn map(&self, func: fn(&f64) -> f64) -> Self {
-        let values = self.values.iter().map(|&val| func(&val)).collect();
-        
-        Self::from(self.row_count(), self.column_count(), values)
-    }
-
-    /// Subtracts rhs Matrix from lhs Matrix.
     /// Partitioner implementation complete.
-    pub fn sub(&self, rhs: &Matrix) -> Self {
-       let partition_strategy = match self.all_partitioner.as_ref() {
+    pub fn map(&self, func: fn(&f64) -> f64) -> Self {
+        let partition_strategy = match self.all_partitioner.as_ref() {
             Some(p) => p,
             None => {
                 &Partitioner::with_partitions(self.len(), thread::available_parallelism().unwrap().get())
@@ -188,9 +178,32 @@ impl Matrix {
         let inner_process = move |partition: &Partition| {
             let mut partition_values = Vec::with_capacity(partition.get_size());
             for i in partition.get_range() {
-                let ls = self.values[i];
-                let rs = rhs.values[i];
-                partition_values.push(ls - rs);
+                partition_values.push(func(&self.values[i]));
+            }
+
+            partition_values
+        };
+
+        let values = partition_strategy.parallelized(inner_process);
+        Self::from(self.row_count(), self.column_count(), values)
+    }
+
+    /// Subtracts rhs Matrix from lhs Matrix.
+    /// Partitioner implementation complete.
+    pub fn sub(&self, rhs: &Matrix) -> Self {
+        assert!(self.rows == rhs.rows && self.columns == rhs.columns, "When subtracting two matrices, they must have same order.");
+ 
+        let partition_strategy = match self.all_partitioner.as_ref() {
+            Some(p) => p,
+            None => {
+                &Partitioner::with_partitions(self.len(), thread::available_parallelism().unwrap().get())
+            }
+        };
+
+        let inner_process = move |partition: &Partition| {
+            let mut partition_values = Vec::with_capacity(partition.get_size());
+            for i in partition.get_range() {
+                partition_values.push(self.values[i] - rhs.values[i]);
             }
 
             partition_values
@@ -413,5 +426,34 @@ mod tests {
 
         let actual = tc.add_row_partitioned(&row_to_add);
         assert_eq!(actual, expected);        
+    }
+
+    #[test]
+    fn test_mul_with_transpose() {
+        let lhs = Matrix::from(4, 3,  vec![
+            1., 2., 3.,
+            4., 5., 6.,
+            7., 8., 9.,
+            10., 11., 12.
+        ]);
+
+        // Assume already transposed.
+        let rhs = &Matrix::from(5, 3, vec![
+            1., 6., 11.,
+            2., 7., 12.,
+            3., 8., 13.,
+            4., 9., 14.,
+            5., 10., 15.
+        ]);
+
+        let expected = Matrix::from(4, 5, vec! [
+            46., 52., 58., 64., 70.,
+            100., 115., 130., 145., 160.,
+            154., 178., 202., 226., 250.,
+            208., 241., 274., 307., 340.
+        ]);
+
+        let actual = lhs.mul_with_transpose(rhs);
+        assert_eq!(actual, expected);
     }
 }
