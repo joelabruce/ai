@@ -16,7 +16,7 @@ impl Propagates for Activation {
         assert_eq!(dvalues.row_count(), inputs.row_count(), "Backpropagation for Activation needs inputs and dvalues to have same rows.");
         assert_eq!(dvalues.column_count(), inputs.column_count(), "Backpropagation for Activation needs inputs and dvalues to have same columns.");
 
-        inputs.map(self.d).elementwise_multiply_threaded(&dvalues)
+        inputs.map(self.d).mul_element_wise_partitioned(&dvalues)
     }
 }
 
@@ -48,7 +48,7 @@ pub const H_SWISH: Activation = Activation {
 
 /// Calculates the cross-entropy (used with softmax) for each input sample.
 pub fn forward_categorical_cross_entropy_loss(predictions: &Matrix, expected: &Matrix) -> Matrix {
-    let t: Matrix = predictions.elementwise_multiply_threaded(expected);
+    let t: Matrix = predictions.mul_element_wise_partitioned(expected);
     let mut r = Vec::with_capacity(t.row_count());
     for row in 0..t.row_count() {
         let loss = -t.get_row_vector_slice(row).iter().sum::<f64>().log10();

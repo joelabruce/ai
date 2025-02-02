@@ -34,15 +34,6 @@ impl Matrix {
         }
     }
 
-    /// Possibly faster way to implement an identity matrix.
-    pub fn new_identity(n: usize) -> Self {
-        assert!(n > 0);
-
-        let values = (0..n*n).map(|i| kronecker_delta_f64(i % (n + 1), 0)).collect();
-
-        Self::from(n, n, values)
-    }
-
     /// Returns a row x column matrix filled with random values between -1.0 and 1.0 inclusive.
     pub fn new_randomized_z(rows: usize, columns: usize) -> Self {
         assert!(columns > 0);
@@ -78,7 +69,7 @@ impl Matrix {
     }
 
     /// Returns a newly allocated matrix that is the transpose of the matrix operated on.
-    pub fn get_transpose(&self) -> Self {
+    pub fn transpose_s(&self) -> Self {
         let capacity = self.values.len();
         let mut transposed = Vec::with_capacity(capacity);
 
@@ -91,6 +82,7 @@ impl Matrix {
         Self::from(self.columns, self.rows, transposed)
     }
 
+    /// Returns transpose of matrix.
     pub fn transpose(&self) -> Self {
         let inner_process = move |partition: &Partition| {
             let mut partition_values = Vec::with_capacity(partition.get_size());
@@ -115,7 +107,7 @@ impl Matrix {
     }
 
     /// Element-wise multiplication.
-    pub fn elementwise_multiply(&self, rhs: &Matrix) -> Self {
+    pub fn elementwise_multiply_s(&self, rhs: &Matrix) -> Self {
         assert_eq!(self.columns, rhs.columns, "Columns must match for elementwise multiply.");
         assert_eq!(self.rows, rhs.rows, "Rows must match for elementwise multiply.");
 
@@ -128,87 +120,28 @@ impl Matrix {
         Self::from(self.rows, self.columns, values)
     }
 
-    // /// Row-wise multi-threaded element-wise multiply
-    pub fn elementwise_multiply_threaded(&self, rhs: &Matrix) -> Self {
-        assert_eq!(self.columns, rhs.columns, "Columns must match for elementwise multiply.");
-        assert_eq!(self.rows, rhs.rows, "Rows must match for elementwise multiply.");
-
-        let num_cores = thread::available_parallelism().unwrap().get();
-        let rows_per_core = self.rows / num_cores;
-
-        if rows_per_core < 1 {
-        // If there are not enough rows, must use regular multiplication
-        // Otherwise it fails because there is not enough data to parallelize
-            return self.elementwise_multiply(&rhs);
-        }
-
-        let spread = self.rows % num_cores;
-
-        let mut rows_curosr = 0;
-        let mut values = Vec::with_capacity(self.rows * rhs.rows);
-
-        thread::scope(|s| {
-            let mut thread_join_handles = Vec::with_capacity(num_cores);
-            for core in 0..num_cores {
-                let rows_to_handle = rows_per_core + if core < spread { 1 } else { 0 };
-                let partition_start = rows_curosr;
-                let partition_end = partition_start + rows_to_handle - 1;
-
-                rows_curosr = partition_end + 1;
-
-                thread_join_handles.push(s.spawn(move || {
-                    let mut partition_values: Vec<f64> = Vec::with_capacity(rows_to_handle * rhs.rows);
-
-                    for row in partition_start..=partition_end {
-                        //////
-                        // Actual work inside of thread to be done
-                        let ls = self.get_row_vector_slice(row);
-                        let rs = rhs.get_row_vector_slice(row);
-                            
-                        let values = ls
-                            .iter()
-                            .zip(rs)
-                            .map(|(&l, &r)| l * r);
-                        partition_values.extend(values);
-                        // End of actual parallelized work
-                        //////
-                    }                
-                    
-                    partition_values
-                }));
-            }
-
-            for thread in thread_join_handles {
-                match thread.join() {
-                    Ok(r) => { values.extend(r); },
-                    Err(_e) => { } 
-                }
-            }
-        });
-
-        Self::from(self.row_count(), self.column_count(), values)
-    }
-
     /// Makes use of supplied partitions to parallelize the operation.
     /// If partitions is cached, can be reused (to hopefully save even more time).
-    pub fn mul_element_wise_partitioned(&self, rhs: &Matrix, partitioner: &Partitioner) -> Self {
+    pub fn mul_element_wise_partitioned(&self, rhs: &Matrix) -> Self {
         let inner_process = |partition: &Partition| {
             // We know in advance the exact capacity of result.
             // It will always be partition size * number of inner rows.
-            let mut partition_values: Vec<f64> = Vec::with_capacity(partition.get_size() * self.columns);
-            for row in partition.get_range() {
-                let ls = self.get_row_vector_slice(row);
-                let rs = rhs.get_row_vector_slice(row);
-
-                for column in 0..ls.len() {
-                    partition_values.push(rs[column] * ls[column]);
-                }
+            let mut partition_values: Vec<f64> = Vec::with_capacity(partition.get_size());
+            for i in partition.get_range() {
+                partition_values.push(self.values[i] * rhs.values[i]);
             }
 
             partition_values
         };
 
-        let values = partitioner.parallelized(inner_process);
+        let partition_strategy = match self.all_partitioner.as_ref() {
+            Some(p) => p,
+            None => {
+                &Partitioner::with_partitions(self.len(), thread::available_parallelism().unwrap().get())
+            }
+        };
+
+        let values = partition_strategy.parallelized(inner_process);
 
         Self::from(self.row_count(), self.column_count(), values)
     }
@@ -217,7 +150,7 @@ impl Matrix {
     /// Willing to take performance hit [O(m x n)] for small matrices for creating transposed matrix. 
     pub fn mul(&self, rhs: &Matrix) -> Self {
         assert_eq!(self.columns, rhs.rows, "When multiplying matrices, lhs columns must equal rhs rows.");
-        let transposed = rhs.get_transpose();
+        let transposed = rhs.transpose_s();
         self.mul_with_transposed(&transposed)
     }
 
@@ -360,7 +293,7 @@ impl Matrix {
     /// TODO: write in new _Matrix.
     /// Sums each row in self, and outputs a new matrix that is 1 row but same number of columns.
     pub fn shrink_rows_by_add(&self) -> Self {
-        let t = self.get_transpose();
+        let t = self.transpose_s();
         let mut values = Vec::with_capacity(self.columns);
         for row in 0..t.rows {
             let x = t.get_row_vector_slice(row).iter().sum();
@@ -432,8 +365,6 @@ mod tests {
 
     #[test]
     fn transpose_test() {
-        let p = thread::available_parallelism().unwrap().get();
-
         let m = Matrix::from(5, 4, vec![
                 0f64, 1f64, 2f64, 3f64,
                 4f64, 5f64, 6f64, 7f64,
@@ -449,7 +380,7 @@ mod tests {
                 3f64, 7f64, 11f64, 15f64, 19f64
             ]);
         
-        let actual = m.get_transpose();
+        let actual = m.transpose_s();
         assert_eq!(actual, expected);
     }
 
@@ -462,8 +393,6 @@ mod tests {
 
      #[test]
     fn matrix_mul() {
-        let p = thread::available_parallelism().unwrap().get();
-
         // Given
         let lhs = Matrix::from(4, 3, vec![
                 1f64, 2f64, 3f64,
@@ -497,8 +426,6 @@ mod tests {
 
         let expected = lhs.mul_with_transposed(&rhs);
 
-        let partition_count = thread::available_parallelism().unwrap().get();
-        let partitioner = Partitioner::with_partitions(lhs.rows, partition_count);
         let actual = lhs.mul_with_transposed_partitioned(&rhs);
 
         assert_eq!(actual, expected);
@@ -506,8 +433,6 @@ mod tests {
 
     #[test]
     fn test_scale() {
-        let p = thread::available_parallelism().unwrap().get();
-
         let tc = Matrix::from(2, 3, vec![
                 1., 2., 3.,
                 4., 5., 6.
@@ -524,8 +449,6 @@ mod tests {
 
     #[test]
     fn test_shrink_rows_by_add() {
-        let p = thread::available_parallelism().unwrap().get();
-
         let tc = Matrix::from(3, 3, vec![
                 1., 1., 2.,
                 2., 3., 3.,
@@ -542,8 +465,6 @@ mod tests {
 
     #[test]
     fn test_get_row_vector_slice() {
-        let p = thread::available_parallelism().unwrap().get();
-
         let tc = Matrix::from(4, 3, vec![
                 1., 2., 3.,
                 10., 20., 30.,
@@ -562,19 +483,15 @@ mod tests {
         let lhs = Matrix::new_randomized_z(1000, 3001);
         let rhs = Matrix::new_randomized_z(1000, 3001);
 
-        let expected = lhs.elementwise_multiply(&rhs);
+        let expected = lhs.elementwise_multiply_s(&rhs);
 
-        let partition_count = thread::available_parallelism().unwrap().get();
-        let partitioner = Partitioner::with_partitions(lhs.rows, partition_count);
-        let actual = lhs.mul_element_wise_partitioned(&rhs, &partitioner);
+        let actual = lhs.mul_element_wise_partitioned(&rhs);
 
         assert_eq!(actual, expected);
     }
 
     #[test]
     fn test_add_row_vector() {
-        let p = thread::available_parallelism().unwrap().get();
-
         let tc = Matrix::from(3, 4, vec![
                 0., 0., 0., 0.,
                 1., 1., 1., 1.,
