@@ -45,11 +45,9 @@ impl DenseLayer {
 impl Propagates for DenseLayer {
     /// Forward propagates by performing weights dot inputs + biases.
     fn forward<'a>(&mut self, inputs: &'a Matrix) -> Matrix {
-        let partitioner = self.partitioner_cache.get_or_add(inputs.row_count(), self.parallelism);
-
         let r = inputs
-            .mul_with_transposed_partitioned(&self.weights.get_transpose(), partitioner)
-            .add_row_partitioned(&self.biases, partitioner);
+            .mul_with_transposed_partitioned(&self.weights.transpose())
+            .add_row_partitioned(&self.biases);
         r
     }
 
@@ -57,9 +55,8 @@ impl Propagates for DenseLayer {
     /// Will return dvalues to be used in next back propagation layer.
     fn backward<'a>(& mut self, dvalues: &Matrix, inputs: &Matrix) -> Matrix {
         // Mutate the weights based on derivative weights
-        let inputs_t = inputs.get_transpose();
-        let inputs_t_partitioner = self.partitioner_cache.get_or_add(inputs_t.row_count(), self.parallelism);
-        let dweights = inputs_t.mul_with_transposed_partitioned(&dvalues.get_transpose(), inputs_t_partitioner);
+        let inputs_t = inputs.transpose();
+        let dweights = inputs_t.mul_with_transposed_partitioned(&dvalues.transpose());
 
         self.weights = self.weights.sub(&dweights.scale(learning_rate()));
 
@@ -67,8 +64,7 @@ impl Propagates for DenseLayer {
         let dbiases = dvalues.shrink_rows_by_add();
         self.biases = self.biases.sub(&dbiases.scale(learning_rate()));
 
-        let dvalues_partitioner = self.partitioner_cache.get_or_add(dvalues.row_count(), self.parallelism);
-        let result = dvalues.mul_with_transposed_partitioned(&self.weights, dvalues_partitioner);
+        let result = dvalues.mul_with_transposed_partitioned(&self.weights);
         result
     }
 }

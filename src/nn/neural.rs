@@ -8,7 +8,6 @@ use crate::digit_image::DigitImage;
 use crate::nn::layers::*;
 use crate::nn::activation_functions::*;
 use crate::geoalg::f64_math::matrix::*;
-use crate::experimental::*;
 use crate::input_csv_reader::*;
 use crate::output_bin_writer::OutputBinWriter;
 use crate::statistics::sample::Sample;
