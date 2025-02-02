@@ -5,7 +5,9 @@ use std::thread;
 use rand::distributions::Uniform;
 use rand::prelude::Distribution;
 
-use crate::partitions::Partitioner;
+use crate::geoalg::f64_math::optimized_functions::dot_product_of_vector_slices;
+use crate::partitioner_cache;
+use crate::partitions::{Partition, Partitioner};
 
 #[repr(align(64))]
 struct PaddedAtomicU64 {
@@ -14,16 +16,12 @@ struct PaddedAtomicU64 {
 
 impl PaddedAtomicU64 {
     pub fn new() -> Self {
-        Self {
-            inner: AtomicU64::new(0)
-        }
+        Self { inner: AtomicU64::new(0) }
     }
 
     pub fn from_float(value: f64) -> Self {
         let inner = AtomicU64::new(value.to_bits());
-        Self {
-            inner
-        }
+        Self { inner }
     }
 
     pub fn come_in(&self, value: f64) {
@@ -56,16 +54,34 @@ fn contiguous(rows: usize, columns: usize) -> Arc<Vec<PaddedAtomicU64>> {
     Arc::new(x)
 }
 
+fn to_vec(a_values: &Arc<Vec<PaddedAtomicU64>>) -> Vec<f64> {
+    let size = a_values.len();
+    let mut f64s = Vec::with_capacity(size);
+
+    for i in 0..size {
+        let x = a_values[i].go_out();
+        f64s.push(x);
+    }
+
+    f64s
+}
+
 #[derive(Clone)]
 pub struct Matrix {
     rows: usize,
     columns: usize,
     a_values: Arc<Vec<PaddedAtomicU64>>,
     values: Vec<f64>,
-    partitioner: Option<Partitioner>
+    row_partitioner: Option<Partitioner>,
+    all_partitioner: Option<Partitioner>
 }
 
 impl Matrix {
+    pub fn partition_by_rows(mut self) -> Self {
+        self.row_partitioner = Some(Partitioner::with_partitions(self.row_count(), thread::available_parallelism().unwrap().get()));
+        self
+    }
+
     /// Returns number of rows.
     pub fn row_count(&self) -> usize { self.rows }
 
@@ -77,7 +93,11 @@ impl Matrix {
     /// Creates a new Matrix by taking over ownership of an Arc<Vec<AtomicU64>>.
     /// Private for now, only needed internally.
     fn new(rows: usize, columns: usize, a_values: Arc<Vec<PaddedAtomicU64>>) -> Self {
-        Self { rows, columns, a_values: a_values, partitioner: None, values: vec![] }
+        //let partitioner = Partitioner::none();
+        let values = to_vec(&a_values);
+        Self { rows, columns, a_values, values, 
+            row_partitioner: None,
+            all_partitioner: None }
     }
 
     /// Returns a row x column matrix filled with random values between -1.0 and 1.0 inclusive.
@@ -101,22 +121,17 @@ impl Matrix {
             .collect::<Vec<PaddedAtomicU64>>();
         
         let a_values = Arc::new(a_values);
+        //let partitioner = Partitioner::none();
 
-        Self { rows, columns, a_values, partitioner: None, values }
+        Self { rows, columns, a_values, values, 
+            row_partitioner: None,
+            all_partitioner: None }
     }
 
     /// Returns internal values as a Vec<f64>.
     /// Private for now.
     pub fn to_vec(&self) -> Vec<f64> {
-        let size = self.columns * self.rows;
-        let mut f64s = Vec::with_capacity(size);
-
-        for i in 0..size {
-            let x = self.a_values[i].go_out();
-            f64s.push(x);
-        }
-
-        f64s
+        to_vec(&self.a_values)
     }
 
     /// Returns a contiguous slice of data representing a vector of columns in the matrix.
@@ -139,7 +154,7 @@ impl Matrix {
 
     /// Performs a function on every element in Matrix.
     /// # Partition by self.len().
-    pub fn map(&self, function: fn(&f64) -> f64, partitioner: &Partitioner) -> Self {
+    pub fn map_atomic(&self, function: fn(&f64) -> f64, partitioner: &Partitioner) -> Self {
         let values = contiguous(self.rows, self.columns);
         thread::scope(|s| {
             for partition in &partitioner.partitions {
@@ -156,6 +171,34 @@ impl Matrix {
         });
 
         Self::new(self.rows, self.columns, values)
+    }
+
+    pub fn map(&self, function: fn(&f64) -> f64) -> Self {
+        let inner_process = move |partition: &Partition| {
+            let mut partitioned_values = Vec::with_capacity(partition.get_size());
+            for i in partition.get_range() {
+                let original = self.values[i];
+                let value = function(&original);
+                partitioned_values.push(value);
+            }
+
+            partitioned_values
+        };
+
+        // Self::new(self.rows, self.columns, values)
+        // Strategy for calculating the multiplication
+        match self.all_partitioner.as_ref() {
+            Some(p) => {
+                let values = p.parallelized(inner_process);
+                return Self::from(self.rows, self.rows, values);
+            },
+            None => {
+                let all_partitioner =  Partitioner::with_partitions(self.len(), thread::available_parallelism().unwrap().get());
+                let values = all_partitioner.parallelized(inner_process);
+                let result = Self::from(self.rows, self.columns, values);
+                return result;
+            }
+        }
     }
 
     /// Returns transpose of Matrix.
@@ -206,30 +249,34 @@ impl Matrix {
         Self::new(self.rows, self.columns, values)
     }
 
-    /// Multiples self to rhs, assuming that rhs has been transposed.
-    /// # Partition by self.row_count().
-    pub fn mul_with_transposed(&self, rhs: &Self, partitioner: &Partitioner) -> Self {
-        assert_eq!(self.columns, rhs.columns);
-
-        let values = contiguous(self.rows, rhs.rows);        
-        thread::scope(|s| {
-            for partition in &partitioner.partitions {
-                let partitioned_values = Arc::clone(&values);
-                let _handle = s.spawn(move || {
-                    for row_index in partition.get_range() {
-                        let cursor = row_index * rhs.rows;
-                        let ls= self.atomic_row(row_index);
-                        for transposed_row_index in 0..rhs.rows {
-                            let rs = rhs.atomic_row(transposed_row_index);
-                            let value = dot_product_atomic(&ls, &rs);
-                            partitioned_values[cursor + transposed_row_index].come_in(value);
-                        }
-                    }
-                });
+    pub fn mul_by_transpose(&self, rhs: &Self) -> Self {
+        let inner_process = move |partition: &Partition| {
+            let mut partition_values: Vec<f64> = Vec::with_capacity(partition.get_size() * rhs.rows);
+            for row in partition.get_range() {
+                let ls = self.row(row);
+                for transposed_row in 0..rhs.rows {
+                    let rs = rhs.row(transposed_row);
+                    let dot_product = dot_product_of_vector_slices(&ls, &rs);
+                    partition_values.push(dot_product);
+                }
             }
-        });
 
-        Self::new(self.rows, rhs.rows, values)
+            partition_values
+        };
+
+        // Strategy for calculating the multiplication
+        match self.row_partitioner.as_ref() {
+            Some(p) => {
+                let values = p.parallelized(inner_process);
+                return Self::from(self.rows, rhs.rows, values);
+            },
+            None => {
+                let row_partitioner =  Partitioner::with_partitions(self.row_count(), thread::available_parallelism().unwrap().get());
+                let values = row_partitioner.parallelized(inner_process);
+                let result = Self::from(self.rows, rhs.rows, values);
+                return result;
+            }
+        }
     }
 
     /// Subtracts right hand side from left hand side.
@@ -304,7 +351,7 @@ impl Matrix {
     }
 }
 
-#[cfg (test)]
+#[cfg(test)]
 mod tests {
     use super::*;
 
@@ -412,7 +459,7 @@ mod tests {
         ]);
 
         let partitioner = Partitioner::with_partitions(6, 2);
-        let actual = ls.map(|&x| -x, &partitioner);
+        let actual = ls.map_atomic(|&x| -x, &partitioner);
 
         let expected = Matrix::from(2, 3, vec![
             -1., -1., -1.,
@@ -470,7 +517,7 @@ mod tests {
     }
 
     #[test]
-    fn test_mul_with_transposed() {
+    fn test_mul_by_transpose() {
         let lhs = Matrix::from(4, 3,  vec![
             1., 2., 3.,
             4., 5., 6.,
@@ -494,8 +541,9 @@ mod tests {
             208., 241., 274., 307., 340.
         ]);
 
-        let partitioner = &Partitioner::with_partitions(lhs.rows, 2); 
-        let actual = lhs.mul_with_transposed(rhs, partitioner);
+        //let partitioner = &Partitioner::with_partitions(lhs.rows, 2); 
+        //let rows = lhs.row_count();
+        let actual = lhs.mul_by_transpose(rhs);
 
         assert_eq!(actual.to_vec(), expected.to_vec());
     }

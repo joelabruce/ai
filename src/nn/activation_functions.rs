@@ -13,10 +13,10 @@ pub struct Activation {
 
 impl Propagates for Activation {
     fn forward(&mut self, inputs: &Matrix) -> Matrix {
-        let partition_count = thread::available_parallelism().unwrap().get();
-        let partitioner = &Partitioner::with_partitions(inputs.len(), partition_count);
-
-        inputs.map(self.f, partitioner)
+        // let partition_count = thread::available_parallelism().unwrap().get();
+        // let partitioner = &Partitioner::with_partitions(inputs.len(), partition_count);
+        // inputs.map_atomic(self.f, partitioner)
+        inputs.map(self.f)
     }
     fn backward(&mut self, dvalues: & Matrix, inputs: & Matrix) -> Matrix {
         assert_eq!(dvalues.row_count(), inputs.row_count(), "Backpropagation for Activation needs inputs and dvalues to have same rows.");
@@ -24,8 +24,9 @@ impl Propagates for Activation {
 
         let partition_count = thread::available_parallelism().unwrap().get();
 
-        let partitioner = &Partitioner::with_partitions(inputs.len(), partition_count);
-        let x = inputs.map(self.d, &partitioner);
+        //let partitioner = &Partitioner::with_partitions(inputs.len(), partition_count);
+        //let x = inputs.map_atomic(self.d, &partitioner);
+        let x = inputs.map(self.d);
         
         let partitioner = &Partitioner::with_partitions(x.row_count(), partition_count);
         let r = x.hadamard(&dvalues, &partitioner);

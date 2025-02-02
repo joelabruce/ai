@@ -1,8 +1,8 @@
 use std::{ops::RangeInclusive, thread};
 
-pub struct Partitioned<T> {
-    pub partitioned: T,
-    pub partitioner: Partitioner
+pub enum PartitionStrategy {
+    WithParallelism,
+    NoParallelism
 }
 
 /// Partions data to be operated on, and provides for multi-threading.
@@ -12,6 +12,11 @@ pub struct Partitioner {
 }
 
 impl Partitioner {
+    pub fn none() -> Self {
+        let partitions = vec![];
+        Self { partitions }
+    }
+
     /// Creates a partitioner with partitions that are mostly equal in size, with no more than a difference of 1.    
     pub fn with_partitions(count: usize, partition_count: usize) -> Self {
         let partition_size = count / partition_count;

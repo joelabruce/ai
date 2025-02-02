@@ -240,7 +240,7 @@ pub fn handwritten_digits(load_from_file: bool) {
 mod tests {
     use super::*;
 
-    //#[ignore = "Needs mnist_train.csv to train on."]
+    #[ignore = "Needs mnist_train.csv to train on."]
     #[test]
     fn nn_test() {
         handwritten_digits(true);

@@ -1,4 +1,4 @@
-use std::thread;
+use std::{result, thread};
 
 use rand::distributions::Uniform;
 use crate::{partitioner_cache::PartitionerCache};
@@ -46,8 +46,9 @@ impl Propagates for DenseLayer {
         let mut partitioner = self.partitioner_cache.get_or_add(self.weights.len());
         let weights_t = self.weights.transpose(partitioner);
 
-        partitioner = self.partitioner_cache.get_or_add(inputs.row_count());
-        let r = inputs.mul_with_transposed(&weights_t, partitioner);
+        //partitioner = self.partitioner_cache.get_or_add(inputs.row_count());
+        //let r = inputs.mul_with_transposed(&weights_t, partitioner);
+        let r= inputs.mul_by_transpose(&weights_t);
 
         partitioner = self.partitioner_cache.get_or_add(r.row_count());
         let x = r.add_broadcasted(&self.biases, partitioner);
@@ -64,8 +65,9 @@ impl Propagates for DenseLayer {
         partitioner = self.partitioner_cache.get_or_add(dvalues.len());
         let dvalues_t = dvalues.transpose(partitioner);
 
-        partitioner = self.partitioner_cache.get_or_add(inputs_t.row_count());
-        let dweights = inputs_t.mul_with_transposed(&dvalues_t, partitioner);
+        //partitioner = self.partitioner_cache.get_or_add(inputs_t.row_count());
+        //let dweights = inputs_t.mul_with_transposed(&dvalues_t, partitioner);
+        let dweights = inputs_t.mul_by_transpose(&dvalues_t);
 
         //partitioner = self.partitioner_cache.get_or_add(dweights.len());
         let scaled_dweights= dweights.scale(learning_rate());
@@ -82,8 +84,9 @@ impl Propagates for DenseLayer {
         partitioner = self.partitioner_cache.get_or_add(self.biases.row_count());
         self.biases = self.biases.sub(&scaled_dbiases, partitioner);
 
-        partitioner = self.partitioner_cache.get_or_add(dvalues.row_count());
-        let result = dvalues.mul_with_transposed(&self.weights, partitioner);
+        //partitioner = self.partitioner_cache.get_or_add(dvalues.row_count());
+        //let result = dvalues.mul_with_transposed(&self.weights, partitioner);
+        let result = dvalues.mul_by_transpose(&self.weights);
         result
     }
 }
