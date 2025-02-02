@@ -99,8 +99,8 @@ impl NeuralNetwork {
         for node in from_nodes {
             match node {
                 Node::HiddenLayer(n) => {
-                    to_writer.write_slice_f64(&&n.weights.to_vec());
-                    to_writer.write_slice_f64(&&n.biases.to_vec());
+                    to_writer.write_slice_f64(&&n.weights.from_atomic());
+                    to_writer.write_slice_f64(&&n.biases.from_atomic());
                 }
                 _ => { }
             }
@@ -201,7 +201,7 @@ pub fn handwritten_digits(load_from_file: bool) {
             // Forward pass on training data btch
             let predictions = (SOFTMAX.f)(&forward_stack.pop().unwrap());
             let sample_losses = forward_categorical_cross_entropy_loss(&predictions, &targets);
-            let data_loss = sample_losses.to_vec().into_iter().sum::<f64>() / sample_losses.len() as f64;            
+            let data_loss = sample_losses.from_atomic().into_iter().sum::<f64>() / sample_losses.len() as f64;            
             
             // Backward pass on training data batch
             let dvalues6 = backward_categorical_cross_entropy_loss_wrt_softmax(&predictions, &targets).scale(1. / batch_size as f64);
@@ -225,7 +225,7 @@ pub fn handwritten_digits(load_from_file: bool) {
         forward_stack = NeuralNetwork::forward(vl.clone(), &mut training_nodes);
         let v_predictions = &(SOFTMAX.f)(&forward_stack.pop().unwrap());
         let v_sample_losses = forward_categorical_cross_entropy_loss(&v_predictions, &validation_tagets);
-        let v_data_loss = v_sample_losses.to_vec().into_iter().sum::<f64>() / v_sample_losses.len() as f64;
+        let v_data_loss = v_sample_losses.from_atomic().into_iter().sum::<f64>() / v_sample_losses.len() as f64;
 
         print!("| Validation Loss: {v_data_loss}");
 
@@ -240,7 +240,7 @@ pub fn handwritten_digits(load_from_file: bool) {
 mod tests {
     use super::*;
 
-    #[ignore = "Needs mnist_train.csv to train on."]
+    //#[ignore = "Needs mnist_train.csv to train on."]
     #[test]
     fn nn_test() {
         handwritten_digits(true);

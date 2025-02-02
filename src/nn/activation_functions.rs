@@ -13,23 +13,14 @@ pub struct Activation {
 
 impl Propagates for Activation {
     fn forward(&mut self, inputs: &Matrix) -> Matrix {
-        // let partition_count = thread::available_parallelism().unwrap().get();
-        // let partitioner = &Partitioner::with_partitions(inputs.len(), partition_count);
-        // inputs.map_atomic(self.f, partitioner)
         inputs.map(self.f)
     }
     fn backward(&mut self, dvalues: & Matrix, inputs: & Matrix) -> Matrix {
         assert_eq!(dvalues.row_count(), inputs.row_count(), "Backpropagation for Activation needs inputs and dvalues to have same rows.");
         assert_eq!(dvalues.column_count(), inputs.column_count(), "Backpropagation for Activation needs inputs and dvalues to have same columns.");
 
-        let partition_count = thread::available_parallelism().unwrap().get();
-
-        //let partitioner = &Partitioner::with_partitions(inputs.len(), partition_count);
-        //let x = inputs.map_atomic(self.d, &partitioner);
         let x = inputs.map(self.d);
-        
-        let partitioner = &Partitioner::with_partitions(x.row_count(), partition_count);
-        let r = x.hadamard(&dvalues, &partitioner);
+        let r = x.mul_element_wise(&dvalues);
         r
     }
 }
@@ -62,11 +53,8 @@ pub const H_SWISH: Activation = Activation {
 
 /// Calculates the cross-entropy (used with softmax) for each input sample.
 pub fn forward_categorical_cross_entropy_loss(predictions: &Matrix, expected: &Matrix) -> Matrix {
-    //let t: Matrix = predictions.elementwise_multiply_threaded(expected);
-    let partition_count = thread::available_parallelism().unwrap().get();
-    let partitioner = &Partitioner::with_partitions(predictions.row_count(), partition_count);
+    let t = predictions.mul_element_wise(&expected);
 
-    let t: Matrix = predictions.hadamard(expected, partitioner);
     let mut values = Vec::with_capacity(t.row_count());
     for row in 0..t.row_count() {
         let loss = -t.row(row).iter().sum::<f64>().log10();
@@ -143,7 +131,7 @@ mod tests {
             0.6652409557748218            
         ]);
 
-        assert_eq!(actual.to_vec(), expected.to_vec());
+        assert_eq!(actual.from_atomic(), expected.from_atomic());
     }
 
     #[test]

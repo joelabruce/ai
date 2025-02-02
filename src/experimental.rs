@@ -95,7 +95,8 @@ impl Matrix {
     fn new(rows: usize, columns: usize, a_values: Arc<Vec<PaddedAtomicU64>>) -> Self {
         //let partitioner = Partitioner::none();
         let values = to_vec(&a_values);
-        Self { rows, columns, a_values, values, 
+        Self { a_values, 
+            rows, columns, values, 
             row_partitioner: None,
             all_partitioner: None }
     }
@@ -123,14 +124,15 @@ impl Matrix {
         let a_values = Arc::new(a_values);
         //let partitioner = Partitioner::none();
 
-        Self { rows, columns, a_values, values, 
+        Self { a_values,
+            rows, columns, values, 
             row_partitioner: None,
             all_partitioner: None }
     }
 
     /// Returns internal values as a Vec<f64>.
     /// Private for now.
-    pub fn to_vec(&self) -> Vec<f64> {
+    pub fn from_atomic(&self) -> Vec<f64> {
         to_vec(&self.a_values)
     }
 
@@ -152,27 +154,6 @@ impl Matrix {
         res
     }
 
-    /// Performs a function on every element in Matrix.
-    /// # Partition by self.len().
-    pub fn map_atomic(&self, function: fn(&f64) -> f64, partitioner: &Partitioner) -> Self {
-        let values = contiguous(self.rows, self.columns);
-        thread::scope(|s| {
-            for partition in &partitioner.partitions {
-                let partitioned_values = Arc::clone(&values);
-                let _handle = s.spawn(move || {
-                    for i in partition.get_range() {
-                        let cursor = i;
-                        let read_value = self.a_values[cursor].go_out();
-                        let value = function(&read_value);
-                        partitioned_values[cursor].come_in(value);
-                    }
-                });
-            }
-        });
-
-        Self::new(self.rows, self.columns, values)
-    }
-
     pub fn map(&self, function: fn(&f64) -> f64) -> Self {
         let inner_process = move |partition: &Partition| {
             let mut partitioned_values = Vec::with_capacity(partition.get_size());
@@ -187,24 +168,21 @@ impl Matrix {
 
         // Self::new(self.rows, self.columns, values)
         // Strategy for calculating the multiplication
-        match self.all_partitioner.as_ref() {
-            Some(p) => {
-                let values = p.parallelized(inner_process);
-                return Self::from(self.rows, self.rows, values);
-            },
+        let all_partitioner = match self.all_partitioner.as_ref() {
+            Some(p) => p,
             None => {
-                let all_partitioner =  Partitioner::with_partitions(self.len(), thread::available_parallelism().unwrap().get());
-                let values = all_partitioner.parallelized(inner_process);
-                let result = Self::from(self.rows, self.columns, values);
-                return result;
+                &Partitioner::with_partitions(self.len(), thread::available_parallelism().unwrap().get())
             }
-        }
+        };
+        
+        let values = all_partitioner.parallelized(inner_process);
+        return Self::from(self.rows, self.columns, values);
     }
 
     /// Returns transpose of Matrix.
     /// # Partition by Matrix.len().
     /// Does not modify original Matrix.
-    pub fn transpose(&self, partitioner: &Partitioner) -> Self {
+    pub fn transpose_atomic(&self, partitioner: &Partitioner) -> Self {
         let values = contiguous(self.columns, self.rows);
         thread::scope(|s| {
             for partition in &partitioner.partitions {
@@ -223,30 +201,52 @@ impl Matrix {
         Self::new(self.columns, self.rows, values)
     }
 
-    /// Returns element-wise product.
-    /// # Partition by self.row_count().
-    pub fn hadamard(&self, rhs: &Self, partitioner: &Partitioner) -> Self {
-        let values = contiguous(self.rows, self.columns);
-        thread::scope(|s| {
-            for partition in &partitioner.partitions {
-                let partitioned_values = Arc::clone(&values);
-                let _handle = s.spawn(move || {
-                    for row_index in partition.get_range() {
-                        let cursor = row_index * self.columns;
-                        let ls = self.atomic_row(row_index);
-                        let rs = rhs.atomic_row(row_index);
-                        for column_index in 0..self.columns {
-                            let x = ls[column_index].go_out();
-                            let y = rs[column_index].go_out();
-                            let value = x * y;
-                            partitioned_values[cursor + column_index].come_in(value);
-                        }
-                    }
-                });
+    pub fn transpose(&self) -> Self {
+        let inner_process = move |partition: &Partition| {
+            let mut partition_values = Vec::with_capacity(partition.get_size());
+            for i in partition.get_range() {
+                let index_to_read = self.columns * (i % self.rows) + i / self.rows;
+                let value = self.values[index_to_read];                        
+                partition_values.push(value);
             }
-        });
 
-        Self::new(self.rows, self.columns, values)
+            partition_values
+        };
+
+        let partition_strategy = match self.all_partitioner.as_ref() {
+            Some(p) => p,
+            None => {
+                &Partitioner::with_partitions(self.len(), thread::available_parallelism().unwrap().get())
+            }
+        };
+
+        let values = partition_strategy.parallelized(inner_process);
+        Self::from(self.columns, self.rows, values)
+    }
+
+    pub fn mul_element_wise(&self, rhs: &Self) -> Self {
+        let inner_process = move |partition: &Partition| {
+            let mut partition_values = Vec::with_capacity(partition.get_size() * self.columns);
+            for row in partition.get_range() {
+                let ls = self.row(row);
+                let rs = rhs.row(row);
+                for column in 0..ls.len() {
+                    partition_values.push(ls[column] * rs[column]);
+                }
+            }
+
+            partition_values
+        };
+
+        let partition_strategy = match self.row_partitioner.as_ref() {
+            Some(p) => p,
+            None => {
+                &Partitioner::with_partitions(self.row_count(), thread::available_parallelism().unwrap().get())
+            }
+        };
+
+        let values = partition_strategy.parallelized(inner_process);
+        Self::from(self.rows, self.columns, values)
     }
 
     pub fn mul_by_transpose(&self, rhs: &Self) -> Self {
@@ -265,18 +265,15 @@ impl Matrix {
         };
 
         // Strategy for calculating the multiplication
-        match self.row_partitioner.as_ref() {
-            Some(p) => {
-                let values = p.parallelized(inner_process);
-                return Self::from(self.rows, rhs.rows, values);
-            },
+        let partition_strategy = match self.row_partitioner.as_ref() {
+            Some(p) => p,
             None => {
-                let row_partitioner =  Partitioner::with_partitions(self.row_count(), thread::available_parallelism().unwrap().get());
-                let values = row_partitioner.parallelized(inner_process);
-                let result = Self::from(self.rows, rhs.rows, values);
-                return result;
+                &Partitioner::with_partitions(self.row_count(), thread::available_parallelism().unwrap().get())
             }
-        }
+        };
+
+        let values = partition_strategy.parallelized(inner_process);
+        Self::from(self.rows, rhs.rows, values)
     }
 
     /// Subtracts right hand side from left hand side.
@@ -306,14 +303,14 @@ impl Matrix {
 
     /// Scales matrix elements by specified scalar.
     pub fn scale(&self, scalar: f64) -> Self {
-        let values = self.to_vec().iter().map(|f| f * scalar).collect();
+        let values = self.from_atomic().iter().map(|f| f * scalar).collect();
         Self::from(self.rows, self.columns, values)
     }
 
     /// Returns a 1 row matrix where the column values for each row are summed.
     /// # Partition by self.len()
     pub fn shrink_rows_by_add(&self, partitioner: &Partitioner) -> Self {
-        let t = self.transpose(partitioner);
+        let t = self.transpose_atomic(partitioner);
 
         let mut values = Vec::with_capacity(self.columns);
         for row in 0..t.row_count() {
@@ -381,7 +378,7 @@ mod tests {
         let partitioner = &Partitioner::with_partitions(tc.row_count(), p);
 
         let actual = tc.add_broadcasted(&row_to_add, partitioner);
-        assert_eq!(actual.to_vec(), expected.to_vec());        
+        assert_eq!(actual.from_atomic(), expected.from_atomic());        
     }
 
     #[test]
@@ -408,9 +405,9 @@ mod tests {
         let partitioner = Partitioner::with_partitions(lhs.rows, partition_count);
         let actual = lhs.sub(&rhs, &partitioner);
 
-        println!("exptect: {:?}, actual: {:?}", expected.to_vec(), expected.to_vec());
+        println!("exptect: {:?}, actual: {:?}", expected.from_atomic(), expected.from_atomic());
 
-        assert_eq!(actual.to_vec(), expected.to_vec());
+        assert_eq!(actual.from_atomic(), expected.from_atomic());
     }
 
     #[test]
@@ -430,7 +427,7 @@ mod tests {
             7., 8., 10.
         ]);
 
-        assert_eq!(actual.to_vec(), expected.to_vec());
+        assert_eq!(actual.from_atomic(), expected.from_atomic());
     }
 
     #[test]
@@ -448,25 +445,7 @@ mod tests {
             12., 15., 18.
         ]);
 
-        assert_eq!(actual.to_vec(), expected.to_vec()); 
-    }
-
-    #[test]
-    fn test_map() {
-        let ls = Matrix::from(2, 3, vec![
-            1., 1., 1.,
-            2., 2., 2.
-        ]);
-
-        let partitioner = Partitioner::with_partitions(6, 2);
-        let actual = ls.map_atomic(|&x| -x, &partitioner);
-
-        let expected = Matrix::from(2, 3, vec![
-            -1., -1., -1.,
-            -2., -2., -2.
-        ]);
-
-        assert_eq!(actual.to_vec(), expected.to_vec()); 
+        assert_eq!(actual.from_atomic(), expected.from_atomic()); 
     }
 
     #[test]
@@ -485,35 +464,8 @@ mod tests {
         ]);
 
         let partitioner = &Partitioner::with_partitions(12, 2);
-        let actual = tc1.transpose(partitioner);
-        assert_eq!(actual.to_vec(), expected.to_vec());
-    }
-
-    #[test]
-    fn test_hadamard() {
-        let lhs = Matrix::from(3, 3, vec![
-            1., 1., 1.,
-            2., 2., 2.,
-            3., 3., 3.
-        ]);
-
-        let rhs = Matrix::from(3, 3, vec![
-            10., 20., 30.,
-            10., 20., 30.,
-            10., 20., 30.
-        ]);
-
-        let expected = Matrix::from(3, 3, vec![
-            10., 20., 30.,
-            20., 40., 60.,
-            30., 60., 90.
-        ]);
-
-        let partition_count = thread::available_parallelism().unwrap().get();
-        let partitioner = Partitioner::with_partitions(lhs.rows, partition_count);
-        let actual = lhs.hadamard(&rhs, &partitioner);
-
-        assert_eq!(actual.to_vec(), expected.to_vec());
+        let actual = tc1.transpose_atomic(partitioner);
+        assert_eq!(actual.from_atomic(), expected.from_atomic());
     }
 
     #[test]
@@ -541,10 +493,8 @@ mod tests {
             208., 241., 274., 307., 340.
         ]);
 
-        //let partitioner = &Partitioner::with_partitions(lhs.rows, 2); 
-        //let rows = lhs.row_count();
         let actual = lhs.mul_by_transpose(rhs);
 
-        assert_eq!(actual.to_vec(), expected.to_vec());
+        assert_eq!(actual.from_atomic(), expected.from_atomic());
     }
 }
