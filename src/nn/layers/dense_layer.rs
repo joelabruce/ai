@@ -46,7 +46,7 @@ impl Propagates for DenseLayer {
     /// Forward propagates by performing weights dot inputs + biases.
     fn forward<'a>(&mut self, inputs: &'a Matrix) -> Matrix {
         let r = inputs
-            .mul_with_transposed_partitioned(&self.weights.transpose())
+            .mul_with_transpose(&self.weights.transpose())
             .add_row_partitioned(&self.biases);
         r
     }
@@ -56,15 +56,16 @@ impl Propagates for DenseLayer {
     fn backward<'a>(& mut self, dvalues: &Matrix, inputs: &Matrix) -> Matrix {
         // Mutate the weights based on derivative weights
         let inputs_t = inputs.transpose();
-        let dweights = inputs_t.mul_with_transposed_partitioned(&dvalues.transpose());
+        let dweights = inputs_t.mul_with_transpose(&dvalues.transpose());
 
         self.weights = self.weights.sub(&dweights.scale(learning_rate()));
 
         // Mutate the biases based on derivative biases
-        let dbiases = dvalues.shrink_rows_by_add();
+        //let dbiases = dvalues.shrink_rows_by_add();
+        let dbiases = dvalues.reduce_rows_by_add();
         self.biases = self.biases.sub(&dbiases.scale(learning_rate()));
 
-        let result = dvalues.mul_with_transposed_partitioned(&self.weights);
+        let result = dvalues.mul_with_transpose(&self.weights);
         result
     }
 }

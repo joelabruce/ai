@@ -16,7 +16,7 @@ impl Propagates for Activation {
         assert_eq!(dvalues.row_count(), inputs.row_count(), "Backpropagation for Activation needs inputs and dvalues to have same rows.");
         assert_eq!(dvalues.column_count(), inputs.column_count(), "Backpropagation for Activation needs inputs and dvalues to have same columns.");
 
-        inputs.map(self.d).mul_element_wise_partitioned(&dvalues)
+        inputs.map(self.d).mul_element_wise(&dvalues)
     }
 }
 
@@ -48,10 +48,10 @@ pub const H_SWISH: Activation = Activation {
 
 /// Calculates the cross-entropy (used with softmax) for each input sample.
 pub fn forward_categorical_cross_entropy_loss(predictions: &Matrix, expected: &Matrix) -> Matrix {
-    let t: Matrix = predictions.mul_element_wise_partitioned(expected);
+    let t: Matrix = predictions.mul_element_wise(expected);
     let mut r = Vec::with_capacity(t.row_count());
     for row in 0..t.row_count() {
-        let loss = -t.get_row_vector_slice(row).iter().sum::<f64>().log10();
+        let loss = -t.row(row).iter().sum::<f64>().log10();
         r.push(loss);
     }
 
@@ -73,7 +73,7 @@ pub const SOFTMAX: FoldActivation = FoldActivation {
         let mut values = Vec::with_capacity(m.len());
 
         for row in 0..m.row_count() {
-            let v = m.get_row_vector_slice(row);
+            let v = m.row(row);
             let max = v.iter().max_by(|x, y| x.total_cmp(y)).unwrap();
 
             let exp_numerators: Vec<f64> = v.iter().map(|&x| E.powf(x - max)).collect();
@@ -96,8 +96,8 @@ pub fn accuracy(predicted: &Matrix, expected: &Matrix) -> f64 {
 
     let mut matches = 0.;
     for row in 0..predicted.row_count() {
-        let (actual_i, _) = vector_row_max(predicted.get_row_vector_slice(row));
-        let (expected_i, _) = vector_row_max(expected.get_row_vector_slice(row));
+        let (actual_i, _) = vector_row_max(predicted.row(row));
+        let (expected_i, _) = vector_row_max(expected.row(row));
         if actual_i == expected_i { matches += 1. }
     }
 
