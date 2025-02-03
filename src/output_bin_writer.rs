@@ -21,7 +21,7 @@ impl OutputBinWriter {
         self.file.flush().expect("Could not flush to file");
     }
 
-    pub fn write_slice_f64(&mut self, data: &[f64]) {
+    pub fn write_slice_f32(&mut self, data: &[f32]) {
         for &value in data {
             self.file.write_all(&value.to_le_bytes()).expect("Should be able to write file, please check permissions.");
             self.file.flush().expect("Could not flush to file, please check permissions.");
@@ -39,6 +39,6 @@ mod tests {
         writer.write_meta_legible("test meta");
         
         let vec = vec![1.3; 8];
-        writer.write_slice_f64(&vec);
+        writer.write_slice_f32(&vec);
     }
 }

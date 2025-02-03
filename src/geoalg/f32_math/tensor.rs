@@ -1,4 +1,4 @@
-use crate::geoalg::f64_math::optimized_functions::*;
+use crate::geoalg::f32_math::optimized_functions::*;
 
 // Dimension constants
 const COLUMN:usize = 0;
@@ -8,11 +8,11 @@ const DEPTH:usize = 2;
 #[derive(PartialEq, Debug, Clone)]
 pub struct Tensor {
     pub shape: Vec<usize>,   // Rows, columns, depth. Everything after is arbitrary
-    pub values: Vec<f64>
+    pub values: Vec<f32>
 }
 
 impl Tensor {
-    pub fn new(shape: Vec<usize>, values: Vec<f64>, ) -> Tensor {
+    pub fn new(shape: Vec<usize>, values: Vec<f32>, ) -> Tensor {
         let zero = 0;
         let no_zeroes = !shape.contains(&zero);
         assert!(no_zeroes, "Shape cannot have dimensions of zero.");
@@ -41,7 +41,7 @@ impl Tensor {
 
     /// Gets a specific value inside tensor.
     /// Does not check each individual shape's bounds (yet?)
-    pub fn get_at(&self, coordinate: Vec<usize>) -> f64 {
+    pub fn get_at(&self, coordinate: Vec<usize>) -> f32 {
         assert_eq!(self.shape.len(), coordinate.len());
 
         let dims = self.get_dims();
@@ -51,13 +51,13 @@ impl Tensor {
         self.values[index]
     }
 
-    fn get_row(&self, row:usize, depth: usize) -> &[f64] {
+    fn get_row(&self, row:usize, depth: usize) -> &[f32] {
         let start = row * self.shape[0] + depth * self.shape[0] * self.shape[1];
         let end = start + self.shape[0];
         &self.values[start..end]
     }
 
-    fn get_row_short(&self, row: usize, depth: usize, column_start: usize, len: usize) -> &[f64] {
+    fn get_row_short(&self, row: usize, depth: usize, column_start: usize, len: usize) -> &[f32] {
         assert!(column_start < len);
         let start_row = row * self.shape[COLUMN] + depth * self.shape[ROW] * self.shape[COLUMN];
 

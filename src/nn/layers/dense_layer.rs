@@ -1,7 +1,7 @@
 use std::thread;
 
 use rand::distributions::Uniform;
-use crate::{geoalg::f64_math::matrix::Matrix, partitioner_cache::PartitionerCache};
+use crate::{geoalg::f32_math::matrix::Matrix, partitioner_cache::PartitionerCache};
 use super::*;
 
 /// A fully connected layer.

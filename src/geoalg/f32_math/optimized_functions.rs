@@ -1,12 +1,12 @@
-const ROWS_DIFFEREMT_LENGTHS: &str = "Cannot take dot product of two &[f64] of unequal length.";
+const ROWS_DIFFEREMT_LENGTHS: &str = "Cannot take dot product of two &[f32] of unequal length.";
 
-/// Dot product of two Vec<f64> slices. Will always assume they are same length (not production ready).
+/// Dot product of two Vec<f32> slices. Will always assume they are same length (not production ready).
 /// How can this be effectively benchmarked and optimized?
-pub fn dot_product_of_vector_slices(lhs: &[f64], rhs: &[f64]) -> f64 {
+pub fn dot_product_of_vector_slices(lhs: &[f32], rhs: &[f32]) -> f32 {
     assert_eq!(lhs.len(), rhs.len(), "{}", ROWS_DIFFEREMT_LENGTHS);
     let n = lhs.len();
 
-    let mut sum = 0f64;
+    let mut sum = 0f32;
     for i in 0..n {
         sum += lhs[i] * rhs[i];
     }
@@ -15,12 +15,12 @@ pub fn dot_product_of_vector_slices(lhs: &[f64], rhs: &[f64]) -> f64 {
 }
 
 /// Calculates the Kronecker Delta given i and j that are equatable to eachother.
-pub fn kronecker_delta_f64<I:PartialEq>(i: I, j: I) -> f64 {
+pub fn kronecker_delta_f32<I:PartialEq>(i: I, j: I) -> f32 {
     if i == j { 1.0 } else { 0.0 } 
 }
 
 /// Argmax. Returns index and value at the index.
-pub fn vector_row_max(values: &[f64]) -> (usize, f64) {
+pub fn vector_row_max(values: &[f32]) -> (usize, f32) {
     let mut max = values[0];
     let mut index = 0;
     for i in 1..values.len() {
@@ -110,13 +110,13 @@ mod tests {
 
     #[test]
     fn test_kronecker() {
-        let actual = kronecker_delta_f64(3, 0);
+        let actual = kronecker_delta_f32(3, 0);
         assert_eq!(actual, 0.);
 
-        let actual = kronecker_delta_f64(0, 0);
+        let actual = kronecker_delta_f32(0, 0);
         assert_eq!(actual, 1.);
 
-        let actual = kronecker_delta_f64(5., 5.);
+        let actual = kronecker_delta_f32(5., 5.);
         assert_eq!(actual, 1.);
     }
 

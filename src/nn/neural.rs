@@ -7,7 +7,7 @@ use input_layer::InputLayer;
 use crate::digit_image::DigitImage;
 use crate::nn::layers::*;
 use crate::nn::activation_functions::*;
-use crate::geoalg::f64_math::matrix::*;
+use crate::geoalg::f32_math::matrix::*;
 use crate::input_csv_reader::*;
 use crate::output_bin_writer::OutputBinWriter;
 use crate::statistics::sample::Sample;
@@ -98,8 +98,8 @@ impl NeuralNetwork {
         for node in from_nodes {
             match node {
                 Node::HiddenLayer(n) => {
-                    to_writer.write_slice_f64(&n.weights.read_values());
-                    to_writer.write_slice_f64(&n.biases.read_values());
+                    to_writer.write_slice_f32(&n.weights.read_values());
+                    to_writer.write_slice_f32(&n.biases.read_values());
                 }
                 _ => { }
             }
@@ -109,31 +109,33 @@ impl NeuralNetwork {
     pub fn attempt_load_network(from_file_path: &str, to_nodes: &mut Vec<Node>) {
         let file_open_try = File::open(from_file_path);
 
+        let chunk_size = 4; // 4 for 32-bit, 8 for 64-bit
+
         match file_open_try {
             Ok(mut file) => {   // File could be opened for read
                 for node in to_nodes {
                     match node {
                         Node::HiddenLayer(n) => {
                             // Load weights first
-                            let mut weights_buf = vec![0u8; n.weights.len() * 8];
+                            let mut weights_buf = vec![0u8; n.weights.len() * chunk_size];
                             let mut columns = n.weights.column_count();
                             let mut rows = n.weights.row_count();
 
                             file.read_exact(&mut weights_buf).expect("Should not error reading in weights for a layer.");
-                            let weights_floats: Vec<f64> = weights_buf
-                                .chunks_exact(8)
-                                .map(|chunk| f64::from_le_bytes(chunk.try_into().unwrap()))
+                            let weights_floats: Vec<f32> = weights_buf
+                                .chunks_exact(chunk_size)
+                                .map(|chunk| f32::from_le_bytes(chunk.try_into().unwrap()))
                                 .collect();
                             n.weights = Matrix::from(rows, columns, weights_floats);
 
                             // Load biases next
                             columns = n.biases.column_count();
                             rows = n.biases.row_count();
-                            let mut biases_buf = vec![0u8; n.biases.len() * 8];
+                            let mut biases_buf = vec![0u8; n.biases.len() * chunk_size];
                             file.read_exact(&mut biases_buf).expect("Should not error reading biases for a layer.");
-                            let biases_floats: Vec<f64> = biases_buf
-                                .chunks_exact(8)
-                                .map(|chunk| f64::from_le_bytes(chunk.try_into().unwrap()))
+                            let biases_floats: Vec<f32> = biases_buf
+                                .chunks_exact(chunk_size)
+                                .map(|chunk| f32::from_le_bytes(chunk.try_into().unwrap()))
                                 .collect();
                             n.biases = Matrix::from(rows, columns, biases_floats);
                             println!("Loaded weights and biases for dense layer.")
@@ -175,7 +177,7 @@ pub fn handwritten_digits(load_from_file: bool) {
     let batch_size = 500;
     let batches = training_sample / batch_size;
     let v_batch_size = std::cmp::min(batches * batch_size / 5, 9999);        
-    let mut lowest_loss = f64::INFINITY;
+    let mut lowest_loss = f32::INFINITY;
 
     // Validtion setup
     let mut testing_reader = NeuralNetwork::open_for_importing("./training/mnist_test.csv");
@@ -200,10 +202,10 @@ pub fn handwritten_digits(load_from_file: bool) {
             // Forward pass on training data btch
             let predictions = (SOFTMAX.f)(&forward_stack.pop().unwrap());
             let sample_losses = forward_categorical_cross_entropy_loss(&predictions, &targets);
-            let data_loss = sample_losses.read_values().into_iter().sum::<f64>() / sample_losses.len() as f64;            
+            let data_loss = sample_losses.read_values().into_iter().sum::<f32>() / sample_losses.len() as f32;            
             
             // Backward pass on training data batch
-            let dvalues6 = backward_categorical_cross_entropy_loss_wrt_softmax(&predictions, &targets).scale(1. / batch_size as f64);
+            let dvalues6 = backward_categorical_cross_entropy_loss_wrt_softmax(&predictions, &targets).scale(1. / batch_size as f32);
             NeuralNetwork::backward(&mut training_nodes, &dvalues6, &mut forward_stack);
 
             if batch % 50 == 0 {
@@ -224,7 +226,7 @@ pub fn handwritten_digits(load_from_file: bool) {
         forward_stack = NeuralNetwork::forward(vl.clone(), &mut training_nodes);
         let v_predictions = &(SOFTMAX.f)(&forward_stack.pop().unwrap());
         let v_sample_losses = forward_categorical_cross_entropy_loss(&v_predictions, &validation_tagets);
-        let v_data_loss = v_sample_losses.read_values().into_iter().sum::<f64>() / v_sample_losses.len() as f64;
+        let v_data_loss = v_sample_losses.read_values().into_iter().sum::<f32>() / v_sample_losses.len() as f32;
 
         print!("| Validation Loss: {v_data_loss}");
 

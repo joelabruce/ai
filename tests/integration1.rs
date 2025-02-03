@@ -7,6 +7,6 @@ mod tests {
         writer.write_meta_legible("test meta");
 
         let vec = vec![0.3; 3];
-        writer.write_slice_f64(&vec);
+        writer.write_slice_f32(&vec);
     }
 }

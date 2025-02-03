@@ -1,21 +1,21 @@
-use crate::geoalg::f64_math::optimized_functions::*;
+use crate::geoalg::f32_math::optimized_functions::*;
 
 /// Converts label into a vector.
 /// If label is greater than bounds, than vector will be zeroes.
-pub fn one_hot_encode(label: f64, bounds: usize) -> Vec<f64> {
+pub fn one_hot_encode(label: f32, bounds: usize) -> Vec<f32> {
     (0..bounds)
-        .map(|x| kronecker_delta_f64(label, x as f64))
+        .map(|x| kronecker_delta_f32(label, x as f32))
         .collect()
 }
 
 /// Greyscale 28x28 image that can be 0 through 9
 pub struct DigitImage {
-    pub pixels: Vec<f64>,
-    pub label: f64
+    pub pixels: Vec<f32>,
+    pub label: f32
 }
 
 impl DigitImage {
-    pub fn one_hot_encoded_label(&self) -> Vec<f64> {
+    pub fn one_hot_encoded_label(&self) -> Vec<f32> {
         one_hot_encode(self.label, 10)
     }
 }

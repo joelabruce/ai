@@ -1,8 +1,8 @@
 use std::thread;
 use rand::distributions::{Distribution, Uniform};
-use crate::{geoalg::f64_math::optimized_functions::*, Partitioner, Partition};
+use crate::{geoalg::f32_math::{matrix_simd::*, optimized_functions::*}, Partition, Partitioner};
 
-/// Matrix is implemented as a single dimensional vector of f64s.
+/// Matrix is implemented as a single dimensional vector of f32s.
 /// This implementation of Matrix is row-major. 
 /// Row-major is specified so certain optimizations and parallelization can be performed.
 /// Column-major is not yet implemented.
@@ -10,7 +10,7 @@ use crate::{geoalg::f64_math::optimized_functions::*, Partitioner, Partition};
 pub struct Matrix {
     rows: usize,
     columns: usize,
-    values: Vec<f64>,
+    values: Vec<f32>,
     all_partitioner: Option<Partitioner>,
     row_partitioner: Option<Partitioner>,
     column_partitioner: Option<Partitioner>
@@ -27,10 +27,15 @@ impl Matrix {
     pub fn column_count(&self) -> usize { self.columns }
 
     /// Returns a slice of the values this matrix has.
-    pub fn read_values(&self) -> &[f64] { &self.values }
+    pub fn read_values(&self) -> &[f32] { &self.values }
+
+    pub fn read_at(&self, index: usize) -> f32 {
+        assert!(index < self.len());
+        self.values[index]
+    }
 
     /// Returns a new Matrix.
-    pub fn from(rows: usize, columns: usize, values: Vec<f64>) -> Self {
+    pub fn from(rows: usize, columns: usize, values: Vec<f32>) -> Self {
         Self {
             rows, columns, values,
             all_partitioner: None,
@@ -40,7 +45,7 @@ impl Matrix {
     }
 
     /// Returns a contiguous slice of data representing columns in the matrix.
-    pub fn row(&self, row_index: usize) -> &[f64] {
+    pub fn row(&self, row_index: usize) -> &[f32] {
         assert!(row_index < self.rows, "Tried to get a row that was out of bounds.");
 
         let start = row_index * self.columns;
@@ -62,7 +67,7 @@ impl Matrix {
     }
 
     /// Returns an rows x column matrix filled with random values specified by uniform distribution.
-    pub fn new_randomized_uniform(rows: usize, columns: usize, uniform: Uniform<f64>) -> Self {
+    pub fn new_randomized_uniform(rows: usize, columns: usize, uniform: Uniform<f32>) -> Self {
         assert!(columns > 0);
         assert!(rows > 0);
 
@@ -115,7 +120,7 @@ impl Matrix {
         };
 
         let inner_process = |partition: &Partition| {
-            let mut partition_values: Vec<f64> = Vec::with_capacity(partition.get_size());
+            let mut partition_values: Vec<f32> = Vec::with_capacity(partition.get_size());
             for i in partition.get_range() {
                 partition_values.push(self.values[i] * rhs.values[i]);
             }
@@ -143,21 +148,16 @@ impl Matrix {
         };
 
         let inner_process = move |partition: &Partition| {
-            // We know in advance the exact capacity of result.
-            // It will always be partition size * number of inner rows.
-            let mut partition_values: Vec<f64> = Vec::with_capacity(partition.get_size() * rhs.rows);
-
-            // This is start of the main logic of the code we care about
+            let mut partition_values: Vec<f32> = Vec::with_capacity(partition.get_size() * rhs.rows);
             for row in partition.get_range() {
                 let ls = self.row(row);
                 for transposed_row in 0..rhs.rows {
                     let rs = rhs.row(transposed_row);
-                    let dot_product = dot_product_of_vector_slices(&ls, &rs);
+                    //let dot_product = dot_product_of_vector_slices(&ls, &rs);
+                    let dot_product = dot_product_simd3(&ls, &rs);
                     partition_values.push(dot_product);
                 }
             }
-            // End of the main code we care abour
-
             partition_values
         };
 
@@ -167,7 +167,7 @@ impl Matrix {
 
     /// Useful for applying an activation function to the entire matrix.
     /// Partitioner implementation complete.
-    pub fn map(&self, func: fn(&f64) -> f64) -> Self {
+    pub fn map(&self, func: fn(&f32) -> f32) -> Self {
         let partition_strategy = match self.all_partitioner.as_ref() {
             Some(p) => p,
             None => {
@@ -275,7 +275,7 @@ impl Matrix {
     /// Scales matrix by a scalar.
     /// Instead of making a division operator, please pass in reciprocal of scalar.
     /// Partitioner implementation complete.
-    pub fn scale(&self, scalar: f64) -> Self {
+    pub fn scale(&self, scalar: f32) -> Self {
         let partition_strategy = match self.all_partitioner.as_ref() {
             Some(p) => p,
             None => {
@@ -336,18 +336,18 @@ mod tests {
     #[test]
     fn transpose_test() {
         let m = Matrix::from(5, 4, vec![
-                0f64, 1f64, 2f64, 3f64,
-                4f64, 5f64, 6f64, 7f64,
-                8f64, 9f64, 10f64, 11f64,
-                12f64, 13f64, 14f64, 15f64,
-                16f64, 17f64, 18f64, 19f64
+                0f32, 1f32, 2f32, 3f32,
+                4f32, 5f32, 6f32, 7f32,
+                8f32, 9f32, 10f32, 11f32,
+                12f32, 13f32, 14f32, 15f32,
+                16f32, 17f32, 18f32, 19f32
             ]);
 
         let expected = Matrix::from(4, 5, vec![
-                0f64, 4f64, 8f64, 12f64, 16f64,
-                1f64, 5f64, 9f64, 13f64, 17f64,
-                2f64, 6f64, 10f64, 14f64, 18f64,
-                3f64, 7f64, 11f64, 15f64, 19f64
+                0f32, 4f32, 8f32, 12f32, 16f32,
+                1f32, 5f32, 9f32, 13f32, 17f32,
+                2f32, 6f32, 10f32, 14f32, 18f32,
+                3f32, 7f32, 11f32, 15f32, 19f32
             ]);
         
         let actual = m.transpose();
