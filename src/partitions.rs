@@ -1,4 +1,4 @@
-use std::{char::EscapeUnicode, iter::StepBy, ops::RangeInclusive, thread};
+use std::{iter::StepBy, ops::RangeInclusive, thread};
 
 pub struct Partitioned<T> {
     pub partitioned: T,
@@ -118,11 +118,6 @@ impl Partition {
 
     /// Creates a range to work with when processing data for the partition.
     pub fn get_range(&self) -> RangeInclusive<usize> { self.start..=self.end }
-
-    /// Experimental for use with SIMD.
-    pub fn get_strided_range(&self, stride: usize) -> StepBy<RangeInclusive<usize>> {
-        (self.start..=self.end).step_by(stride)
-    }
 }
 
 #[cfg(test)]
