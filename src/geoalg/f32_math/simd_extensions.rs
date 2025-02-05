@@ -26,7 +26,7 @@ pub fn dot_product_simd3(lhs: &[f32], rhs: &[f32]) -> f32 {
     sums.reduce_sum()
 }
 
-/// Take from github examples.
+/// Taken from github examples.
 /// This version is slower than not doing simd, why?
 /// Too much reliance on abstractions??
 pub fn dot_product_simd5(a: &[f32], b: &[f32]) -> f32 {
@@ -38,32 +38,34 @@ pub fn dot_product_simd5(a: &[f32], b: &[f32]) -> f32 {
 }
 
 impl Matrix {
-    pub fn mul_element_wise_simd_old(&self, rhs: &Matrix) -> Self {
-        assert!(self.row_count() == rhs.row_count() && self.column_count() == rhs.column_count(), "When element-wise multiplying two matrices, they must have same order.");
-        
-        let partitioner = Partitioner::with_partitions(self.len(), 1);
+    pub fn scale_simd(&self, scalar: f32) -> Self {
+        let partitioner = Partitioner::with_partitions_simd(self.len(), 16);
 
         let inner_process = |partition: &Partition| {
             let mut partition_values: Vec<f32> = Vec::with_capacity(partition.get_size());
-            
-            let simd_passes = partition.get_size() / SIMD_LANES;
-            let rem_begin = simd_passes * SIMD_LANES + partition.get_start();
-            let return_slice: &mut Vec<f32> = &mut vec![0.; SIMD_LANES];
-            for i in 0..simd_passes {
-                let cursor = i * SIMD_LANES + partition.get_start();
+
+            // Avoids doing division and unnecessary multiplications
+            let return_slice: &mut Vec<f32> = &mut vec![0.; SIMD_LANES];            
+            let mut cursor = partition.get_start();
+            while cursor + SIMD_LANES <= partition.get_end() {
                 let range = cursor..cursor + SIMD_LANES;
                 let x_simd = Simd::<f32, SIMD_LANES>::from_slice(&self.read_values()[range.clone()]);
-                let y_simd = Simd::<f32, SIMD_LANES>::from_slice(&rhs.read_values()[range.clone()]);
+                let y_simd = Simd::<f32, SIMD_LANES>::splat(scalar);
 
                 let r_simd = x_simd * y_simd;
 
                 r_simd.copy_to_slice(return_slice);
                 partition_values.extend_from_slice(return_slice);
+                cursor += SIMD_LANES;
             }
 
+            // Checks to see if there are any remainder chunks to deal with
+            if cursor > partition.get_end() { cursor -= SIMD_LANES; }
+
             // Does normal multiplication for remaining elements that cannot fit into simd.
-            for i in rem_begin..=partition.get_end() {
-                partition_values.push(self.read_at(i) * rhs.read_at(i));
+            // If using Partitioner::with_partitions_simd, this should only execute at most 1 time for the last thread.
+            for i in cursor..=partition.get_end() {
+                partition_values.push(self.read_at(i) * scalar);
             }
 
             partition_values
@@ -72,11 +74,12 @@ impl Matrix {
         let values = partitioner.parallelized(inner_process);
         Self::from(self.row_count(), self.column_count(), values)
     }
-    
+
+    /// TODO
     pub fn mul_element_wise_simd(&self, rhs: &Matrix) -> Self {
         assert!(self.row_count() == rhs.row_count() && self.column_count() == rhs.column_count(), "When element-wise multiplying two matrices, they must have same order.");
         
-        let partitioner = Partitioner::with_partitions(self.len(), 2);//thread::available_parallelism().unwrap().get());
+        let partitioner = Partitioner::with_partitions_simd(self.len(), 16);
 
         let inner_process = |partition: &Partition| {
             let mut partition_values: Vec<f32> = Vec::with_capacity(partition.get_size());
@@ -100,6 +103,7 @@ impl Matrix {
             if cursor > partition.get_end() { cursor -= SIMD_LANES; }
 
             // Does normal multiplication for remaining elements that cannot fit into simd.
+            // If using Partitioner::with_partitions_simd, this should only execute at most 1 time for the last thread.
             for i in cursor..=partition.get_end() {
                 partition_values.push(self.read_at(i) * rhs.read_at(i));
             }
@@ -138,13 +142,14 @@ impl Partitioner {
             partitions = Vec::with_capacity(count / partition_count);
         }
 
-        let msg = format!("simd_chunks: {simd_per_lane}, simds_per_core: {simd_per_lane_per_partition}").bright_blue();
-        println!("{msg}");
+        // Debug only
+        //let msg = format!("simd_chunks: {simd_per_lane}, simds_per_core: {simd_per_lane_per_partition}").bright_blue();
+        //println!("{msg}");
 
         let partition_size = SIMD_LANES * simd_per_lane_per_partition;
         let simd_spread = simd_per_lane % partition_count;
 
-        let mut start = 0;
+        let mut start;
         let mut adjusted_partition_size;
         let mut cursor = 0;
         let mut end;
@@ -283,5 +288,15 @@ mod tests {
 
         // let msg = format!("Partitions: {:?}", x).bright_red();
         // println!("{msg}");
+    }
+
+    #[test]
+    fn test_scale_simd() {
+        let tc = Matrix::new_randomized_z(1000, 1000);
+
+        let expected = tc.scale(1.2);
+        let actual = tc.scale_simd(1.2);
+
+        assert_eq!(actual, expected);
     }
 }

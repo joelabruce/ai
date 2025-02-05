@@ -58,11 +58,11 @@ impl Propagates for DenseLayer {
         let inputs_t = inputs.transpose();
         let dweights = inputs_t.mul_with_transpose(&dvalues.transpose());
 
-        self.weights = self.weights.sub(&dweights.scale(learning_rate()));
+        self.weights = self.weights.sub(&dweights.scale_simd(learning_rate()));
 
         // Mutate the biases based on derivative biases
         let dbiases = dvalues.reduce_rows_by_add();
-        self.biases = self.biases.sub(&dbiases.scale(learning_rate()));
+        self.biases = self.biases.sub(&dbiases.scale_simd(learning_rate()));
 
         let result = dvalues.mul_with_transpose(&self.weights);
         result
