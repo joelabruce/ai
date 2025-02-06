@@ -6,3 +6,7 @@ edition = "2021"
 [dependencies]
 rand = "0.8.5"
 colored = "2"
+
+[[example]]
+name = "mnist_digits"
+path = "examples/mnist_handwritten_digits.rs"

@@ -117,9 +117,9 @@ impl Matrix {
 }
 
 impl Partitioner {
-    /// Optimizes partitioner to fill simd lanes as full as possible across specified partition_count.
+    /// Optimizes partitioner to fill SIMD lanes as full as possible across specified partition_count.
     /// Will only multi-thread if count >= partition_count * SIMD_LANES.
-    /// Front-loads as many simds as possible, puts remainder in last thread since theoretically it will be the slowest to process.
+    /// Front-loads as many SIMDs as possible, puts remainder in last thread since theoretically it will be the slowest to process.
     pub fn with_partitions_simd(count: usize, partition_count: usize) -> Self {
         let mut partitions: Vec<Partition>;
         
