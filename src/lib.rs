@@ -15,6 +15,8 @@ pub mod weight_initializers;
 
 pub mod experimental;
 
+pub mod timed;
+
 use crate::partitions::*;
 use colored::*;
 use geoalg::f32_math::optimized_functions::{strict_partitions_n_into_3_fast, strict_partitions_n_into_4_experimental, strict_partitions_n_into_4_recursive};
