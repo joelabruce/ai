@@ -91,8 +91,8 @@ pub fn handwritten_digits(load_from_file: bool) {
                 // }
             }
 
-            print!("Epoch #{epoch} completed. Saving...");
             let backup_to_write = 1 + epoch % backup_cycle;
+            print!("Epoch #{epoch} completed. Saving cycle {backup_to_write}...");
             let mut network_saver = OutputBinWriter::new(format!("{trained_model_location}{backup_to_write}.nn").as_str());
             NeuralNetwork::save_network(epoch, &nn_nodes, &mut network_saver);
             print!("Completed");
