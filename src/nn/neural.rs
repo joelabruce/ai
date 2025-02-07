@@ -12,7 +12,9 @@ use crate::input_csv_reader::*;
 use crate::output_bin_writer::OutputBinWriter;
 use crate::statistics::sample::Sample;
 
-pub struct NeuralNetwork { }
+pub struct NeuralNetwork { 
+    pub epoch: usize
+}
 
 pub enum Node {
     HiddenLayer(DenseLayer),
@@ -76,7 +78,8 @@ impl NeuralNetwork {
        }
     }
 
-    pub fn save_network(from_nodes: &Vec<Node>, to_writer: &mut OutputBinWriter) {
+    pub fn save_network(epochs: usize, from_nodes: &Vec<Node>, to_writer: &mut OutputBinWriter) {
+        to_writer.write_usize(epochs);
         for node in from_nodes {
             match node {
                 Node::HiddenLayer(n) => {
@@ -88,37 +91,50 @@ impl NeuralNetwork {
         }
     }
 
-    pub fn attempt_load_network(from_file_path: &str, to_nodes: &mut Vec<Node>) {
-        let file_open_try = File::open(from_file_path);
+    fn read_usize(file: &mut File) -> usize {
+        let mut buf = [0u8; size_of::<usize>()];
+        file.read_exact(&mut buf).expect("Couldn't read usize from file");
 
-        let chunk_size = 4; // 4 for 32-bit, 8 for 64-bit
+        usize::from_le_bytes(buf)
+    }
+
+    fn read_section(file: &mut File, size: usize, chunk_size: usize) -> Vec<f32> {
+        let mut buf = vec![0u8; size * chunk_size];
+        file.read_exact(&mut buf).expect("Couldn't read section of file");
+        let floats: Vec<f32> = buf
+            .chunks_exact(chunk_size)
+            .map(|chunk| f32::from_le_bytes(chunk.try_into().unwrap()))
+            .collect();
+
+        floats
+    }
+
+    pub fn attempt_load_network(from_file_path: &str, to_nodes: &mut Vec<Node>) -> usize {
+        let file_open_try = File::open(from_file_path);
+ 
+        // 4 for 32-bit, 8 for 64-bit
+        const CHUNK_SIZE: usize = 4;
+
+        let mut epoch: usize = 0;
 
         match file_open_try {
             Ok(mut file) => {   // File could be opened for read
+                epoch = NeuralNetwork::read_usize(&mut file);
                 for node in to_nodes {
                     match node {
                         Node::HiddenLayer(n) => {
                             // Load weights first
-                            let mut weights_buf = vec![0u8; n.weights.len() * chunk_size];
                             let mut columns = n.weights.column_count();
                             let mut rows = n.weights.row_count();
 
-                            file.read_exact(&mut weights_buf).expect("Should not error reading in weights for a layer.");
-                            let weights_floats: Vec<f32> = weights_buf
-                                .chunks_exact(chunk_size)
-                                .map(|chunk| f32::from_le_bytes(chunk.try_into().unwrap()))
-                                .collect();
-                            n.weights = Matrix::from(rows, columns, weights_floats);
+                            let weight_floats = NeuralNetwork::read_section(&mut file, columns * rows, CHUNK_SIZE);
+                            n.weights = Matrix::from(rows, columns, weight_floats);
 
                             // Load biases next
                             columns = n.biases.column_count();
                             rows = n.biases.row_count();
-                            let mut biases_buf = vec![0u8; n.biases.len() * chunk_size];
-                            file.read_exact(&mut biases_buf).expect("Should not error reading biases for a layer.");
-                            let biases_floats: Vec<f32> = biases_buf
-                                .chunks_exact(chunk_size)
-                                .map(|chunk| f32::from_le_bytes(chunk.try_into().unwrap()))
-                                .collect();
+                            
+                            let biases_floats = NeuralNetwork::read_section(&mut file, columns * rows, CHUNK_SIZE);
                             n.biases = Matrix::from(rows, columns, biases_floats);
                             println!("Loaded weights and biases for dense layer.")
                         }
@@ -130,6 +146,8 @@ impl NeuralNetwork {
             }
             _ => {}
         }
+
+        epoch
     }
 }
 

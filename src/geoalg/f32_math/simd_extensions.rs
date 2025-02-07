@@ -26,16 +26,16 @@ pub fn dot_product_simd3(lhs: &[f32], rhs: &[f32]) -> f32 {
     sums.reduce_sum()
 }
 
-/// Taken from github examples.
-/// This version is slower than not doing simd, why?
-/// Too much reliance on abstractions??
-pub fn dot_product_simd5(a: &[f32], b: &[f32]) -> f32 {
-    a.array_chunks::<SIMD_LANES>()
-        .map(|&a| Simd::<f32, SIMD_LANES>::from_array(a))
-        .zip(b.array_chunks::<SIMD_LANES>().map(|&b| Simd::<f32, SIMD_LANES>::from_array(b)))
-        .fold(Simd::<f32, SIMD_LANES>::splat(0.), |acc, (a, b)| a.mul_add(b, acc))
-        .reduce_sum()
-}
+// Taken from github examples.
+// This version is slower than not doing simd, why?
+// Too much reliance on abstractions??
+// pub fn dot_product_simd5(a: &[f32], b: &[f32]) -> f32 {
+//     a.array_chunks::<SIMD_LANES>()
+//         .map(|&a| Simd::<f32, SIMD_LANES>::from_array(a))
+//         .zip(b.array_chunks::<SIMD_LANES>().map(|&b| Simd::<f32, SIMD_LANES>::from_array(b)))
+//         .fold(Simd::<f32, SIMD_LANES>::splat(0.), |acc, (a, b)| a.mul_add(b, acc))
+//         .reduce_sum()
+// }
 
 impl Matrix {
     pub fn scale_simd(&self, scalar: f32) -> Self {

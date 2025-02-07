@@ -9,11 +9,15 @@ pub struct OutputBinWriter {
 impl OutputBinWriter {
     pub fn new(file_path: &str) -> OutputBinWriter {
         let file = File::create(file_path).expect("File should be able to be created to save the neural network model.");
-        //let mut writer = BufWriter::new(file);
 
         OutputBinWriter {
             file
         }
+    }
+
+    pub fn write_usize(&mut self, value: usize) {
+        self.file.write_all(&value.to_le_bytes()).expect("Should be able to write usize");
+        self.file.flush().expect("Could not flush to file");
     }
 
     pub fn write_meta_legible(&mut self, data: &str) {

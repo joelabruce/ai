@@ -37,13 +37,14 @@ pub fn handwritten_digits(load_from_file: bool) {
         training_nodes.push(Node::HiddenLayer(dense3));
 
         let trained_model_location = "./tests/network_training.nn";
+        let mut epoch_offset = 0;
         if load_from_file {
             println!("Trying to load trained neural network...");
-            NeuralNetwork::attempt_load_network(&trained_model_location, &mut training_nodes);
+            epoch_offset = NeuralNetwork::attempt_load_network(&trained_model_location, &mut training_nodes);
         }
 
         // Training hyper-parameters
-        let total_epochs = 40;
+        let total_epochs = 10;
         let training_sample = 60000;
         let batch_size = 500;
         let batches = training_sample / batch_size;
@@ -54,7 +55,7 @@ pub fn handwritten_digits(load_from_file: bool) {
         let mut testing_reader = NeuralNetwork::open_for_importing("./training/mnist_test.csv");
         let _ = testing_reader.read_and_skip_header_line();
         let mut testing_sample = NeuralNetwork::create_sample_for_digit_images_from_file(&mut testing_reader, 10000);
-        let (vl, validation_tagets) = from_sample_digit_images(&mut testing_sample, v_batch_size);
+        let (vl, v_targets) = from_sample_digit_images(&mut testing_sample, v_batch_size);
 
         // Training setup
         let mut training_reader = NeuralNetwork::open_for_importing("./training/mnist_train.csv");
@@ -64,46 +65,46 @@ pub fn handwritten_digits(load_from_file: bool) {
         // Create Layers in network
         let mut forward_stack: Vec<Matrix>;
 
-        for epoch in 1..=total_epochs {
+        for epoch in epoch_offset + 1..=epoch_offset + total_epochs {
             training_sample.reset();
-            for batch in 0..batches {
+            for _batch in 0..batches {
                 let (il, targets) = from_sample_digit_images(&mut training_sample, batch_size);
                 forward_stack = NeuralNetwork::forward(il, &mut training_nodes);
     
                 // Forward pass on training data btch
                 let predictions = (SOFTMAX.f)(&forward_stack.pop().unwrap());
-                let sample_losses = forward_categorical_cross_entropy_loss(&predictions, &targets);
-                let data_loss = sample_losses.read_values().into_iter().sum::<f32>() / sample_losses.len() as f32;            
                 
                 // Backward pass on training data batch
                 let dvalues6 = backward_categorical_cross_entropy_loss_wrt_softmax(&predictions, &targets).scale_simd(1. / batch_size as f32);
                 NeuralNetwork::backward(&mut training_nodes, &dvalues6, &mut forward_stack);
 
-                // if batch % 50 == 0 {
-                //     print!("Training to batch #{batch} complete | Data Loss: {data_loss}");
-                    
+                // Only uncomment if network training is slow to see if accuracy and data loss is actually improving
+                // if _batch % 50 == 0 {
+                //     // Only needed when outputting data loss for debugging purposes.
+                //     let sample_losses = forward_categorical_cross_entropy_loss(&predictions, &targets);
+                //     let data_loss = sample_losses.read_values().into_iter().sum::<f32>() / sample_losses.len() as f32;            
+                //     print!("Training to batch #{_batch} complete | Data Loss: {data_loss}");
+                //
                 //     let accuracy = accuracy(&predictions, &targets);
                 //     println!(" | Accuracy: {accuracy}");
                 // }
             }
 
             print!("Epoch #{epoch} completed. Saving...");
-            let mut network_saver = OutputBinWriter::new(&format!("{trained_model_location}"));
-            NeuralNetwork::save_network(&training_nodes, &mut network_saver);
+            let mut network_saver = OutputBinWriter::new(trained_model_location);
+            NeuralNetwork::save_network(epoch, &training_nodes, &mut network_saver);
 
             // Validate updated neural network against validation inputs it hasn't been trained on.
             // Clone the validation layer, so it is not consumed
             // Better to clone here than cloning for each iteration of the batches being trained on for performance.
             forward_stack = NeuralNetwork::forward(vl.clone(), &mut training_nodes);
             let v_predictions = &(SOFTMAX.f)(&forward_stack.pop().unwrap());
-            let v_sample_losses = forward_categorical_cross_entropy_loss(&v_predictions, &validation_tagets);
-            let v_data_loss = v_sample_losses.read_values().into_iter().sum::<f32>() / v_sample_losses.len() as f32;
-
-            print!("| Validation Loss: {v_data_loss}");
-
-            let accuracy = accuracy(&v_predictions, &validation_tagets);
-            println!(" | Accuracy: {accuracy}");
             
+            let accuracy = accuracy(&v_predictions, &v_targets);
+            let v_sample_losses = forward_categorical_cross_entropy_loss(&v_predictions, &v_targets);
+            let v_data_loss = v_sample_losses.read_values().into_iter().sum::<f32>() / v_sample_losses.len() as f32;
+            println!(" | Accuracy: {accuracy} | Validation Loss: {v_data_loss}");
+
             if v_data_loss < lowest_loss { lowest_loss = v_data_loss } else { println!("Warning, validation has not improved! Consider stopping training here."); }
         }
     });

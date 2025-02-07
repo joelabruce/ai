@@ -10,7 +10,7 @@ pub struct  Checkpoints {
 }
 
 impl Checkpoints {
-    pub fn tag_at(&mut self, tag: String) {
+    pub fn tag(&mut self, tag: String) {
         self.checkpoints.push(Checkpoint {
             tag,
             at: Instant::now()

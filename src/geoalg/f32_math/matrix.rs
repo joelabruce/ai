@@ -1,6 +1,6 @@
 use std::thread;
 use rand::distributions::{Distribution, Uniform};
-use crate::{geoalg::f32_math::{optimized_functions::dot_product_of_vector_slices, simd_extensions::{dot_product_simd3, dot_product_simd5}}, Partition, Partitioner};
+use crate::{geoalg::f32_math::{optimized_functions::dot_product_of_vector_slices, simd_extensions::dot_product_simd3}, Partition, Partitioner};
 
 /// Matrix is implemented as a single dimensional vector of f32s.
 /// This implementation of Matrix is row-major. 
@@ -13,7 +13,8 @@ pub struct Matrix {
     values: Vec<f32>,
     all_partitioner: Option<Partitioner>,
     row_partitioner: Option<Partitioner>,
-    column_partitioner: Option<Partitioner>
+    column_partitioner: Option<Partitioner>,
+    //pub dot_product: fn(&[f32], &[f32]) -> f32
 }
 
 impl Matrix {
