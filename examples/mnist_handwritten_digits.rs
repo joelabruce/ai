@@ -2,7 +2,7 @@
 // Use the following command to run in release mode:
 // cargo run --release --example mnist_digits
 
-use ai::{digit_image::DigitImage, geoalg::f32_math::matrix::Matrix, nn::{activation_functions::{accuracy, backward_categorical_cross_entropy_loss_wrt_softmax, forward_categorical_cross_entropy_loss, RELU, SOFTMAX}, layers::{dense_layer::DenseLayer, input_layer::InputLayer}, neural::{NeuralNetwork, Node}}, output_bin_writer::OutputBinWriter, statistics::sample::Sample, timed};
+use ai::{digit_image::DigitImage, geoalg::f32_math::matrix::Matrix, nn::{activation_functions::{accuracy, backward_categorical_cross_entropy_loss_wrt_softmax, forward_categorical_cross_entropy_loss, RELU, SOFTMAX}, layers::{dense_layer::DenseLayer, input_layer::InputLayer}, neural::{NeuralNetwork, NeuralNetworkNode}}, output_bin_writer::OutputBinWriter, statistics::sample::Sample, timed};
 
 /// Creates an input layer drawn randomly from a sample.
 pub fn from_sample_digit_images(sample: &mut Sample<DigitImage>, requested_batch_size: usize) -> (InputLayer, Matrix) {
@@ -29,21 +29,22 @@ pub fn handwritten_digits(load_from_file: bool) {
         let dense3 = dense2.calulated_dense_layer(10);
 
         // Add layers to the network for forward and backward propagation.
-        let mut training_nodes: Vec<Node> = Vec::new();
-        training_nodes.push(Node::HiddenLayer(dense1));
-        training_nodes.push(Node::Activation(RELU));
-        training_nodes.push(Node::HiddenLayer(dense2));
-        training_nodes.push(Node::Activation(RELU));
-        training_nodes.push(Node::HiddenLayer(dense3));
+        let mut nn_nodes: Vec<NeuralNetworkNode> = Vec::new();
+        nn_nodes.push(NeuralNetworkNode::HiddenLayer(dense1));
+        nn_nodes.push(NeuralNetworkNode::Activation(RELU));
+        nn_nodes.push(NeuralNetworkNode::HiddenLayer(dense2));
+        nn_nodes.push(NeuralNetworkNode::Activation(RELU));
+        nn_nodes.push(NeuralNetworkNode::HiddenLayer(dense3));
 
-        let trained_model_location = "./tests/network_training.nn";
+        let trained_model_location = "./tests/network_training";
         let mut epoch_offset = 0;
         if load_from_file {
             println!("Trying to load trained neural network...");
-            epoch_offset = NeuralNetwork::attempt_load_network(&trained_model_location, &mut training_nodes);
+            epoch_offset = NeuralNetwork::attempt_load_network(&trained_model_location, 1,&mut nn_nodes);
         }
 
         // Training hyper-parameters
+        let backup_cycle = 5;
         let total_epochs = 10;
         let training_sample = 60000;
         let batch_size = 500;
@@ -69,14 +70,14 @@ pub fn handwritten_digits(load_from_file: bool) {
             training_sample.reset();
             for _batch in 0..batches {
                 let (il, targets) = from_sample_digit_images(&mut training_sample, batch_size);
-                forward_stack = NeuralNetwork::forward(il, &mut training_nodes);
+                forward_stack = NeuralNetwork::forward(il, &mut nn_nodes);
     
                 // Forward pass on training data btch
                 let predictions = (SOFTMAX.f)(&forward_stack.pop().unwrap());
                 
                 // Backward pass on training data batch
                 let dvalues6 = backward_categorical_cross_entropy_loss_wrt_softmax(&predictions, &targets).scale_simd(1. / batch_size as f32);
-                NeuralNetwork::backward(&mut training_nodes, &dvalues6, &mut forward_stack);
+                NeuralNetwork::backward(&mut nn_nodes, &dvalues6, &mut forward_stack);
 
                 // Only uncomment if network training is slow to see if accuracy and data loss is actually improving
                 // if _batch % 50 == 0 {
@@ -91,13 +92,15 @@ pub fn handwritten_digits(load_from_file: bool) {
             }
 
             print!("Epoch #{epoch} completed. Saving...");
-            let mut network_saver = OutputBinWriter::new(trained_model_location);
-            NeuralNetwork::save_network(epoch, &training_nodes, &mut network_saver);
+            let backup_to_write = 1 + epoch % backup_cycle;
+            let mut network_saver = OutputBinWriter::new(format!("{trained_model_location}{backup_to_write}.nn").as_str());
+            NeuralNetwork::save_network(epoch, &nn_nodes, &mut network_saver);
+            print!("Completed");
 
             // Validate updated neural network against validation inputs it hasn't been trained on.
             // Clone the validation layer, so it is not consumed
             // Better to clone here than cloning for each iteration of the batches being trained on for performance.
-            forward_stack = NeuralNetwork::forward(vl.clone(), &mut training_nodes);
+            forward_stack = NeuralNetwork::forward(vl.clone(), &mut nn_nodes);
             let v_predictions = &(SOFTMAX.f)(&forward_stack.pop().unwrap());
             
             let accuracy = accuracy(&v_predictions, &v_targets);

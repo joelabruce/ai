@@ -12,16 +12,23 @@ use crate::input_csv_reader::*;
 use crate::output_bin_writer::OutputBinWriter;
 use crate::statistics::sample::Sample;
 
-pub struct NeuralNetwork { 
-    pub epoch: usize
-}
-
-pub enum Node {
+pub enum NeuralNetworkNode {
     HiddenLayer(DenseLayer),
     Activation(Activation)
 }
 
+/// Contains structure and hyper-parameters needed for a neural network
+pub struct NeuralNetwork { 
+    pub epoch: usize,
+    pub nodes: Vec<NeuralNetworkNode>
+}
+
 impl NeuralNetwork {
+    pub fn add_node(mut self, node: NeuralNetworkNode) -> Self {
+        self.nodes.push(node);
+        self
+    }
+
     pub fn open_for_importing(file_path: &str) -> InputCsvReader {
         let reader = InputCsvReader::new(file_path);
 
@@ -41,14 +48,14 @@ impl NeuralNetwork {
 
     /// Forward propagates the inputs through the layers.
     /// Calculates a Vec of matrices to be used for backpropagation.
-    pub fn forward(with_input: InputLayer, to_nodes: &mut Vec<Node>) -> Vec<Matrix> {
+    pub fn forward(with_input: InputLayer, to_nodes: &mut Vec<NeuralNetworkNode>) -> Vec<Matrix> {
         let mut forward_stack = Vec::with_capacity(to_nodes.len() + 1);
 
         forward_stack.push(with_input.input_matrix);
         for node in to_nodes.iter_mut() {
             match node {
-                Node::Activation(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
-                Node::HiddenLayer(n) => forward_stack.push(n.forward(forward_stack.last().unwrap()))
+                NeuralNetworkNode::Activation(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
+                NeuralNetworkNode::HiddenLayer(n) => forward_stack.push(n.forward(forward_stack.last().unwrap()))
             }
         } 
 
@@ -57,7 +64,7 @@ impl NeuralNetwork {
 
     /// Applies backpropagation.
     /// Pops the items off of fcalcs, but keeps nodes in the Vec so we can do the next forward pass.
-    pub fn backward(from_nodes: &mut Vec<Node>, dz: &Matrix, fcalcs: &mut Vec<Matrix>) {
+    pub fn backward(from_nodes: &mut Vec<NeuralNetworkNode>, dz: &Matrix, fcalcs: &mut Vec<Matrix>) {
         let mut dvalues = dz.clone();
         
         for i in (0..from_nodes.len()).rev() {
@@ -65,11 +72,11 @@ impl NeuralNetwork {
 
             if let Some(node) = node_opt {
                 match node {
-                    Node::Activation(n) => {
+                    NeuralNetworkNode::Activation(n) => {
                         let fcalc = fcalcs.pop().unwrap();
                         dvalues = n.backward(&dvalues, &fcalc);
                     },
-                    Node::HiddenLayer(n) => {
+                    NeuralNetworkNode::HiddenLayer(n) => {
                         let fcalc = fcalcs.pop().unwrap();
                         dvalues = n.backward(&dvalues, &fcalc);
                     }
@@ -78,11 +85,11 @@ impl NeuralNetwork {
        }
     }
 
-    pub fn save_network(epochs: usize, from_nodes: &Vec<Node>, to_writer: &mut OutputBinWriter) {
+    pub fn save_network(epochs: usize, from_nodes: &Vec<NeuralNetworkNode>, to_writer: &mut OutputBinWriter) {
         to_writer.write_usize(epochs);
         for node in from_nodes {
             match node {
-                Node::HiddenLayer(n) => {
+                NeuralNetworkNode::HiddenLayer(n) => {
                     to_writer.write_slice_f32(&n.weights.read_values());
                     to_writer.write_slice_f32(&n.biases.read_values());
                 }
@@ -109,8 +116,8 @@ impl NeuralNetwork {
         floats
     }
 
-    pub fn attempt_load_network(from_file_path: &str, to_nodes: &mut Vec<Node>) -> usize {
-        let file_open_try = File::open(from_file_path);
+    pub fn attempt_load_network(from_file_path: &str, cycle: usize, to_nodes: &mut Vec<NeuralNetworkNode>) -> usize {
+        let file_open_try = File::open(format!("{from_file_path}{cycle}.nn"));
  
         // 4 for 32-bit, 8 for 64-bit
         const CHUNK_SIZE: usize = 4;
@@ -122,18 +129,14 @@ impl NeuralNetwork {
                 epoch = NeuralNetwork::read_usize(&mut file);
                 for node in to_nodes {
                     match node {
-                        Node::HiddenLayer(n) => {
+                        NeuralNetworkNode::HiddenLayer(n) => {
                             // Load weights first
-                            let mut columns = n.weights.column_count();
-                            let mut rows = n.weights.row_count();
-
+                            let (mut rows, mut columns) = n.weights.shape();
                             let weight_floats = NeuralNetwork::read_section(&mut file, columns * rows, CHUNK_SIZE);
                             n.weights = Matrix::from(rows, columns, weight_floats);
 
                             // Load biases next
-                            columns = n.biases.column_count();
-                            rows = n.biases.row_count();
-                            
+                            (rows, columns) = n.biases.shape();                            
                             let biases_floats = NeuralNetwork::read_section(&mut file, columns * rows, CHUNK_SIZE);
                             n.biases = Matrix::from(rows, columns, biases_floats);
                             println!("Loaded weights and biases for dense layer.")
@@ -144,7 +147,9 @@ impl NeuralNetwork {
 
                 println!("Success in loading the neural network!");
             }
-            _ => {}
+            _ => {
+                println!("Could not find or open file specified, starting new model.");
+            }
         }
 
         epoch

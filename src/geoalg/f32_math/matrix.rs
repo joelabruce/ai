@@ -27,6 +27,8 @@ impl Matrix {
     /// Returns number of columns this matrix has.
     pub fn column_count(&self) -> usize { self.columns }
 
+    pub fn shape(&self) -> (usize, usize) { (self.rows, self.columns) }
+
     /// Returns a slice of the values this matrix has.
     pub fn read_values(&self) -> &[f32] { &self.values }
 
