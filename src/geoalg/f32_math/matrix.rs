@@ -32,6 +32,7 @@ impl Matrix {
     /// Returns a slice of the values this matrix has.
     pub fn read_values(&self) -> &[f32] { &self.values }
 
+    /// Reads value at specified index.
     pub fn read_at(&self, index: usize) -> f32 {
         assert!(index < self.len());
         self.values[index]

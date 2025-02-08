@@ -1,4 +1,6 @@
-use crate::geoalg::f32_math::optimized_functions::*;
+use crate::geoalg::f32_math::{optimized_functions::*, simd_extensions::dot_product_simd3};
+
+use super::matrix::Matrix;
 
 // Dimension constants
 const COLUMN:usize = 0;
@@ -12,7 +14,7 @@ pub struct Tensor {
 }
 
 impl Tensor {
-    pub fn new(shape: Vec<usize>, values: Vec<f32>, ) -> Tensor {
+    pub fn from(shape: Vec<usize>, values: Vec<f32>) -> Self {
         let zero = 0;
         let no_zeroes = !shape.contains(&zero);
         assert!(no_zeroes, "Shape cannot have dimensions of zero.");
@@ -23,6 +25,23 @@ impl Tensor {
         Tensor {
             values,
             shape
+        }
+    }
+
+    /// Assumes that the supplied vector of matrices are all of the same order
+    pub fn from_matrices(matrices: Vec<Matrix>) -> Self {
+        let depth  = matrices.len();
+        let rows = matrices[0].row_count();
+        let columns = matrices[0].column_count();
+        let mut values = Vec::with_capacity(rows * columns * depth);
+
+        for i in 0..depth {
+            values.extend_from_slice(matrices[i].read_values());
+        }
+        
+        Tensor {
+            shape: vec![rows, columns, depth],
+            values
         }
     }
 
@@ -107,7 +126,7 @@ impl Tensor {
                         let x = self.get_row_short(row + kernel_row, depth, column, kernel.shape[COLUMN]);
                         let y = kernel.get_row(kernel_row, depth);
 
-                        c_accum += dot_product_of_vector_slices(x, y)
+                        c_accum += dot_product_simd3(x, y)
                     }
 
                     value_stream.push(c_accum);

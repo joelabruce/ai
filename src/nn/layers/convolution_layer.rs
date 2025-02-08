@@ -1,14 +1,16 @@
+use crate::geoalg::f32_math::tensor::Tensor;
+
 use super::{Matrix, Propagates};
 
 ///
 pub struct ConvolutionalLayer {
-    pub kernel: Matrix,
+    pub kernel: Tensor,
     pub biases: Matrix,
     pub stride: usize
 }
 
 impl ConvolutionalLayer {
-    //fn 
+    
 }
 
 impl Propagates for ConvolutionalLayer {
