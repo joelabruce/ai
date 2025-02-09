@@ -3,8 +3,8 @@ use crate::geoalg::f32_math::{optimized_functions::*, simd_extensions::dot_produ
 use super::matrix::Matrix;
 
 // Dimension constants
-const COLUMN:usize = 0;
 const ROW:usize = 1;
+const COLUMN:usize = 0;
 const DEPTH:usize = 2;
 
 #[derive(PartialEq, Debug, Clone)]
@@ -29,6 +29,7 @@ impl Tensor {
     }
 
     /// Assumes that the supplied vector of matrices are all of the same order
+    /// Row-major, then column, then depth.
     pub fn from_matrices(matrices: Vec<Matrix>) -> Self {
         let depth  = matrices.len();
         let rows = matrices[0].row_count();
@@ -43,6 +44,17 @@ impl Tensor {
             shape: vec![rows, columns, depth],
             values
         }
+    }
+
+    /// Retrieves clone of matrix at specified depth
+    pub fn get_matrix_at(&self, depth: usize) -> Matrix {
+        assert!(depth < self.shape[DEPTH]);
+        
+        let matrix_len = self.shape[ROW] * self.shape[COLUMN];
+        let depth_start = matrix_len * depth;
+        
+        let values = self.values[depth_start..depth_start+matrix_len].to_vec();
+        Matrix::from(self.shape[ROW], self.shape[COLUMN], values)
     }
 
     /// Unstable internal.
@@ -71,8 +83,8 @@ impl Tensor {
     }
 
     fn get_row(&self, row:usize, depth: usize) -> &[f32] {
-        let start = row * self.shape[0] + depth * self.shape[0] * self.shape[1];
-        let end = start + self.shape[0];
+        let start = row * self.shape[COLUMN] + depth * self.shape[ROW] * self.shape[COLUMN];
+        let end = start + self.shape[COLUMN];
         &self.values[start..end]
     }
 
@@ -160,8 +172,8 @@ mod tests {
             ]
         };
 
-        let actual = tc.get_at(vec![2, 1, 0]);
-        let expected = 7.;
+        let actual = tc.get_at(vec![1, 2, 0]);
+        let expected = 10.;
         assert_eq!(actual, expected);
 
         let actual = tc.get_at(vec![1,2,1]);

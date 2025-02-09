@@ -1,5 +1,7 @@
 use std::thread;
-use rand::distributions::{Distribution, Uniform};
+//use rand::distributions::{Distribution, Uniform};
+use rand::prelude::*;
+use rand_distr::{Distribution, Normal, Uniform};
 use crate::{geoalg::f32_math::{optimized_functions::dot_product_of_vector_slices, simd_extensions::dot_product_simd3}, Partition, Partitioner};
 
 /// Matrix is implemented as a single dimensional vector of f32s.
@@ -79,6 +81,14 @@ impl Matrix {
         let element_count = columns * rows;
         let values = uniform.sample_iter(&mut rng).take(element_count).collect();
         
+        Self::from(rows, columns, values)
+    }
+
+    pub fn new_randomized_normal(rows: usize, columns: usize, normal: Normal<f32>) -> Self {
+        let mut rng = rand::thread_rng();
+        let element_count = columns * rows;        
+        let values = normal.sample_iter(&mut rng).take(element_count).collect();
+
         Self::from(rows, columns, values)
     }
 

@@ -12,8 +12,11 @@ use crate::input_csv_reader::*;
 use crate::output_bin_writer::OutputBinWriter;
 use crate::statistics::sample::Sample;
 
+use super::layers::convolution_layer::Convolution2dLayer;
+
 pub enum NeuralNetworkNode {
-    HiddenLayer(DenseLayer),
+    Dense(DenseLayer),
+    Convolution2d(Convolution2dLayer),
     Activation(Activation)
 }
 
@@ -55,7 +58,8 @@ impl NeuralNetwork {
         for node in to_nodes.iter_mut() {
             match node {
                 NeuralNetworkNode::Activation(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
-                NeuralNetworkNode::HiddenLayer(n) => forward_stack.push(n.forward(forward_stack.last().unwrap()))
+                NeuralNetworkNode::Dense(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
+                _ => ()
             }
         } 
 
@@ -76,10 +80,11 @@ impl NeuralNetwork {
                         let fcalc = fcalcs.pop().unwrap();
                         dvalues = n.backward(&dvalues, &fcalc);
                     },
-                    NeuralNetworkNode::HiddenLayer(n) => {
+                    NeuralNetworkNode::Dense(n) => {
                         let fcalc = fcalcs.pop().unwrap();
                         dvalues = n.backward(&dvalues, &fcalc);
-                    }
+                    },
+                    _ => ()
                 };
             };
        }
@@ -89,7 +94,7 @@ impl NeuralNetwork {
         to_writer.write_usize(epochs);
         for node in from_nodes {
             match node {
-                NeuralNetworkNode::HiddenLayer(n) => {
+                NeuralNetworkNode::Dense(n) => {
                     to_writer.write_slice_f32(&n.weights.read_values());
                     to_writer.write_slice_f32(&n.biases.read_values());
                 }
@@ -129,7 +134,7 @@ impl NeuralNetwork {
                 epoch = NeuralNetwork::read_usize(&mut file);
                 for node in to_nodes {
                     match node {
-                        NeuralNetworkNode::HiddenLayer(n) => {
+                        NeuralNetworkNode::Dense(n) => {
                             // Load weights first
                             let (mut rows, mut columns) = n.weights.shape();
                             let weight_floats = NeuralNetwork::read_section(&mut file, columns * rows, CHUNK_SIZE);

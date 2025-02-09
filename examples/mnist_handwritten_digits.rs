@@ -30,11 +30,11 @@ pub fn handwritten_digits(load_from_file: bool) {
 
         // Add layers to the network for forward and backward propagation.
         let mut nn_nodes: Vec<NeuralNetworkNode> = Vec::new();
-        nn_nodes.push(NeuralNetworkNode::HiddenLayer(dense1));
+        nn_nodes.push(NeuralNetworkNode::Dense(dense1));
         nn_nodes.push(NeuralNetworkNode::Activation(RELU));
-        nn_nodes.push(NeuralNetworkNode::HiddenLayer(dense2));
+        nn_nodes.push(NeuralNetworkNode::Dense(dense2));
         nn_nodes.push(NeuralNetworkNode::Activation(RELU));
-        nn_nodes.push(NeuralNetworkNode::HiddenLayer(dense3));
+        nn_nodes.push(NeuralNetworkNode::Dense(dense3));
 
         let trained_model_location = "./tests/network_training";
         let mut epoch_offset = 0;

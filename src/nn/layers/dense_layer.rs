@@ -1,6 +1,8 @@
 use std::thread;
 
-use rand::distributions::Uniform;
+use rand_distr::Uniform;
+
+//use rand::distributions::Uniform;
 use crate::{geoalg::f32_math::matrix::Matrix, partitioner_cache::PartitionerCache};
 use super::*;
 
