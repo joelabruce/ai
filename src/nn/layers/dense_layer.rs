@@ -1,9 +1,7 @@
-use std::thread;
-
 use rand_distr::Uniform;
 
 //use rand::distributions::Uniform;
-use crate::{geoalg::f32_math::matrix::Matrix, partitioner_cache::PartitionerCache};
+use crate::geoalg::f32_math::matrix::Matrix;
 use super::*;
 
 /// A fully connected layer.
@@ -11,8 +9,8 @@ pub struct DenseLayer {
     pub biases: Matrix,
     pub weights: Matrix,
 
-    partitioner_cache: PartitionerCache,
-    parallelism: usize
+    //partitioner_cache: PartitionerCache,
+    //parallelism: usize
 }
 
 impl DenseLayer {
@@ -30,8 +28,6 @@ impl DenseLayer {
         DenseLayer {
             weights,
             biases,
-            partitioner_cache: PartitionerCache::new(),
-            parallelism: thread::available_parallelism().unwrap().get()
         }
     }
 

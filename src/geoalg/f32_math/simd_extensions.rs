@@ -1,7 +1,7 @@
-use colored::*;
+//use colored::*;
 
 use crate::partitions::{Partition, Partitioner};
-use std::{simd::{num::SimdFloat, *}, thread};
+use std::simd::{num::SimdFloat, *};
 use super::matrix::*;
 
 pub const SIMD_LANES: usize = 16;

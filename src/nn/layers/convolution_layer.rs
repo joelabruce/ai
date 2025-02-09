@@ -1,9 +1,6 @@
-use rand::prelude::*;
 use rand_distr::Normal;
-//use rand::distributions::;
 
-
-use crate::geoalg::f32_math::{simd_extensions::dot_product_simd3, tensor::Tensor};
+use crate::geoalg::f32_math::simd_extensions::dot_product_simd3;
 
 use super::{Matrix, Propagates};
 
@@ -133,10 +130,6 @@ mod tests {
             0., 2., 0.,
             0., 0., 0.
         ]);
-
-        // let expected = Matrix::from(2, 3 * 2 * 2, vec![
-        //     6., 
-        // ]);
 
         let output = cv2d.forward(&inputs);
         let conv_result = format!("{:?}", output).bright_cyan();

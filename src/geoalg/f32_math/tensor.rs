@@ -1,4 +1,4 @@
-use crate::geoalg::f32_math::{optimized_functions::*, simd_extensions::dot_product_simd3};
+use crate::geoalg::f32_math::simd_extensions::dot_product_simd3;
 
 use super::matrix::Matrix;
 

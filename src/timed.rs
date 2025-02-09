@@ -26,6 +26,6 @@ pub fn timed(f: impl Fn() -> ()) -> f32 {
     duration.as_secs_f32()
 }
 
-pub fn timed_checkpointed(f: impl Fn(Checkpoints)) {
-
-}
+// pub fn timed_checkpointed(f: impl Fn(Checkpoints)) {
+//     f();
+// }
