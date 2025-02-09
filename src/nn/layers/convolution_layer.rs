@@ -84,12 +84,62 @@ impl Propagates for Convolution2dLayer {
             }
         }
 
-        Matrix::from(batches, n_rows * n_columns, values)
+        Matrix::from(batches, self.kernels.row_count() * n_rows * n_columns, values)
     }
 
     fn backward<'a>(&'a mut self, dvalues: &Matrix, inputs: &Matrix) -> Matrix {
         dvalues.len();
         inputs.len();
         todo!()
+    }
+}
+
+#[cfg(test)]
+
+mod tests {
+    use colored::Colorize;
+
+    use crate::{geoalg::f32_math::matrix::Matrix, nn::layers::Propagates};
+
+    use super::Convolution2dLayer;
+
+    #[test]
+    fn test_forward() {
+        // Test two different images
+        let inputs = Matrix::from(2, 4 * 4, vec![
+            1., 2., 3., 4., 
+            5., 6., 7., 8.,
+            9., 10., 11., 12.,
+            13., 14., 15., 16.,
+
+            10., 20., 30., 40.,
+            50., 60., 70., 80.,
+            90., 100., 110., 120.,
+            130., 140., 150., 160.
+        ]);
+
+        // Have two filters
+        let mut cv2d = Convolution2dLayer::new(3, 1, 3, 3, 4, 4);
+        cv2d.kernels = Matrix::from(3, 3 * 3, vec![
+            0., 0.15, 0.,
+            0.15, 0.4, 0.15,
+            0., 0.15, 0., 
+
+            0., 0.10, 0.,
+            0.10, 0.6, 0.10,
+            0., 0.10, 0.,
+
+            0., 0., 0.,
+            0., 2., 0.,
+            0., 0., 0.
+        ]);
+
+        // let expected = Matrix::from(2, 3 * 2 * 2, vec![
+        //     6., 
+        // ]);
+
+        let output = cv2d.forward(&inputs);
+        let conv_result = format!("{:?}", output).bright_cyan();
+        println!("{conv_result}");
     }
 }
