@@ -3,6 +3,7 @@ use std::io::{self, prelude::*, BufReader};
 
 use crate::digit_image::*;
 
+/// Simple implementation that reads in CSV files for training data.
 pub struct InputCsvReader {
     reader: BufReader<File>
 }
