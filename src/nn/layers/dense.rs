@@ -14,7 +14,7 @@ pub struct Dense {
 }
 
 impl Dense {
-    fn random_weight_biases(neuron_count: usize, prev_layer_input_count: usize) -> (Matrix, Matrix) {
+    fn random_weight_biases(prev_layer_input_count: usize, neuron_count: usize) -> (Matrix, Matrix) {
         let uniform = Uniform::new_inclusive(-0.5, 0.5);
         let weights = Matrix::new_randomized_uniform(prev_layer_input_count, neuron_count, uniform);
         let biases = Matrix::from(1, neuron_count, vec![0.0; neuron_count]);
@@ -23,7 +23,7 @@ impl Dense {
     }
 
     pub fn new(input_size: usize, neuron_count: usize) -> Dense {
-        let (weights, biases) = Dense::random_weight_biases(neuron_count, input_size);
+        let (weights, biases) = Dense::random_weight_biases(input_size, neuron_count);
 
         Dense {
             weights,
@@ -32,7 +32,7 @@ impl Dense {
     }
 
     /// Instantiates and returns a new Hidden Layer based off self's shape.
-    pub fn evolve_to_dense(&self, neuron_count: usize) -> Dense {
+    pub fn influences_dense(&self, neuron_count: usize) -> Dense {
         assert!(self.weights.len() > 0);
         assert!(self.biases.len() > 0);
 

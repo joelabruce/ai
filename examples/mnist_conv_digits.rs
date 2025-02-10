@@ -2,7 +2,7 @@
 // Use the following command to run in release mode:
 // cargo run --release --example mnist_digits
 
-use ai::{digit_image::DigitImage, geoalg::f32_math::matrix::Matrix, nn::{activation_functions::{accuracy, backward_categorical_cross_entropy_loss_wrt_softmax, forward_categorical_cross_entropy_loss, RELU, SOFTMAX}, layers::{convolution2d::Convolution2d, dense::Dense, input::Input}, neural::{NeuralNetwork, NeuralNetworkNode}}, output_bin_writer::OutputBinWriter, statistics::sample::Sample, timed};
+use ai::{digit_image::DigitImage, geoalg::f32_math::matrix::Matrix, nn::{activation_functions::{accuracy, backward_categorical_cross_entropy_loss_wrt_softmax, forward_categorical_cross_entropy_loss, RELU, SOFTMAX}, layers::{convolution2d::Convolution2d, input::Input}, neural::{NeuralNetwork, NeuralNetworkNode}}, output_bin_writer::OutputBinWriter, statistics::sample::Sample, timed};
 
 /// Creates an input layer drawn randomly from a sample.
 pub fn from_sample_digit_images(sample: &mut Sample<DigitImage>, requested_batch_size: usize) -> (Input, Matrix) {
@@ -16,28 +16,37 @@ pub fn from_sample_digit_images(sample: &mut Sample<DigitImage>, requested_batch
         target_vector.extend(datum.one_hot_encoded_label());
     }
 
-    (Input {
-        input_matrix: Matrix::from(rows, 784, pixel_vector)
-    }, Matrix::from(rows, 10, target_vector))
+    (
+        Input::from(rows, 784, pixel_vector), 
+        Matrix::from(rows, 10, target_vector)
+    )
 }
 
 pub fn handwritten_digits(load_from_file: bool) {
     let time_to_run = timed::timed(|| {
-        // Create dense layers
+        // Training hyper-parameters
+        let backup_cycle = 5;
+        let total_epochs = 10;
+        let training_sample = 60000;
+        let batch_size = 500;
+        let batches = training_sample / batch_size;
+        let v_batch_size = std::cmp::min(batches * batch_size / 5, 9999);        
+        let mut lowest_loss = f32::INFINITY;
+
+        // Create layers
         let convo = Convolution2d::new(
             32, 
             1, 
             3, 3,
             28, 28);
 
-        let maxpool = convo.evolve_to_maxpool(
+        let maxpool = convo.influences_maxpool(
             2, 
             2,
             2);
 
-        //let dense1 = Dense::new(784, 128);
-        let dense1 = maxpool.evolve_to_dense(128);
-        let dense2 = dense1.evolve_to_dense(10);
+        let dense1 = maxpool.influences_dense();
+        let dense2 = dense1.influences_dense(10);
 
         // Add layers to the network for forward and backward propagation.
         let mut nn_nodes: Vec<NeuralNetworkNode> = Vec::new();
@@ -48,21 +57,17 @@ pub fn handwritten_digits(load_from_file: bool) {
         nn_nodes.push(NeuralNetworkNode::ActivationLayer(RELU));
         nn_nodes.push(NeuralNetworkNode::DenseLayer(dense2));
 
-        let trained_model_location = "./tests/network_training";
+        let trained_model_location = "./tests/convo_model";
+
+
+
+        // Begin processing neural network now, this code should only be in 1 place between examples.
+        // Consider refactoring to make examples easier instead of redundant everywhere.
         let mut epoch_offset = 0;
         if load_from_file {
             println!("Trying to load trained neural network...");
             epoch_offset = NeuralNetwork::attempt_load_network(&trained_model_location, 1,&mut nn_nodes);
         }
-
-        // Training hyper-parameters
-        let backup_cycle = 5;
-        let total_epochs = 10;
-        let training_sample = 60000;
-        let batch_size = 500;
-        let batches = training_sample / batch_size;
-        let v_batch_size = std::cmp::min(batches * batch_size / 5, 9999);        
-        let mut lowest_loss = f32::INFINITY;
 
         // Validtion setup
         let mut testing_reader = NeuralNetwork::open_for_importing("./training/mnist_test.csv");
@@ -92,7 +97,7 @@ pub fn handwritten_digits(load_from_file: bool) {
                 NeuralNetwork::backward(&mut nn_nodes, &dvalues6, &mut forward_stack);
 
                 // Only uncomment if network training is slow to see if accuracy and data loss is actually improving
-                if _batch % 50 == 0 {
+                if _batch % 10 == 0 {
                     // Only needed when outputting data loss for debugging purposes.
                     let sample_losses = forward_categorical_cross_entropy_loss(&predictions, &targets);
                     let data_loss = sample_losses.read_values().into_iter().sum::<f32>() / sample_losses.len() as f32;            
@@ -103,7 +108,7 @@ pub fn handwritten_digits(load_from_file: bool) {
                 }
             }
 
-            let backup_to_write = 1 + epoch % backup_cycle;
+            let backup_to_write = 1 + (epoch - 1) % backup_cycle;
             print!("Epoch #{epoch} completed. Saving cycle {backup_to_write}...");
             let mut network_saver = OutputBinWriter::new(format!("{trained_model_location}{backup_to_write}.nn").as_str());
             NeuralNetwork::save_network(epoch, &nn_nodes, &mut network_saver);

@@ -7,15 +7,11 @@ pub struct Input {
 }
 
 impl Input {
-    /// Creates input layer based on inputs supplied.
-    /// Allows for automatic shaping of succeeding layer generation.
-    pub fn from_vec(values: Vec<Vec<f32>>) -> Input {
-        let rows = values.len();                                                // Number of inputs
-        let columns = values.len() / rows;                                      // Number of features.
-        let values: Vec<f32> = values.into_iter().flat_map(|v| v).collect();
-
-        Input {
-            input_matrix: Matrix::from(rows, columns, values)
+    // Creates input layer based on inputs supplied.
+    // Allows for automatic shaping of succeeding layer generation.
+    pub fn from(batch_size: usize, features: usize, raw_values: Vec<f32>) -> Self {
+        Self {
+            input_matrix: Matrix::from(batch_size, features, raw_values)
         }
     }
 }

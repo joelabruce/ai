@@ -20,17 +20,29 @@ impl MaxPooling {
         }
     }
 
-    pub fn evolve_to_dense(&self, neuron_count: usize) -> Dense {
-        let features = self.filters * self.input_height * self.input_height;
-        Dense::new(features, neuron_count)
+    pub fn influences_dense(&self) -> Dense {
+        let (rows, columns) = self.output_shape();
+
+        let features = self.filters * rows * columns;
+        //Dense::new(self.input_size,features)
+        Dense::new(features, 100)
+    }
+
+    fn output_shape(&self) -> (usize, usize) {
+        (
+            (self.input_height - self.pooling_height) / self.stride + 1,
+            (self.input_width - self.pooling_width) / self.stride + 1
+        )
     }
 }
 
 impl Propagates for MaxPooling {
     fn forward(&mut self, inputs: &Matrix) -> Matrix {
         let batches = inputs.row_count();
-        let rows = (self.input_height - self.pooling_height) / self.stride + 1;
-        let columns = (self.input_width - self.pooling_width) / self.stride + 1;
+
+        //assert_eq!(batches, self.input_size, "Input size does not equal expected rows count passed into MaxPooling.");
+
+        let (rows, columns) = self.output_shape();
         let rows_x_columns = rows * columns;
 
         let mut values = Vec::with_capacity(batches * self.filters * rows_x_columns);        
@@ -111,6 +123,7 @@ mod tests {
             4, 4,
             2);
 
+        // Assume 2 filters
         let forward_output = pooling.forward(&tc);
         let expected = Matrix::from(1, 2 * 2 * 2, vec![
             4.0, 5.0,

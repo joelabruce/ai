@@ -16,17 +16,18 @@ pub fn from_sample_digit_images(sample: &mut Sample<DigitImage>, requested_batch
         target_vector.extend(datum.one_hot_encoded_label());
     }
 
-    (Input {
-        input_matrix: Matrix::from(rows, 784, pixel_vector)
-    }, Matrix::from(rows, 10, target_vector))
+    (
+        Input::from(rows, 784, pixel_vector), 
+        Matrix::from(rows, 10, target_vector)
+    )
 }
 
 pub fn handwritten_digits(load_from_file: bool) {
     let time_to_run = timed::timed(|| {
         // Create dense layers
         let dense1 = Dense::new(784, 128);
-        let dense2 = dense1.evolve_to_dense(64);
-        let dense3 = dense2.evolve_to_dense(10);
+        let dense2 = dense1.influences_dense(64);
+        let dense3 = dense2.influences_dense(10);
 
         // Add layers to the network for forward and backward propagation.
         let mut nn_nodes: Vec<NeuralNetworkNode> = Vec::new();
@@ -36,7 +37,7 @@ pub fn handwritten_digits(load_from_file: bool) {
         nn_nodes.push(NeuralNetworkNode::ActivationLayer(RELU));
         nn_nodes.push(NeuralNetworkNode::DenseLayer(dense3));
 
-        let trained_model_location = "./tests/network_training";
+        let trained_model_location = "./tests/fully_connected_model";
         let mut epoch_offset = 0;
         if load_from_file {
             println!("Trying to load trained neural network...");
@@ -91,7 +92,7 @@ pub fn handwritten_digits(load_from_file: bool) {
                 // }
             }
 
-            let backup_to_write = 1 + epoch % backup_cycle;
+            let backup_to_write = 1 + (epoch - 1) % backup_cycle;
             print!("Epoch #{epoch} completed. Saving cycle {backup_to_write}...");
             let mut network_saver = OutputBinWriter::new(format!("{trained_model_location}{backup_to_write}.nn").as_str());
             NeuralNetwork::save_network(epoch, &nn_nodes, &mut network_saver);

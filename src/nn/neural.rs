@@ -88,7 +88,14 @@ impl NeuralNetwork {
                         let fcalc = fcalcs.pop().unwrap();
                         dvalues = n.backward(&dvalues, &fcalc);
                     },
-                    _ => ()
+                    NeuralNetworkNode::Convolution2dLayer(n) => {
+                        let fcalc = fcalcs.pop().unwrap();
+                        dvalues = n.backward(&dvalues, &fcalc);
+                    },
+                    NeuralNetworkNode::MaxPoolLayer(n) => {
+                        let fcalc = fcalcs.pop().unwrap();
+                        dvalues = n.backward(&dvalues, &fcalc);
+                    },
                 };
             };
        }

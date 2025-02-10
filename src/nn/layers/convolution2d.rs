@@ -1,6 +1,8 @@
+use std::thread;
+
 use rand_distr::Normal;
 
-use crate::geoalg::f32_math::simd_extensions::dot_product_simd3;
+use crate::{geoalg::f32_math::simd_extensions::dot_product_simd3, partitions::{Partition, Partitioner}};
 
 use super::{max_pooling::MaxPooling, Matrix, Propagates};
 
@@ -37,7 +39,7 @@ impl Convolution2d {
         }
     }
 
-    pub fn evolve_to_maxpool(&self, pooling_height: usize, pooling_width: usize, stride: usize) -> MaxPooling {
+    pub fn influences_maxpool(&self, pooling_height: usize, pooling_width: usize, stride: usize) -> MaxPooling {
         MaxPooling::new(
             self.filters,
             pooling_height, pooling_width,
@@ -51,53 +53,62 @@ impl Propagates for Convolution2d {
     fn forward(&mut self, inputs: &Matrix) -> Matrix {
         let batches = inputs.row_count();
 
+        let partitioner = &Partitioner::with_partitions(batches, 1);//, partition_count) &Partitioner::with_partitions(batches, thread::available_parallelism().unwrap().get());
+
         // Adjust for valid convolution (no padding)
         let n_rows = self.image_height - self.kernel_height + 1;
-
-        // Columns are calculated based on remaining items
-        // Might consider having it as parameter when creating the layer.
         let n_columns = self.image_width - self.kernel_width + 1;
+        let filters_size = self.filters * n_rows * n_columns;
 
-        let mut values = Vec::with_capacity(self.kernels.len());
-        for batch_index in 0..batches {
-            let input = inputs.row(batch_index);
-            for filter_index in 0..self.kernels.row_count() {
-                let filter = self.kernels.row(filter_index);
+        //let inner_process = move |partition: &Partition| {
+            let mut partition_values = Vec::new();//with_capacity(partition.get_size() * inputs.row_count());
+            for batch_index in partitioner.get_partition(0).get_range() { //0..batches {
+                let input = inputs.row(batch_index);
+                for filter_index in 0..self.kernels.row_count() {
+                    let filter = self.kernels.row(filter_index);
 
-                for row in 0..n_rows {
-                    for column in 0..n_columns {
-                        let mut c_accum = 0.;
+                    for row in 0..n_rows {
+                        for column in 0..n_columns {
+                            let mut c_accum = 0.;
 
-                        // Slide kernel window horizontally and then vertically
-                        // Since we are doing optimized dot_products, only need to move down the rows
-                        for kernel_row in 0..self.kernel_height {
-                            // Get the row of the input, offset by kernel row, and start the row at the column.
-                            let input_row_start_index = (row + kernel_row) * self.image_width + column;
-                            // Only get as many columns as are in the kernel for the convolution.
-                            let input_row_end_index = input_row_start_index + self.kernel_width;
+                            // Slide kernel window horizontally and then vertically
+                            // Since we are doing optimized dot_products, only need to move down the rows
+                            for kernel_row in 0..self.kernel_height {
+                                // Get the row of the input, offset by kernel row, and start the row at the column.
+                                let input_row_start_index = (row + kernel_row) * self.image_width + column;
+                                // Only get as many columns as are in the kernel for the convolution.
+                                let input_row_end_index = input_row_start_index + self.kernel_width;
 
-                            let kernel_row_start_index = kernel_row * self.kernel_width;
-                            let kernel_row_end_index = kernel_row_start_index + self.kernel_width;
+                                let kernel_row_start_index = kernel_row * self.kernel_width;
+                                let kernel_row_end_index = kernel_row_start_index + self.kernel_width;
 
-                            let x = &input[input_row_start_index..input_row_end_index];
-                            let y = &filter[kernel_row_start_index..kernel_row_end_index];
+                                let x = &input[input_row_start_index..input_row_end_index];
+                                let y = &filter[kernel_row_start_index..kernel_row_end_index];
 
-                            c_accum += dot_product_simd3(x, y)
+                                c_accum += dot_product_simd3(x, y)
+                            }
+
+                            partition_values.push(c_accum);
                         }
-
-                        values.push(c_accum);
                     }
                 }
             }
-        }
 
-        Matrix::from(batches, self.kernels.row_count() * n_rows * n_columns, values)
+            //partition_values
+        //};
+
+        let values = partition_values;// partitioner.parallelized(inner_process);// Vec::with_capacity(batches * filters_size);
+        Matrix::from(batches, filters_size, values)
     }
 
     fn backward<'a>(&'a mut self, dvalues: &Matrix, inputs: &Matrix) -> Matrix {
         dvalues.len();
         inputs.len();
-        todo!()
+        //todo!()
+
+        let capacity = self.kernels.row_count() * self.image_height * self.image_width;
+
+        Matrix::from(inputs.row_count(), self.image_height * self.image_width, vec![0.; capacity])
     }
 }
 
@@ -127,7 +138,7 @@ mod tests {
 
         // Have two filters
         let mut cv2d = Convolution2d::new(
-            3, 
+            3,
             1, 
             3, 3, 
             4, 4);
