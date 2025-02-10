@@ -2,7 +2,7 @@ use rand_distr::Normal;
 
 use crate::geoalg::f32_math::simd_extensions::dot_product_simd3;
 
-use super::{Matrix, Propagates};
+use super::{max_pooling_layer::MaxPoolingLayer, Matrix, Propagates};
 
 ///
 pub struct Convolution2dLayer {
@@ -12,7 +12,6 @@ pub struct Convolution2dLayer {
     pub biases: Matrix,
     pub image_width: usize,
     pub image_height: usize,
-    //pub image_height: usize   // inferred for now
     //pub stride: usize,        // Assumes stride of 1 for now.
 }
 
@@ -34,6 +33,14 @@ impl Convolution2dLayer {
             image_width,
             image_height
         }
+    }
+
+    pub fn evolve_to_maxpool(&self) -> MaxPoolingLayer {
+        MaxPoolingLayer::new(
+            2, 2,
+            self.image_height - self.kernel_height + 1,
+            self.image_width - self.kernel_width + 1,
+            2)
     }
 }
 

@@ -32,7 +32,7 @@ impl DenseLayer {
     }
 
     /// Instantiates and returns a new Hidden Layer based off self's shape.
-    pub fn calulated_dense_layer(&self, neuron_count: usize) -> DenseLayer {
+    pub fn evolve_to_dense(&self, neuron_count: usize) -> DenseLayer {
         assert!(self.weights.len() > 0);
         assert!(self.biases.len() > 0);
 

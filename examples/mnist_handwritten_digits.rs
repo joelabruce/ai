@@ -25,8 +25,8 @@ pub fn handwritten_digits(load_from_file: bool) {
     let time_to_run = timed::timed(|| {
         // Create dense layers
         let dense1 = DenseLayer::new(784, 128);
-        let dense2 = dense1.calulated_dense_layer(64);
-        let dense3 = dense2.calulated_dense_layer(10);
+        let dense2 = dense1.evolve_to_dense(64);
+        let dense3 = dense2.evolve_to_dense(10);
 
         // Add layers to the network for forward and backward propagation.
         let mut nn_nodes: Vec<NeuralNetworkNode> = Vec::new();
