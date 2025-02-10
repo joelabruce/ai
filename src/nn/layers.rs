@@ -1,6 +1,6 @@
-pub mod dense_layer;
-pub mod input_layer;
-pub mod convolution_layer;
+pub mod dense;
+pub mod input;
+pub mod convolution2d;
 pub mod max_pooling_layer;
 
 extern crate rand;

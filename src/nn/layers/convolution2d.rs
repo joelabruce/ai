@@ -5,7 +5,7 @@ use crate::geoalg::f32_math::simd_extensions::dot_product_simd3;
 use super::{max_pooling_layer::MaxPoolingLayer, Matrix, Propagates};
 
 ///
-pub struct Convolution2dLayer {
+pub struct Convolution2d {
     pub kernels: Matrix,
     pub kernel_width: usize,
     pub kernel_height: usize,
@@ -15,7 +15,7 @@ pub struct Convolution2dLayer {
     //pub stride: usize,        // Assumes stride of 1 for now.
 }
 
-impl Convolution2dLayer {
+impl Convolution2d {
     /// Set channels to 1 for greyscale, 3 for RGB.
     /// *RGB support not implemented yet, so ensure channels is 1.
     pub fn new(filters: usize, channels: usize, kernel_width: usize, kernel_height: usize, image_width: usize, image_height: usize) -> Self {
@@ -25,7 +25,7 @@ impl Convolution2dLayer {
         let normal_term = (2. / fanin).sqrt();
         let normal = Normal::new(0., normal_term).unwrap();
         
-        Convolution2dLayer {
+        Convolution2d {
             kernels: Matrix::new_randomized_normal(filters, channels * kernel_height * kernel_width, normal),
             kernel_width,
             kernel_height,
@@ -44,7 +44,7 @@ impl Convolution2dLayer {
     }
 }
 
-impl Propagates for Convolution2dLayer {
+impl Propagates for Convolution2d {
     fn forward(&mut self, inputs: &Matrix) -> Matrix {
         let batches = inputs.row_count();
 
@@ -105,7 +105,7 @@ mod tests {
 
     use crate::{geoalg::f32_math::matrix::Matrix, nn::layers::Propagates};
 
-    use super::Convolution2dLayer;
+    use super::Convolution2d;
 
     #[test]
     fn test_forward() {
@@ -123,7 +123,7 @@ mod tests {
         ]);
 
         // Have two filters
-        let mut cv2d = Convolution2dLayer::new(3, 1, 3, 3, 4, 4);
+        let mut cv2d = Convolution2d::new(3, 1, 3, 3, 4, 4);
         cv2d.kernels = Matrix::from(3, 3 * 3, vec![
             0., 0.15, 0.,
             0.15, 0.4, 0.15,

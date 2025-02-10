@@ -1,8 +1,8 @@
 use std::fs::File;
 use std::io::Read;
 
-use dense_layer::DenseLayer;
-use input_layer::InputLayer;
+use dense::Dense;
+use input::Input;
 
 use crate::digit_image::DigitImage;
 use crate::nn::layers::*;
@@ -12,12 +12,12 @@ use crate::input_csv_reader::*;
 use crate::output_bin_writer::OutputBinWriter;
 use crate::statistics::sample::Sample;
 
-use super::layers::convolution_layer::Convolution2dLayer;
+use super::layers::convolution2d::Convolution2d;
 
 pub enum NeuralNetworkNode {
-    Dense(DenseLayer),
-    Convolution2d(Convolution2dLayer),
-    Activation(Activation)
+    DenseLayer(Dense),
+    Convolution2dLayer(Convolution2d),
+    ActivationLayer(Activation)
 }
 
 /// Contains structure and hyper-parameters needed for a neural network
@@ -51,14 +51,14 @@ impl NeuralNetwork {
 
     /// Forward propagates the inputs through the layers.
     /// Calculates a Vec of matrices to be used for backpropagation.
-    pub fn forward(with_input: InputLayer, to_nodes: &mut Vec<NeuralNetworkNode>) -> Vec<Matrix> {
+    pub fn forward(with_input: Input, to_nodes: &mut Vec<NeuralNetworkNode>) -> Vec<Matrix> {
         let mut forward_stack = Vec::with_capacity(to_nodes.len() + 1);
 
         forward_stack.push(with_input.input_matrix);
         for node in to_nodes.iter_mut() {
             match node {
-                NeuralNetworkNode::Activation(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
-                NeuralNetworkNode::Dense(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
+                NeuralNetworkNode::ActivationLayer(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
+                NeuralNetworkNode::DenseLayer(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
                 _ => ()
             }
         } 
@@ -76,11 +76,11 @@ impl NeuralNetwork {
 
             if let Some(node) = node_opt {
                 match node {
-                    NeuralNetworkNode::Activation(n) => {
+                    NeuralNetworkNode::ActivationLayer(n) => {
                         let fcalc = fcalcs.pop().unwrap();
                         dvalues = n.backward(&dvalues, &fcalc);
                     },
-                    NeuralNetworkNode::Dense(n) => {
+                    NeuralNetworkNode::DenseLayer(n) => {
                         let fcalc = fcalcs.pop().unwrap();
                         dvalues = n.backward(&dvalues, &fcalc);
                     },
@@ -94,7 +94,7 @@ impl NeuralNetwork {
         to_writer.write_usize(epochs);
         for node in from_nodes {
             match node {
-                NeuralNetworkNode::Dense(n) => {
+                NeuralNetworkNode::DenseLayer(n) => {
                     to_writer.write_slice_f32(&n.weights.read_values());
                     to_writer.write_slice_f32(&n.biases.read_values());
                 }
@@ -134,7 +134,7 @@ impl NeuralNetwork {
                 epoch = NeuralNetwork::read_usize(&mut file);
                 for node in to_nodes {
                     match node {
-                        NeuralNetworkNode::Dense(n) => {
+                        NeuralNetworkNode::DenseLayer(n) => {
                             // Load weights first
                             let (mut rows, mut columns) = n.weights.shape();
                             let weight_floats = NeuralNetwork::read_section(&mut file, columns * rows, CHUNK_SIZE);

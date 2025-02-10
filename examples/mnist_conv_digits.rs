@@ -2,7 +2,7 @@
 // Use the following command to run in release mode:
 // cargo run --release --example mnist_digits
 
-use ai::{digit_image::DigitImage, geoalg::f32_math::matrix::Matrix, nn::{activation_functions::{accuracy, backward_categorical_cross_entropy_loss_wrt_softmax, forward_categorical_cross_entropy_loss, RELU, SOFTMAX}, layers::{dense::Dense, input::Input}, neural::{NeuralNetwork, NeuralNetworkNode}}, output_bin_writer::OutputBinWriter, statistics::sample::Sample, timed};
+use ai::{digit_image::DigitImage, geoalg::f32_math::matrix::Matrix, nn::{activation_functions::{accuracy, backward_categorical_cross_entropy_loss_wrt_softmax, forward_categorical_cross_entropy_loss, RELU, SOFTMAX}, layers::{convolution2d::Convolution2d, dense::Dense, input::Input}, neural::{NeuralNetwork, NeuralNetworkNode}}, output_bin_writer::OutputBinWriter, statistics::sample::Sample, timed};
 
 /// Creates an input layer drawn randomly from a sample.
 pub fn from_sample_digit_images(sample: &mut Sample<DigitImage>, requested_batch_size: usize) -> (Input, Matrix) {
@@ -24,6 +24,7 @@ pub fn from_sample_digit_images(sample: &mut Sample<DigitImage>, requested_batch
 pub fn handwritten_digits(load_from_file: bool) {
     let time_to_run = timed::timed(|| {
         // Create dense layers
+        let _convo = Convolution2d::new(8, 1, 3, 3, 28, 28);
         let dense1 = Dense::new(784, 128);
         let dense2 = dense1.evolve_to_dense(64);
         let dense3 = dense2.evolve_to_dense(10);
@@ -80,15 +81,15 @@ pub fn handwritten_digits(load_from_file: bool) {
                 NeuralNetwork::backward(&mut nn_nodes, &dvalues6, &mut forward_stack);
 
                 // Only uncomment if network training is slow to see if accuracy and data loss is actually improving
-                // if _batch % 50 == 0 {
-                //     // Only needed when outputting data loss for debugging purposes.
-                //     let sample_losses = forward_categorical_cross_entropy_loss(&predictions, &targets);
-                //     let data_loss = sample_losses.read_values().into_iter().sum::<f32>() / sample_losses.len() as f32;            
-                //     print!("Training to batch #{_batch} complete | Data Loss: {data_loss}");
-                //
-                //     let accuracy = accuracy(&predictions, &targets);
-                //     println!(" | Accuracy: {accuracy}");
-                // }
+                if _batch % 50 == 0 {
+                    // Only needed when outputting data loss for debugging purposes.
+                    let sample_losses = forward_categorical_cross_entropy_loss(&predictions, &targets);
+                    let data_loss = sample_losses.read_values().into_iter().sum::<f32>() / sample_losses.len() as f32;            
+                    print!("Training to batch #{_batch} complete | Data Loss: {data_loss}");
+                
+                    let accuracy = accuracy(&predictions, &targets);
+                    println!(" | Accuracy: {accuracy}");
+                }
             }
 
             let backup_to_write = 1 + epoch % backup_cycle;

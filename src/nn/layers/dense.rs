@@ -5,7 +5,7 @@ use crate::geoalg::f32_math::matrix::Matrix;
 use super::*;
 
 /// A fully connected layer.
-pub struct DenseLayer {
+pub struct Dense {
     pub biases: Matrix,
     pub weights: Matrix,
 
@@ -13,7 +13,7 @@ pub struct DenseLayer {
     //parallelism: usize
 }
 
-impl DenseLayer {
+impl Dense {
     fn random_weight_biases(neuron_count: usize, prev_layer_input_count: usize) -> (Matrix, Matrix) {
         let uniform = Uniform::new_inclusive(-0.5, 0.5);
         let weights = Matrix::new_randomized_uniform(prev_layer_input_count, neuron_count, uniform);
@@ -22,25 +22,25 @@ impl DenseLayer {
         (weights, biases)
     }
 
-    pub fn new(input_size: usize, neuron_count: usize) -> DenseLayer {
-        let (weights, biases) = DenseLayer::random_weight_biases(neuron_count, input_size);
+    pub fn new(input_size: usize, neuron_count: usize) -> Dense {
+        let (weights, biases) = Dense::random_weight_biases(neuron_count, input_size);
 
-        DenseLayer {
+        Dense {
             weights,
             biases,
         }
     }
 
     /// Instantiates and returns a new Hidden Layer based off self's shape.
-    pub fn evolve_to_dense(&self, neuron_count: usize) -> DenseLayer {
+    pub fn evolve_to_dense(&self, neuron_count: usize) -> Dense {
         assert!(self.weights.len() > 0);
         assert!(self.biases.len() > 0);
 
-        DenseLayer::new(self.biases.len(), neuron_count)
+        Dense::new(self.biases.len(), neuron_count)
     }
 }
 
-impl Propagates for DenseLayer {
+impl Propagates for Dense {
     /// Forward propagates by performing weights dot inputs + biases.
     fn forward<'a>(&mut self, inputs: &'a Matrix) -> Matrix {
         let r = inputs

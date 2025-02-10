@@ -7,6 +7,7 @@ const ROW:usize = 1;
 const COLUMN:usize = 0;
 const DEPTH:usize = 2;
 
+/// A generalized collection of values that can be used for various math operations.
 #[derive(PartialEq, Debug, Clone)]
 pub struct Tensor {
     pub shape: Vec<usize>,   // Rows, columns, depth. Everything after is arbitrary
