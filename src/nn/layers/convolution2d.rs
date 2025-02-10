@@ -55,6 +55,10 @@ impl Propagates for Convolution2d {
     fn forward(&mut self, inputs: &Matrix) -> Matrix {
         let r = inputs 
             .valid_cross_correlation(&self.kernels, &self.k_d, &self.i_d);
+
+        
+        //println!()
+            //.add_row_partitioned(&self.biases);
         r
     }
 

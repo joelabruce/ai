@@ -363,6 +363,27 @@ impl Matrix {
         Matrix::from(batches, filters_size, values)
     }
 
+    // pub fn full_convolution(&self, kernels: & Matrix, k_d: Dimensions, i_d: &Dimensions) -> Self {
+    //     Self::from(1, 1, vec![0.])
+    // }
+
+    /// Pads a matrix with rows and columns specified by p_d
+    pub fn pad(&self, p_d: Dimensions) -> Self {
+        let padded_rows = self.row_count() + p_d.height * 2;
+        let padded_columns = self.column_count() + p_d.width * 2;
+
+        let mut values = vec![0.; padded_rows * padded_columns];
+        let row_offset = p_d.height;
+        for row in 0..self.rows {
+            let row_to_copy = self.row(row);
+            for column in 0..self.column_count() {
+                values[(row_offset + row) * padded_columns + p_d.width + column] = row_to_copy[column];
+            }
+        }
+
+        Self::from(padded_rows, padded_columns, values)
+    }
+
     /// Might consider putting outside of matrix.
     /// i_d: input dimensions
     /// p_d: pooling dimensions
@@ -421,6 +442,8 @@ impl Matrix {
 
 #[cfg(test)]
 mod tests {
+    //use colored::Colorize;
+
     use super::*;
 
     #[test]
@@ -576,6 +599,28 @@ mod tests {
         ]);
 
         let actual = lhs.mul_with_transpose(rhs);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_pad() {
+        let tc = Matrix::from(2, 2, vec![
+            1., 2.,
+            3., 4.
+        ]);
+
+        let actual = tc.pad(Dimensions { width: 2, height: 2});
+        let expected = Matrix::from(6, 6, vec![
+            0., 0., 0., 0., 0., 0.,
+            0., 0., 0., 0., 0., 0.,
+            0., 0., 1., 2., 0., 0.,
+            0., 0., 3., 4., 0., 0.,
+            0., 0., 0., 0., 0., 0.,
+            0., 0., 0., 0., 0., 0.,
+        ]);
+
+        //let msg = format!("{:?}", actual).bright_purple();
+        //println!("{msg}");
         assert_eq!(actual, expected);
     }
 }
