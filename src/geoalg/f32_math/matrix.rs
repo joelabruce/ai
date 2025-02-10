@@ -370,40 +370,50 @@ impl Matrix {
     pub fn maxpool(&self, filters: usize, stride: usize, i_d: &Dimensions, p_d: &Dimensions, o_d: &Dimensions) -> (Self, Vec<usize>) {
         let batches = self.row_count();
 
+        let partitioner = &Partitioner::with_partitions(
+            batches,
+            thread::available_parallelism().unwrap().get());
+
         let (rows, columns) = o_d.shape();
         let rows_x_columns = rows * columns;
 
-        let mut values = Vec::with_capacity(batches * filters * rows_x_columns);        
-        let mut max_indices = Vec::with_capacity(batches * filters * rows_x_columns);
+        let inner_process = move |partition: &Partition| {
+            let mut partition_values = Vec::with_capacity(partition.get_size() * filters * rows_x_columns);
+            for batch in partition.get_range() {
+                let input_row = self.row(batch);
+                for filter in 0..filters {
+                    let filter_offset = filter * i_d.height * i_d.width;
+                    for row in 0..rows {
+                        let w_row = row * stride;
+                        for column in 0..columns {
+                            let w_column = column * stride;
 
-        for batch in 0..batches {
-            let input_row = self.row(batch);
-            for filter in 0..filters {
-                let filter_offset = filter * i_d.height * i_d.width;
-                for row in 0..rows {
-                    let w_row = row * stride;
-                    for column in 0..columns {
-                        let w_column = column * stride;
-
-                        let mut max = f32::MIN;
-                        let mut max_index = 0;
-                        for k_row in 0..p_d.height {
-                            for k_column in 0..p_d.width {
-                                let index = filter_offset + (w_column + k_column) + (w_row + k_row) * i_d.width;
-                                let index_value = input_row[index];
-                                if index_value > max { 
-                                    max = index_value;
-                                    max_index = index;
-                                } 
+                            let mut max = f32::MIN;
+                            let mut max_index = 0;
+                            for k_row in 0..p_d.height {
+                                for k_column in 0..p_d.width {
+                                    let index = filter_offset + (w_column + k_column) + (w_row + k_row) * i_d.width;
+                                    let index_value = input_row[index];
+                                    if index_value > max { 
+                                        max = index_value;
+                                        max_index = index;
+                                    } 
+                                }
                             }
-                        }
 
-                        values.push(max);
-                        max_indices.push(max_index);
+                            partition_values.push((max, max_index));
+                        }
                     }
                 }
             }
-        }
+
+            partition_values
+        };
+
+        let (values, max_indices) = partitioner.parallelized(inner_process).into_iter().unzip();
+
+        //let msg = format!("{:?}", max_indices).bright_purple();
+        //println!("Max indices: {msg}");
 
         (Matrix::from(batches, filters * rows_x_columns, values), max_indices)
     }

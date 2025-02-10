@@ -51,10 +51,6 @@ impl Partitioner {
         Partitioner { partitions }
     }
 
-    // pub fn iter(&self) -> [Partition] {
-    //     self.partitions[..]
-    // }
-
     /// Returns partition if it exists.
     pub fn get_partition(&self, partition_index: usize) -> &Partition {
         assert!(partition_index < self.partitions.len(), "Index for partition out of bounds.");

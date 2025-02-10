@@ -19,11 +19,11 @@ impl MaxPooling {
         }
     }
 
-    pub fn influences_dense(&self) -> Dense {
+    pub fn influences_dense(&self, neuron_count: usize) -> Dense {
         let (rows, columns) = self.output_dimensions().shape();
 
         let features = self.filters * rows * columns;
-        Dense::new(features, 100)
+        Dense::new(features, neuron_count)
     }
 
     fn output_dimensions(&self) -> Dimensions {
@@ -37,7 +37,12 @@ impl MaxPooling {
 impl Propagates for MaxPooling {
     fn forward(&mut self, inputs: &Matrix) -> Matrix {
         let (r, max_indices) = inputs
-            .maxpool(self.filters, self.stride, &self.i_d, &self.p_d,&self.output_dimensions());
+            .maxpool(
+                self.filters,
+                self.stride,
+                &self.i_d,
+                &self.p_d,
+                &self.output_dimensions());
         self.max_indices = max_indices;
         r
     }

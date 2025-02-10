@@ -25,8 +25,8 @@ pub fn from_sample_digit_images(sample: &mut Sample<DigitImage>, requested_batch
 pub fn handwritten_digits(load_from_file: bool) {
     let time_to_run = timed::timed(|| {
         // Training hyper-parameters
-        let backup_cycle = 5;
-        let total_epochs = 1;
+        let backup_cycle = 2;
+        let total_epochs = 4;
         let training_sample = 60000;
         let batch_size = 500;
         let batches = training_sample / batch_size;
@@ -44,7 +44,7 @@ pub fn handwritten_digits(load_from_file: bool) {
             Dimensions { width: 2, height: 2 },
             2);
 
-        let dense1 = maxpool.influences_dense();
+        let dense1 = maxpool.influences_dense(100);
         let dense2 = dense1.influences_dense(10);
 
         // Add layers to the network for forward and backward propagation.
@@ -57,8 +57,6 @@ pub fn handwritten_digits(load_from_file: bool) {
         nn_nodes.push(NeuralNetworkNode::DenseLayer(dense2));
 
         let trained_model_location = "./tests/convo_model";
-
-
 
         // Begin processing neural network now, this code should only be in 1 place between examples.
         // Consider refactoring to make examples easier instead of redundant everywhere.
