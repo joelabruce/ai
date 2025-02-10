@@ -51,3 +51,9 @@ Allows for wrapping functions to determine runtime. Useful for seeing how perfor
 * MNIST Hand-written Digits Neural Networks
   * A simple fully connected neural network that uses Softmax and Cross Entropy Loss.
   * An implementation using convolutional neural network.
+
+## Goals of project
+  * To develop a set of tools to allow simple creation of complex neural networks.
+  * Only implement and optimize functions that directly impact this goal.
+  * Though many features *could* be implemented for things such as matrix identities or determinants, those operations will only be implemented as deemed useful to creating sophisticated neural networks. Right now they are not implemented because currently no layers need them to function.
+  * Work to keep the code base as clutter free as possible. Actively remove functions that are not providing value to the end goal of simply creating neural networks.

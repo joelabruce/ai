@@ -1,7 +1,7 @@
 pub mod dense;
 pub mod input;
 pub mod convolution2d;
-pub mod max_pooling_layer;
+pub mod max_pooling;
 
 extern crate rand;
 use crate::geoalg::f32_math::matrix::*;

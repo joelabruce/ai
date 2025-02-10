@@ -2,10 +2,11 @@ use rand_distr::Normal;
 
 use crate::geoalg::f32_math::simd_extensions::dot_product_simd3;
 
-use super::{max_pooling_layer::MaxPoolingLayer, Matrix, Propagates};
+use super::{max_pooling::MaxPooling, Matrix, Propagates};
 
 ///
 pub struct Convolution2d {
+    pub filters: usize,
     pub kernels: Matrix,
     pub kernel_width: usize,
     pub kernel_height: usize,
@@ -26,6 +27,7 @@ impl Convolution2d {
         let normal = Normal::new(0., normal_term).unwrap();
         
         Convolution2d {
+            filters,
             kernels: Matrix::new_randomized_normal(filters, channels * kernel_height * kernel_width, normal),
             kernel_width,
             kernel_height,
@@ -35,12 +37,13 @@ impl Convolution2d {
         }
     }
 
-    pub fn evolve_to_maxpool(&self) -> MaxPoolingLayer {
-        MaxPoolingLayer::new(
-            2, 2,
+    pub fn evolve_to_maxpool(&self, pooling_height: usize, pooling_width: usize, stride: usize) -> MaxPooling {
+        MaxPooling::new(
+            self.filters,
+            pooling_height, pooling_width,
             self.image_height - self.kernel_height + 1,
             self.image_width - self.kernel_width + 1,
-            2)
+            stride)
     }
 }
 
@@ -123,7 +126,11 @@ mod tests {
         ]);
 
         // Have two filters
-        let mut cv2d = Convolution2d::new(3, 1, 3, 3, 4, 4);
+        let mut cv2d = Convolution2d::new(
+            3, 
+            1, 
+            3, 3, 
+            4, 4);
         cv2d.kernels = Matrix::from(3, 3 * 3, vec![
             0., 0.15, 0.,
             0.15, 0.4, 0.15,

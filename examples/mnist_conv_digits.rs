@@ -24,18 +24,29 @@ pub fn from_sample_digit_images(sample: &mut Sample<DigitImage>, requested_batch
 pub fn handwritten_digits(load_from_file: bool) {
     let time_to_run = timed::timed(|| {
         // Create dense layers
-        let _convo = Convolution2d::new(8, 1, 3, 3, 28, 28);
-        let dense1 = Dense::new(784, 128);
-        let dense2 = dense1.evolve_to_dense(64);
-        let dense3 = dense2.evolve_to_dense(10);
+        let convo = Convolution2d::new(
+            32, 
+            1, 
+            3, 3,
+            28, 28);
+
+        let maxpool = convo.evolve_to_maxpool(
+            2, 
+            2,
+            2);
+
+        //let dense1 = Dense::new(784, 128);
+        let dense1 = maxpool.evolve_to_dense(128);
+        let dense2 = dense1.evolve_to_dense(10);
 
         // Add layers to the network for forward and backward propagation.
         let mut nn_nodes: Vec<NeuralNetworkNode> = Vec::new();
+        nn_nodes.push(NeuralNetworkNode::Convolution2dLayer(convo));
+        nn_nodes.push(NeuralNetworkNode::ActivationLayer(RELU));
+        nn_nodes.push(NeuralNetworkNode::MaxPoolLayer(maxpool));
         nn_nodes.push(NeuralNetworkNode::DenseLayer(dense1));
         nn_nodes.push(NeuralNetworkNode::ActivationLayer(RELU));
         nn_nodes.push(NeuralNetworkNode::DenseLayer(dense2));
-        nn_nodes.push(NeuralNetworkNode::ActivationLayer(RELU));
-        nn_nodes.push(NeuralNetworkNode::DenseLayer(dense3));
 
         let trained_model_location = "./tests/network_training";
         let mut epoch_offset = 0;

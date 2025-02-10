@@ -13,11 +13,13 @@ use crate::output_bin_writer::OutputBinWriter;
 use crate::statistics::sample::Sample;
 
 use super::layers::convolution2d::Convolution2d;
+use super::layers::max_pooling::MaxPooling;
 
 pub enum NeuralNetworkNode {
     DenseLayer(Dense),
     Convolution2dLayer(Convolution2d),
-    ActivationLayer(Activation)
+    ActivationLayer(Activation),
+    MaxPoolLayer(MaxPooling)
 }
 
 /// Contains structure and hyper-parameters needed for a neural network
@@ -59,7 +61,9 @@ impl NeuralNetwork {
             match node {
                 NeuralNetworkNode::ActivationLayer(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
                 NeuralNetworkNode::DenseLayer(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
-                _ => ()
+                NeuralNetworkNode::Convolution2dLayer(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
+                NeuralNetworkNode::MaxPoolLayer(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
+                //_ => ()
             }
         } 
 
