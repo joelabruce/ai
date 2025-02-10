@@ -16,6 +16,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    - run: rustup upgrade -- nightly
+    - run: rustup default nightly
     - name: Build
       run: cargo build --verbose
     - name: Run tests

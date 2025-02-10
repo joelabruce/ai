@@ -105,6 +105,11 @@ pub struct Partition {
 }
 
 impl Partition {
+    pub fn new(start: usize, end: usize) -> Self {
+        assert!(start <= end);
+        Self { start, end }
+    }
+
     pub fn get_start(&self) -> usize { self.start }
     pub fn get_end(&self) -> usize { self.end }
 

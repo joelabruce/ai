@@ -1,4 +1,4 @@
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 use std::thread;
 
@@ -7,14 +7,14 @@ use rand::prelude::Distribution;
 
 use crate::partitions::Partitioner;
 
-/// Calculates dot product of two slices of AtomicU64 as if they were floats.
+/// Calculates dot product of two slices of AtomicU32 as if they were floats.
 /// This portion not parallelized, outer portions meant to be parallelized.
 /// Might be worthwhile in a work stealing paradigm? Maybe?
-fn dot_product_atomic(lhs: &[AtomicU64], rhs: &[AtomicU64]) -> f64 {
+fn dot_product_atomic(lhs: &[AtomicU32], rhs: &[AtomicU32]) -> f32 {
     let mut sum = 0.;
     for i in 0..lhs.len() {
-        sum += f64::from_bits(lhs[i].load(Ordering::Relaxed)) * 
-            f64::from_bits(rhs[i].load(Ordering::Relaxed));
+        sum += f32::from_bits(lhs[i].load(Ordering::Relaxed)) * 
+            f32::from_bits(rhs[i].load(Ordering::Relaxed));
     }
 
     sum
@@ -22,11 +22,11 @@ fn dot_product_atomic(lhs: &[AtomicU64], rhs: &[AtomicU64]) -> f64 {
 
 /// Helper function to create a contiguous section of memory.
 /// Allocates the place where matrix operation result are stored when done in parallel. 
-fn contiguous(rows: usize, columns: usize) -> Arc<Vec<AtomicU64>> {
+fn contiguous(rows: usize, columns: usize) -> Arc<Vec<AtomicU32>> {
     let size = rows * columns;
     Arc::new(
         (0..size)
-        .map(|_| AtomicU64::new(0))
+        .map(|_| AtomicU32::new(0))
         .collect::<Vec<_>>()
     )
 }
@@ -34,7 +34,7 @@ fn contiguous(rows: usize, columns: usize) -> Arc<Vec<AtomicU64>> {
 pub struct _Matrix {
     rows: usize,
     columns: usize,
-    values: Arc<Vec<AtomicU64>>
+    values: Arc<Vec<AtomicU32>>
 }
 
 impl _Matrix {
@@ -46,14 +46,14 @@ impl _Matrix {
 
     pub fn len(&self) -> usize { self.rows * self.columns }
 
-    /// Creates a new Matrix by taking over ownership of an Arc<Vec<AtomicU64>>.
+    /// Creates a new Matrix by taking over ownership of an Arc<Vec<AtomicU32>>.
     /// Private for now, only needed internally.
-    fn new(rows: usize, columns: usize, values: Arc<Vec<AtomicU64>>) -> Self {
+    fn new(rows: usize, columns: usize, values: Arc<Vec<AtomicU32>>) -> Self {
         Self { rows, columns, values }
     }
 
     /// Returns a row x column matrix filled with random values between -1.0 and 1.0 inclusive.
-    pub fn new_randomized_uniform(rows: usize, columns: usize, uniform: Uniform<f64>) -> Self {
+    pub fn new_randomized_uniform(rows: usize, columns: usize, uniform: Uniform<f32>) -> Self {
         assert!(columns > 0);
         assert!(rows > 0);
 
@@ -64,34 +64,34 @@ impl _Matrix {
         Self::from(rows, columns, values)
     }
 
-    /// Constructs Matrix from supplied Vec<f64>.
-    pub fn from(rows: usize, columns: usize, values: Vec<f64>) -> Self {
+    /// Constructs Matrix from supplied Vec<f32>.
+    pub fn from(rows: usize, columns: usize, values: Vec<f32>) -> Self {
         let values = Arc::new(
             values.into_iter()
-            .map(|x| AtomicU64::new(x.to_bits()))
+            .map(|x| AtomicU32::new(x.to_bits()))
             .collect::<Vec<_>>()
         );
 
         Self { rows, columns, values }
     }
 
-    /// Returns internal values as a Vec<f64>.
+    /// Returns internal values as a Vec<f32>.
     /// Private for now.
-    pub fn to_vec(&self) -> Vec<f64> {
+    pub fn to_vec(&self) -> Vec<f32> {
         let size = self.columns * self.rows;
-        let mut f64s = Vec::with_capacity(size);
+        let mut f32s = Vec::with_capacity(size);
 
         for i in 0..size {
-            let x = f64::from_bits(self.values[i].load(Ordering::Relaxed));
-            f64s.push(x);
+            let x = f32::from_bits(self.values[i].load(Ordering::Relaxed));
+            f32s.push(x);
         }
 
-        f64s
+        f32s
     }
 
     /// Returns a contiguous slice of data representing a vector of columns in the matrix.
-    /// Note that they are AtomicU64, so need to_bits and from_bits operations when using.
-    fn get_row(&self, row: usize) -> &[AtomicU64] {
+    /// Note that they are AtomicU32, so need to_bits and from_bits operations when using.
+    fn get_row(&self, row: usize) -> &[AtomicU32] {
         assert!(row < self.rows, "Tried to get a row that was out of bounds from a matrix.");
 
         let start = row * self.columns;
@@ -100,7 +100,7 @@ impl _Matrix {
     }
 
     /// Performs a function on every element in Matrix.
-    pub fn map(&self, function: fn(&f64) -> f64, partitioner: &Partitioner) -> Self {
+    pub fn map(&self, function: fn(&f32) -> f32, partitioner: &Partitioner) -> Self {
         let values = contiguous(self.rows, self.columns);
         thread::scope(|s| {
             for partition in &partitioner.partitions {
@@ -108,7 +108,7 @@ impl _Matrix {
                 let _handle = s.spawn(move || {
                     for i in partition.get_range() {
                         let cursor = i;
-                        let read_value = f64::from_bits(self.values[cursor].load(Ordering::Relaxed));
+                        let read_value = f32::from_bits(self.values[cursor].load(Ordering::Relaxed));
                         let value = function(&read_value);
                         partitioned_values[cursor].store(value.to_bits(), Ordering::Relaxed);
                     }
@@ -152,8 +152,8 @@ impl _Matrix {
                         let ls = self.get_row(row_index);
                         let rs = rhs.get_row(row_index);
                         for column_index in 0..self.columns {
-                            let x = f64::from_bits(ls[column_index].load(Ordering::Relaxed));
-                            let y = f64::from_bits(rs[column_index].load(Ordering::Relaxed));
+                            let x = f32::from_bits(ls[column_index].load(Ordering::Relaxed));
+                            let y = f32::from_bits(rs[column_index].load(Ordering::Relaxed));
                             let value = x * y;
                             partitioned_values[cursor + column_index].store(value.to_bits(), Ordering::Relaxed);
                         }

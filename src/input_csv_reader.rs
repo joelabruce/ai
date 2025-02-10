@@ -28,7 +28,7 @@ impl InputCsvReader {
     /// Reads a single line. Assumes header was already read.
     pub fn read_and_parse_data_line(&mut self, vec_size: usize) -> DigitImage {
         let mut pixels = Vec::with_capacity(vec_size);
-        let mut label = 0f64;
+        let mut label = 0f32;
         let mut line = String::new();
 
         let _len = self.reader.read_line(&mut line);
@@ -38,19 +38,19 @@ impl InputCsvReader {
             let retrieved_value = element.trim();
 
             if i == 0 {
-                label = retrieved_value.parse::<f64>()
+                label = retrieved_value.parse::<f32>()
                     .expect(format!("Retrieved value should have been a tag, found: [{retrieved_value}].").as_str());
             }
             else if i > vec_size {
                 println!("Line contained more data than expected, possible error");
             }
             else {
-                let float_value = retrieved_value.parse::<f64>();
+                let float_value = retrieved_value.parse::<f32>();
                 let value_to_push = match float_value {
                     Ok(r) => r / 255.0,
                     Err(e) => { // This should only error for header.
-                        println!("ERROR! {e} -> {retrieved_value} (will assume 0.0f64)");
-                        0.0f64
+                        println!("ERROR! {e} -> {retrieved_value} (will assume 0.0f32)");
+                        0.0f32
                     }
                 };
 

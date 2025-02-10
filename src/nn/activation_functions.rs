@@ -1,11 +1,11 @@
-use std::f64::consts::E;
-use crate::geoalg::f64_math::matrix::Matrix;
-use crate::geoalg::f64_math::optimized_functions::vector_row_max;
+use std::f32::consts::E;
+use crate::geoalg::f32_math::matrix::Matrix;
+use crate::geoalg::f32_math::optimized_functions::vector_row_max;
 use crate::nn::layers::*;
 
 pub struct Activation {
-    pub f: fn(&f64) -> f64,
-    pub d: fn(&f64) -> f64
+    pub f: fn(&f32) -> f32,
+    pub d: fn(&f32) -> f32
 }
 
 impl Propagates for Activation {
@@ -16,7 +16,7 @@ impl Propagates for Activation {
         assert_eq!(dvalues.row_count(), inputs.row_count(), "Backpropagation for Activation needs inputs and dvalues to have same rows.");
         assert_eq!(dvalues.column_count(), inputs.column_count(), "Backpropagation for Activation needs inputs and dvalues to have same columns.");
 
-        inputs.map(self.d).mul_element_wise(&dvalues)
+        inputs.map(self.d).mul_element_wise_simd(&dvalues)
     }
 }
 
@@ -48,10 +48,10 @@ pub const H_SWISH: Activation = Activation {
 
 /// Calculates the cross-entropy (used with softmax) for each input sample.
 pub fn forward_categorical_cross_entropy_loss(predictions: &Matrix, expected: &Matrix) -> Matrix {
-    let t: Matrix = predictions.mul_element_wise(expected);
+    let t: Matrix = predictions.mul_element_wise_simd(expected);
     let mut r = Vec::with_capacity(t.row_count());
     for row in 0..t.row_count() {
-        let loss = -t.row(row).iter().sum::<f64>().log10();
+        let loss = -t.row(row).iter().sum::<f32>().log10();
         r.push(loss);
     }
 
@@ -76,8 +76,8 @@ pub const SOFTMAX: FoldActivation = FoldActivation {
             let v = m.row(row);
             let max = v.iter().max_by(|x, y| x.total_cmp(y)).unwrap();
 
-            let exp_numerators: Vec<f64> = v.iter().map(|&x| E.powf(x - max)).collect();
-            let denominator: f64 = exp_numerators.iter().sum();
+            let exp_numerators: Vec<f32> = v.iter().map(|&x| E.powf(x - max)).collect();
+            let denominator: f32 = exp_numerators.iter().sum();
             
             values.extend(exp_numerators.iter().map(|x| x / denominator));
         }
@@ -90,7 +90,7 @@ pub const SOFTMAX: FoldActivation = FoldActivation {
 };
 
 /// Calculats accurace given predicted and expected values
-pub fn accuracy(predicted: &Matrix, expected: &Matrix) -> f64 {
+pub fn accuracy(predicted: &Matrix, expected: &Matrix) -> f32 {
     assert_eq!(predicted.row_count(), expected.row_count());
     assert_eq!(predicted.column_count(), expected.column_count());
 
@@ -101,7 +101,7 @@ pub fn accuracy(predicted: &Matrix, expected: &Matrix) -> f64 {
         if actual_i == expected_i { matches += 1. }
     }
 
-    matches / predicted.row_count() as f64
+    matches / predicted.row_count() as f32
 }
 
 #[cfg(test)]
@@ -115,9 +115,9 @@ mod tests {
         let actual = (SOFTMAX.f)(&mat);
 
         let expected = Matrix::from(1, 3, vec![
-            0.09003057317038046,
-            0.24472847105479764,
-            0.6652409557748218            
+            0.09003058,
+            0.24472848,
+            0.66524094            
         ]);
 
         assert_eq!(actual, expected);

@@ -1,3 +1,7 @@
+#![feature(array_chunks)]
+#![feature(slice_as_chunks)]
+#![feature(portable_simd)]
+
 pub mod geoalg;
 pub mod partitions;
 pub mod statistics;
@@ -11,9 +15,11 @@ pub mod weight_initializers;
 
 pub mod experimental;
 
+pub mod timed;
+
 use crate::partitions::*;
 use colored::*;
-use geoalg::f64_math::optimized_functions::{strict_partitions_n_into_3_fast, strict_partitions_n_into_4_experimental, strict_partitions_n_into_4_recursive};
+use geoalg::f32_math::optimized_functions::{strict_partitions_n_into_3_fast, strict_partitions_n_into_4_experimental, strict_partitions_n_into_4_recursive};
 
 fn _main() {
     //println!("n: ");
