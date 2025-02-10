@@ -1,6 +1,6 @@
 use std::thread;
 use rand_distr::{Distribution, Normal, Uniform};
-use crate::{geoalg::f32_math::simd_extensions::dot_product_simd3, Partition, Partitioner};
+use crate::{geoalg::f32_math::simd_extensions::dot_product_simd3, nn::layers::convolution2d::Dimensions, Partition, Partitioner};
 
 /// Matrix is implemented as a single dimensional vector of f32s.
 /// This implementation of Matrix is row-major. 
@@ -306,6 +306,106 @@ impl Matrix {
 
         let values = partition_strategy.parallelized(inner_process);
         Self::from(self.row_count(), self.column_count(), values)
+    }
+
+    /// Used for convolutional layers.
+    /// Might consider creating outside of matrix.
+    pub fn valid_cross_correlation(&self, kernels: &Matrix, k_d: &Dimensions, i_d: &Dimensions) -> Self {
+        let batches = self.row_count();
+
+        let partitioner = &Partitioner::with_partitions(
+            batches, 
+            thread::available_parallelism().unwrap().get());
+
+        // Adjust for valid convolution (no padding)
+        let n_rows = i_d.height - k_d.height + 1;
+        let n_columns =i_d.width - k_d.width + 1;
+        let filters_size = kernels.row_count() * n_rows * n_columns;
+
+        let inner_process = move |partition: &Partition| {
+            let mut partition_values = Vec::with_capacity(partition.get_size() * filters_size);
+            for batch_index in partition.get_range() {
+                let input = self.row(batch_index);
+                for filter_index in 0..kernels.row_count() {
+                    let filter = kernels.row(filter_index);
+
+                    for row in 0..n_rows {
+                        for column in 0..n_columns {
+                            let mut c_accum = 0.;
+
+                            // Slide kernel window horizontally and then vertically
+                            // Since we are doing optimized dot_products, only need to move down the rows
+                            for kernel_row in 0..k_d.height {
+                                // Get the row of the input, offset by kernel row, and start the row at the column.
+                                let input_row_start_index = (row + kernel_row) * i_d.width + column;
+                                // Only get as many columns as are in the kernel for the convolution.
+                                let input_row_end_index = input_row_start_index + k_d.width;
+
+                                let kernel_row_start_index = kernel_row * k_d.width;
+                                let kernel_row_end_index = kernel_row_start_index + k_d.width;
+
+                                let x = &input[input_row_start_index..input_row_end_index];
+                                let y = &filter[kernel_row_start_index..kernel_row_end_index];
+
+                                c_accum += dot_product_simd3(x, y)
+                            }
+
+                            partition_values.push(c_accum);
+                        }
+                    }
+                }
+            }
+
+            partition_values
+        };
+
+        let values = partitioner.parallelized(inner_process);
+        Matrix::from(batches, filters_size, values)
+    }
+
+    /// Might consider putting outside of matrix.
+    /// i_d: input dimensions
+    /// p_d: pooling dimensions
+    /// o_d: output_dimensions
+    pub fn maxpool(&self, filters: usize, stride: usize, i_d: &Dimensions, p_d: &Dimensions, o_d: &Dimensions) -> (Self, Vec<usize>) {
+        let batches = self.row_count();
+
+        let (rows, columns) = o_d.shape();
+        let rows_x_columns = rows * columns;
+
+        let mut values = Vec::with_capacity(batches * filters * rows_x_columns);        
+        let mut max_indices = Vec::with_capacity(batches * filters * rows_x_columns);
+
+        for batch in 0..batches {
+            let input_row = self.row(batch);
+            for filter in 0..filters {
+                let filter_offset = filter * i_d.height * i_d.width;
+                for row in 0..rows {
+                    let w_row = row * stride;
+                    for column in 0..columns {
+                        let w_column = column * stride;
+
+                        let mut max = f32::MIN;
+                        let mut max_index = 0;
+                        for k_row in 0..p_d.height {
+                            for k_column in 0..p_d.width {
+                                let index = filter_offset + (w_column + k_column) + (w_row + k_row) * i_d.width;
+                                let index_value = input_row[index];
+                                if index_value > max { 
+                                    max = index_value;
+                                    max_index = index;
+                                } 
+                            }
+                        }
+
+                        values.push(max);
+                        max_indices.push(max_index);
+                    }
+                }
+            }
+        }
+
+        (Matrix::from(batches, filters * rows_x_columns, values), max_indices)
     }
 }
 

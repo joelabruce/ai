@@ -1,104 +1,61 @@
-use std::thread;
-
 use rand_distr::Normal;
 
-use crate::{geoalg::f32_math::simd_extensions::dot_product_simd3, partitions::{Partition, Partitioner}};
-
 use super::{max_pooling::MaxPooling, Matrix, Propagates};
+
+pub struct Dimensions {
+    pub height: usize,
+    pub width: usize
+}
+
+impl Dimensions {
+    pub fn shape(&self) -> (usize, usize) {
+        (self.height, self.width)
+    }
+}
 
 ///
 pub struct Convolution2d {
     pub filters: usize,
-    pub kernels: Matrix,
-    pub kernel_width: usize,
-    pub kernel_height: usize,
+    pub kernels: Matrix,        // Same as weights
     pub biases: Matrix,
-    pub image_width: usize,
-    pub image_height: usize,
+    pub k_d: Dimensions,
+    pub i_d: Dimensions,
     //pub stride: usize,        // Assumes stride of 1 for now.
 }
 
 impl Convolution2d {
     /// Set channels to 1 for greyscale, 3 for RGB.
     /// *RGB support not implemented yet, so ensure channels is 1.
-    pub fn new(filters: usize, channels: usize, kernel_width: usize, kernel_height: usize, image_width: usize, image_height: usize) -> Self {
+    pub fn new(filters: usize, channels: usize, k_d: Dimensions, i_d: Dimensions) -> Self {
         let biases = vec![0.; filters];
 
-        let fanin = (kernel_height * kernel_width * channels) as f32;
+        let fanin = (k_d.height * k_d.width * channels) as f32;
         let normal_term = (2. / fanin).sqrt();
         let normal = Normal::new(0., normal_term).unwrap();
         
         Convolution2d {
             filters,
-            kernels: Matrix::new_randomized_normal(filters, channels * kernel_height * kernel_width, normal),
-            kernel_width,
-            kernel_height,
+            kernels: Matrix::new_randomized_normal(filters, channels * k_d.height * k_d.width, normal),
             biases: Matrix::from(1, filters, biases),
-            image_width,
-            image_height
+            k_d,
+            i_d
         }
     }
 
-    pub fn influences_maxpool(&self, pooling_height: usize, pooling_width: usize, stride: usize) -> MaxPooling {
+    pub fn influences_maxpool(&self, p_d: Dimensions, stride: usize) -> MaxPooling {
         MaxPooling::new(
             self.filters,
-            pooling_height, pooling_width,
-            self.image_height - self.kernel_height + 1,
-            self.image_width - self.kernel_width + 1,
+            p_d,
+            Dimensions { height: self.i_d.height - self.k_d.height + 1, width: self.i_d.width - self.k_d.width + 1 },
             stride)
     }
 }
 
 impl Propagates for Convolution2d {
     fn forward(&mut self, inputs: &Matrix) -> Matrix {
-        let batches = inputs.row_count();
-
-        let partitioner = &Partitioner::with_partitions(batches, 1);//, partition_count) &Partitioner::with_partitions(batches, thread::available_parallelism().unwrap().get());
-
-        // Adjust for valid convolution (no padding)
-        let n_rows = self.image_height - self.kernel_height + 1;
-        let n_columns = self.image_width - self.kernel_width + 1;
-        let filters_size = self.filters * n_rows * n_columns;
-
-        //let inner_process = move |partition: &Partition| {
-            let mut partition_values = Vec::new();//with_capacity(partition.get_size() * inputs.row_count());
-            for batch_index in partitioner.get_partition(0).get_range() { //0..batches {
-                let input = inputs.row(batch_index);
-                for filter_index in 0..self.kernels.row_count() {
-                    let filter = self.kernels.row(filter_index);
-
-                    for row in 0..n_rows {
-                        for column in 0..n_columns {
-                            let mut c_accum = 0.;
-
-                            // Slide kernel window horizontally and then vertically
-                            // Since we are doing optimized dot_products, only need to move down the rows
-                            for kernel_row in 0..self.kernel_height {
-                                // Get the row of the input, offset by kernel row, and start the row at the column.
-                                let input_row_start_index = (row + kernel_row) * self.image_width + column;
-                                // Only get as many columns as are in the kernel for the convolution.
-                                let input_row_end_index = input_row_start_index + self.kernel_width;
-
-                                let kernel_row_start_index = kernel_row * self.kernel_width;
-                                let kernel_row_end_index = kernel_row_start_index + self.kernel_width;
-
-                                let x = &input[input_row_start_index..input_row_end_index];
-                                let y = &filter[kernel_row_start_index..kernel_row_end_index];
-
-                                c_accum += dot_product_simd3(x, y)
-                            }
-
-                            partition_values.push(c_accum);
-                        }
-                    }
-                }
-            }
-
-            //partition_values
-        //};
-
-        let values = partition_values;// partitioner.parallelized(inner_process);// Vec::with_capacity(batches * filters_size);
-        Matrix::from(batches, filters_size, values)
+        let r = inputs 
+            .valid_cross_correlation(&self.kernels, &self.k_d, &self.i_d);
+        r
     }
 
     fn backward<'a>(&'a mut self, dvalues: &Matrix, inputs: &Matrix) -> Matrix {
@@ -106,9 +63,9 @@ impl Propagates for Convolution2d {
         inputs.len();
         //todo!()
 
-        let capacity = self.kernels.row_count() * self.image_height * self.image_width;
+        let capacity = self.kernels.row_count() * self.i_d.height * self.i_d.width;
 
-        Matrix::from(inputs.row_count(), self.image_height * self.image_width, vec![0.; capacity])
+        Matrix::from(inputs.row_count(), self.i_d.height * self.i_d.width, vec![0.; capacity])
     }
 }
 
@@ -119,7 +76,7 @@ mod tests {
 
     use crate::{geoalg::f32_math::matrix::Matrix, nn::layers::Propagates};
 
-    use super::Convolution2d;
+    use super::*;
 
     #[test]
     fn test_forward() {
@@ -140,8 +97,8 @@ mod tests {
         let mut cv2d = Convolution2d::new(
             3,
             1, 
-            3, 3, 
-            4, 4);
+            Dimensions { width: 3, height: 3 } , 
+            Dimensions { width: 4, height: 4 });
         cv2d.kernels = Matrix::from(3, 3 * 3, vec![
             0., 0.15, 0.,
             0.15, 0.4, 0.15,

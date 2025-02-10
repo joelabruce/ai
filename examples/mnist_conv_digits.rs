@@ -2,7 +2,7 @@
 // Use the following command to run in release mode:
 // cargo run --release --example mnist_digits
 
-use ai::{digit_image::DigitImage, geoalg::f32_math::matrix::Matrix, nn::{activation_functions::{accuracy, backward_categorical_cross_entropy_loss_wrt_softmax, forward_categorical_cross_entropy_loss, RELU, SOFTMAX}, layers::{convolution2d::Convolution2d, input::Input}, neural::{NeuralNetwork, NeuralNetworkNode}}, output_bin_writer::OutputBinWriter, statistics::sample::Sample, timed};
+use ai::{digit_image::DigitImage, geoalg::f32_math::matrix::Matrix, nn::{activation_functions::{accuracy, backward_categorical_cross_entropy_loss_wrt_softmax, forward_categorical_cross_entropy_loss, RELU, SOFTMAX}, layers::{convolution2d::{Convolution2d, Dimensions}, input::Input}, neural::{NeuralNetwork, NeuralNetworkNode}}, output_bin_writer::OutputBinWriter, statistics::sample::Sample, timed};
 
 /// Creates an input layer drawn randomly from a sample.
 pub fn from_sample_digit_images(sample: &mut Sample<DigitImage>, requested_batch_size: usize) -> (Input, Matrix) {
@@ -26,7 +26,7 @@ pub fn handwritten_digits(load_from_file: bool) {
     let time_to_run = timed::timed(|| {
         // Training hyper-parameters
         let backup_cycle = 5;
-        let total_epochs = 10;
+        let total_epochs = 1;
         let training_sample = 60000;
         let batch_size = 500;
         let batches = training_sample / batch_size;
@@ -37,12 +37,11 @@ pub fn handwritten_digits(load_from_file: bool) {
         let convo = Convolution2d::new(
             32, 
             1, 
-            3, 3,
-            28, 28);
+            Dimensions { width: 3, height: 3 } ,
+            Dimensions { width: 28, height: 28 });
 
         let maxpool = convo.influences_maxpool(
-            2, 
-            2,
+            Dimensions { width: 2, height: 2 },
             2);
 
         let dense1 = maxpool.influences_dense();

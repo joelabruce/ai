@@ -1,88 +1,50 @@
 use crate::geoalg::f32_math::matrix::Matrix;
-use super::{dense::Dense, Propagates};
+use super::{convolution2d::Dimensions, dense::Dense, Propagates};
 
 /// Currently only supports valid pooling layers, with no padding.
 pub struct MaxPooling {
     filters: usize,
-    pooling_height: usize,
-    pooling_width: usize,
+    /// Input dimensions
+    i_d: Dimensions,
+    /// Pooling dimensions
+    p_d: Dimensions,    
     stride: usize,
-    input_width: usize,
-    input_height: usize,
-
     max_indices: Vec<usize>
 }
 
 impl MaxPooling {
-    pub fn new(filters: usize, pooling_height: usize, pooling_width: usize, input_width: usize, input_height: usize, stride: usize) -> Self {
+    pub fn new(filters: usize, p_d: Dimensions, i_d: Dimensions, stride: usize) -> Self {
         MaxPooling {
-            filters, pooling_width, pooling_height, input_height, input_width, stride, max_indices: vec![0]
+            filters, p_d, i_d, stride, max_indices: vec![0]
         }
     }
 
     pub fn influences_dense(&self) -> Dense {
-        let (rows, columns) = self.output_shape();
+        let (rows, columns) = self.output_dimensions().shape();
 
         let features = self.filters * rows * columns;
-        //Dense::new(self.input_size,features)
         Dense::new(features, 100)
     }
 
-    fn output_shape(&self) -> (usize, usize) {
-        (
-            (self.input_height - self.pooling_height) / self.stride + 1,
-            (self.input_width - self.pooling_width) / self.stride + 1
-        )
+    fn output_dimensions(&self) -> Dimensions {
+        Dimensions {
+            height: (self.i_d.height - self.p_d.height) / self.stride + 1,
+            width: (self.i_d.width - self.p_d.width) / self.stride + 1
+        }
     }
 }
 
 impl Propagates for MaxPooling {
     fn forward(&mut self, inputs: &Matrix) -> Matrix {
-        let batches = inputs.row_count();
-
-        //assert_eq!(batches, self.input_size, "Input size does not equal expected rows count passed into MaxPooling.");
-
-        let (rows, columns) = self.output_shape();
-        let rows_x_columns = rows * columns;
-
-        let mut values = Vec::with_capacity(batches * self.filters * rows_x_columns);        
-        self.max_indices = Vec::with_capacity(batches * self.filters * rows_x_columns);
-
-        for batch in 0..batches {
-            let input_row = inputs.row(batch);
-            for filter in 0..self.filters {
-                let filter_offset = filter * self.input_height * self.input_width;
-                for row in 0..rows {
-                    let w_row = row * self.stride;
-                    for column in 0..columns {
-                        let w_column = column * self.stride;
-
-                        let mut max = f32::MIN;
-                        let mut max_index = 0;
-                        for k_row in 0..self.pooling_height {
-                            for k_column in 0..self.pooling_width {
-                                let index = filter_offset + (w_column + k_column) + (w_row + k_row) * self.input_width;
-                                let index_value = input_row[index];
-                                if index_value > max { 
-                                    max = index_value;
-                                    max_index = index;
-                                } 
-                            }
-                        }
-
-                        values.push(max);
-                        self.max_indices.push(max_index);
-                    }
-                }
-            }
-        }
-
-        Matrix::from(batches, self.filters * rows_x_columns, values)
+        let (r, max_indices) = inputs
+            .maxpool(self.filters, self.stride, &self.i_d, &self.p_d,&self.output_dimensions());
+        self.max_indices = max_indices;
+        r
     }
 
     fn backward<'a>(&'a mut self, dvalues: &Matrix, inputs: &Matrix) -> Matrix {
         let batches = inputs.row_count();
-        let columns = self.filters * self.input_height * self.input_width;
+        let columns = self.filters * self.i_d.height * self.i_d.width;
 
         let mut values = vec![0.; batches * columns];
         for i in 0..self.max_indices.len() {
@@ -97,7 +59,7 @@ impl Propagates for MaxPooling {
 mod tests {
     use colored::Colorize;
 
-    use crate::{geoalg::f32_math::matrix::Matrix, nn::layers::Propagates};
+    use crate::{geoalg::f32_math::matrix::Matrix, nn::layers::{convolution2d::Dimensions, Propagates}};
 
     use super::MaxPooling;
 
@@ -119,8 +81,8 @@ mod tests {
 
         let mut pooling = MaxPooling::new(
             2, 
-            2, 2, 
-            4, 4,
+            Dimensions { width: 2, height: 2 }, 
+            Dimensions { width: 4, height: 4 },
             2);
 
         // Assume 2 filters
