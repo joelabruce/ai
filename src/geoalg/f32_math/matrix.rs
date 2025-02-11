@@ -1,4 +1,4 @@
-use std::thread;
+use std::{ops::Sub, thread};
 use rand_distr::{Distribution, Normal, Uniform};
 use crate::{geoalg::f32_math::simd_extensions::dot_product_simd3, nn::layers::convolution2d::Dimensions, Partition, Partitioner};
 
@@ -31,6 +31,10 @@ impl Matrix {
 
     /// Returns a slice of the values this matrix has.
     pub fn read_values(&self) -> &[f32] { &self.values }
+
+    pub fn add_at(&mut self, i: usize, value: f32) {
+        self.values[i] += value;
+    }
 
     /// Reads value at specified index.
     pub fn read_at(&self, index: usize) -> f32 {
@@ -225,6 +229,29 @@ impl Matrix {
         Self::from(self.row_count(), self.column_count(), values)
     }
 
+    pub fn add(&self, rhs: &Matrix) -> Self {
+        assert!(self.rows == rhs.rows && self.columns == rhs.columns, "When subtracting two matrices, they must have same order.");
+    
+        let partition_strategy = match self.all_partitioner.as_ref() {
+            Some(p) => p,
+            None => {
+                &Partitioner::with_partitions(self.len(), thread::available_parallelism().unwrap().get())
+            }
+        };
+
+        let inner_process = move |partition: &Partition| {
+            let mut partition_values = Vec::with_capacity(partition.get_size());
+            for i in partition.get_range() {
+                partition_values.push(self.values[i] + rhs.values[i]);
+            }
+
+            partition_values
+        };
+
+        let values = partition_strategy.parallelized(inner_process);
+        Self::from(self.row_count(), self.column_count(), values)
+    }
+
     /// Adds a row to each row in matrix.
     /// Partitioner implementation complete.
     pub fn add_row_partitioned(&self, rhs: &Matrix) -> Self {
@@ -319,7 +346,7 @@ impl Matrix {
 
         // Adjust for valid convolution (no padding)
         let n_rows = i_d.height - k_d.height + 1;
-        let n_columns =i_d.width - k_d.width + 1;
+        let n_columns = i_d.width - k_d.width + 1;
         let filters_size = kernels.row_count() * n_rows * n_columns;
 
         let inner_process = move |partition: &Partition| {
@@ -363,9 +390,65 @@ impl Matrix {
         Matrix::from(batches, filters_size, values)
     }
 
-    // pub fn full_convolution(&self, kernels: & Matrix, k_d: Dimensions, i_d: &Dimensions) -> Self {
-    //     Self::from(1, 1, vec![0.])
-    // }
+    pub fn full_outer_convolution(&self, kernels: &Matrix, k_d: &Dimensions, i_d: &Dimensions) -> Self {
+        let batches = self.row_count();
+
+        let partitioner = &Partitioner::with_partitions(
+            batches, 
+            1);//thread::available_parallelism().unwrap().get());
+
+        // Adjust for full outer convolution (don't padd, just do bounds checking)
+        let i_rows = (i_d.height - k_d.height + 1) as isize;
+        let i_columns = (i_d.width - k_d.width + 1) as isize;
+
+        let o_rows = i_d.height;
+        let o_columns =i_d.width;
+        let filters_size = kernels.row_count() * o_rows * o_columns;
+
+        let inner_process = move |partition: &Partition| {
+            let mut partition_values = vec![0.; partition.get_size() * filters_size];
+            for batch_index in partition.get_range() {
+                //let input = self.row(batch_index);
+
+                let batch_offset = batch_index * o_rows * o_columns;
+                for filter_index in 0..kernels.row_count() {
+                    //let filter = kernels.row(filter_index);
+                    let filter_offset = filter_index * k_d.height * k_d.width; 
+
+                    for row in 0..o_rows {
+                        for column in 0..o_columns {
+                            let mut c_accum = 0.;
+                            for kernel_row in 0..k_d.height {
+                                for kernel_column in 0..k_d.width {
+                                    let input_row = row as isize - (k_d.height - kernel_row - 1) as isize;
+                                    let input_column = column as isize - (k_d.width - kernel_column - 1) as isize;
+
+                                    if input_row >= 0 && input_row < i_rows &&
+                                       input_column > 0 && input_column < i_columns {
+                                        let input_offset = (batch_index as isize) * i_rows * i_columns;
+
+                                        c_accum += self.values[(input_offset + input_row * i_columns + input_column) as usize] 
+                                            * kernels.values[filter_offset + kernel_row * k_d.width + kernel_column];
+                                    }
+
+                                    //c_accum += dot_product_simd3(x, y)
+                                }
+                            }
+
+                            print!("{c_accum}, ");
+                            partition_values[batch_offset + row * o_columns + column] = c_accum;
+                            //partition_values.push(c_accum);
+                        }
+                    }
+                }
+            }
+
+            partition_values
+        };
+
+        let values = partitioner.parallelized(inner_process);
+        Matrix::from(batches, filters_size, values)
+    }
 
     /// Pads a matrix with rows and columns specified by p_d
     pub fn pad(&self, p_d: Dimensions) -> Self {
@@ -443,6 +526,8 @@ impl Matrix {
 #[cfg(test)]
 mod tests {
     //use colored::Colorize;
+
+    use colored::Colorize;
 
     use super::*;
 
@@ -622,5 +707,29 @@ mod tests {
         //let msg = format!("{:?}", actual).bright_purple();
         //println!("{msg}");
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_full_outer_convolution() {
+        let input = Matrix::from(1, 3 * 3, vec![
+            1., 2., 3.,
+            4., 5., 6.,
+            7., 8., 9.
+        ]);
+        
+        let kernels = Matrix::from(1, 3 * 3, vec![
+            0., 1., 0.,
+            1., -4., 1.,
+            0., 1., 0.
+        ]);
+
+        let actual = input.full_outer_convolution(
+            &kernels, 
+            &Dimensions { width: 3, height: 3 },
+            &Dimensions { width: 5, height: 5 }
+        );
+
+        let msg = format!("{:?}", actual).bright_purple();
+        println!("{msg}");
     }
 }

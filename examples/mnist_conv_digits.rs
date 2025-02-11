@@ -25,17 +25,17 @@ pub fn from_sample_digit_images(sample: &mut Sample<DigitImage>, requested_batch
 pub fn handwritten_digits(load_from_file: bool) {
     let time_to_run = timed::timed(|| {
         // Training hyper-parameters
-        let backup_cycle = 2;
-        let total_epochs = 4;
+        let backup_cycle = 1;
+        let total_epochs = 10;
         let training_sample = 60000;
-        let batch_size = 500;
+        let batch_size = 250;
         let batches = training_sample / batch_size;
         let v_batch_size = std::cmp::min(batches * batch_size / 5, 9999);        
         let mut lowest_loss = f32::INFINITY;
 
         // Create layers
         let convo = Convolution2d::new(
-            32, 
+            24, 
             1, 
             Dimensions { width: 3, height: 3 } ,
             Dimensions { width: 28, height: 28 });
@@ -94,11 +94,12 @@ pub fn handwritten_digits(load_from_file: bool) {
                 NeuralNetwork::backward(&mut nn_nodes, &dvalues6, &mut forward_stack);
 
                 // Only uncomment if network training is slow to see if accuracy and data loss is actually improving
-                if _batch % 10 == 0 {
+                if _batch % 50 == 0 {
+                    let batch = _batch + 1;
                     // Only needed when outputting data loss for debugging purposes.
                     let sample_losses = forward_categorical_cross_entropy_loss(&predictions, &targets);
                     let data_loss = sample_losses.read_values().into_iter().sum::<f32>() / sample_losses.len() as f32;            
-                    print!("Training to batch #{_batch} complete | Data Loss: {data_loss}");
+                    print!("Training to batch #{batch} complete | Data Loss: {data_loss}");
                 
                     let accuracy = accuracy(&predictions, &targets);
                     println!(" | Accuracy: {accuracy}");

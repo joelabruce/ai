@@ -1,6 +1,7 @@
+use colored::Colorize;
 use rand_distr::Normal;
 
-use super::{max_pooling::MaxPooling, Matrix, Propagates};
+use super::{learning_rate, max_pooling::MaxPooling, Matrix, Propagates};
 
 pub struct Dimensions {
     pub height: usize,
@@ -42,6 +43,13 @@ impl Convolution2d {
         }
     }
 
+    pub fn backward_dims(&self) -> Dimensions {
+        Dimensions {
+            height: self.i_d.height - self.k_d.height + 1,
+            width: self.i_d.width - self.k_d.width + 1
+        }
+    }
+
     pub fn influences_maxpool(&self, p_d: Dimensions, stride: usize) -> MaxPooling {
         MaxPooling::new(
             self.filters,
@@ -56,16 +64,37 @@ impl Propagates for Convolution2d {
         let r = inputs 
             .valid_cross_correlation(&self.kernels, &self.k_d, &self.i_d);
 
-        
-        //println!()
-            //.add_row_partitioned(&self.biases);
+            // let msg = format!("F -> {:?} x {:?}", r.row_count(), r.column_count()).bright_red();
+            // println!("{msg}");
         r
     }
 
     fn backward<'a>(&'a mut self, dvalues: &Matrix, inputs: &Matrix) -> Matrix {
-        dvalues.len();
-        inputs.len();
-        //todo!()
+        let dims = self.backward_dims();
+        let size = dims.height * dims.width;
+        let k_size = self.k_d.height * self.k_d.width;
+
+        for filter in 0..self.filters {
+            let filter_offset = filter * size;
+
+            let mut gradient = Matrix::from(1, k_size, vec![0.; k_size]);
+            for image in 0..dvalues.row_count() {
+                let delta_image = dvalues.row(image);
+                let d_i = Matrix::from(1, self.i_d.height * self.i_d.width, delta_image.to_vec());
+
+                let delta_filter = &delta_image[filter_offset..filter_offset + size];
+                let d_f = Matrix::from(1, size, delta_filter.to_vec());
+
+                let grad = d_i.valid_cross_correlation(&d_f, &dims, &self.i_d);
+
+                gradient = gradient.add(&grad);
+            }
+
+            gradient = gradient.scale(1. / dvalues.row_count() as f32);
+            for i in 0..k_size {
+                self.kernels.add_at(filter * k_size + i, -learning_rate() * gradient.read_at(i));
+            }
+        }
 
         let capacity = self.kernels.row_count() * self.i_d.height * self.i_d.width;
 

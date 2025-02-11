@@ -108,6 +108,10 @@ impl NeuralNetwork {
                 NeuralNetworkNode::DenseLayer(n) => {
                     to_writer.write_slice_f32(&n.weights.read_values());
                     to_writer.write_slice_f32(&n.biases.read_values());
+                },
+                NeuralNetworkNode::Convolution2dLayer(n) => {
+                    to_writer.write_slice_f32(&n.kernels.read_values());
+                    to_writer.write_slice_f32(&n.biases.read_values());
                 }
                 _ => { }
             }
@@ -156,6 +160,17 @@ impl NeuralNetwork {
                             let biases_floats = NeuralNetwork::read_section(&mut file, columns * rows, CHUNK_SIZE);
                             n.biases = Matrix::from(rows, columns, biases_floats);
                             println!("Loaded weights and biases for dense layer.")
+                        },
+                        NeuralNetworkNode::Convolution2dLayer(n) => {
+                            // Load weights first
+                            let (mut rows, mut columns) = n.kernels.shape();
+                            let kernel_floats = NeuralNetwork::read_section(&mut file, columns * rows, CHUNK_SIZE);
+                            n.kernels = Matrix::from(rows, columns, kernel_floats);
+
+                            (rows, columns) = n.biases.shape();                            
+                            let biases_floats = NeuralNetwork::read_section(&mut file, columns * rows, CHUNK_SIZE);
+                            n.biases = Matrix::from(rows, columns, biases_floats);
+                            println!("Loaded kernels and biases for convolution2d layer.")
                         }
                         _ => { }
                     }
