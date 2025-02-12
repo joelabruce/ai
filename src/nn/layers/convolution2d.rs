@@ -1,4 +1,3 @@
-use colored::Colorize;
 use rand_distr::Normal;
 
 use super::{learning_rate, max_pooling::MaxPooling, Matrix, Propagates};

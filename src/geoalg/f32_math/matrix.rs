@@ -1,4 +1,4 @@
-use std::{ops::Sub, thread};
+use std::thread;
 use rand_distr::{Distribution, Normal, Uniform};
 use crate::{geoalg::f32_math::simd_extensions::dot_product_simd3, nn::layers::convolution2d::Dimensions, Partition, Partitioner};
 
