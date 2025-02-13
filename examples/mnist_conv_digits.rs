@@ -107,7 +107,7 @@ pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
                     let accuracy = 100. * accuracy(&predictions, &targets);
                     let sample_losses = forward_categorical_cross_entropy_loss(&predictions, &targets);
                     let data_loss = sample_losses.read_values().into_iter().sum::<f32>() / sample_losses.len() as f32;            
-                    println!("   Training through batch #{_batch} complete | Accuracy: {accuracy:7.3}% | Loss: {data_loss}");
+                    println!("   Training through batch #{_batch} complete | Accuracy: {accuracy:7.3}% | Loss: {data_loss:.5}");
                 }
             }
 
@@ -126,7 +126,7 @@ pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
             let accuracy = 100. * accuracy(&v_predictions, &v_targets);
             let v_sample_losses = forward_categorical_cross_entropy_loss(&v_predictions, &v_targets);
             let v_data_loss = v_sample_losses.read_values().into_iter().sum::<f32>() / v_sample_losses.len() as f32;
-            print!(" | Accuracy: {accuracy:7.3}% | Loss: {v_data_loss}");
+            print!(" | Accuracy: {accuracy:7.3}% | Loss: {v_data_loss:.5}");
 
             if v_data_loss < lowest_loss { lowest_loss = v_data_loss; println!(); } else { println!(" *Warning, validation has not improved! Consider stopping training here."); }
         }
@@ -137,5 +137,5 @@ pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
 
 // Runs a neural network for handwritten digit recogniton.
 fn main() {
-    handwritten_digits(true, false);
+    handwritten_digits(true, true);
 }
