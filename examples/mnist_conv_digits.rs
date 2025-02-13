@@ -2,6 +2,8 @@
 // Use the following command to run in release mode:
 // cargo run --release --example mnist_digits
 
+use std::io::Write;
+
 use ai::{digit_image::DigitImage, geoalg::f32_math::matrix::Matrix, nn::{activation_functions::{accuracy, backward_categorical_cross_entropy_loss_wrt_softmax, forward_categorical_cross_entropy_loss, RELU, SOFTMAX}, layers::{convolution2d::{Convolution2d, Dimensions}, input::Input}, neural::{NeuralNetwork, NeuralNetworkNode}}, output_bin_writer::OutputBinWriter, statistics::sample::Sample, timed};
 
 /// Creates an input layer drawn randomly from a sample.
@@ -22,20 +24,20 @@ pub fn from_sample_digit_images(sample: &mut Sample<DigitImage>, requested_batch
     )
 }
 
-pub fn handwritten_digits(load_from_file: bool) {
+pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
     let time_to_run = timed::timed(|| {
         // Training hyper-parameters
         let backup_cycle = 1;
         let total_epochs = 10;
         let training_sample = 60000;
-        let batch_size = 250;
+        let batch_size = 125;
         let batches = training_sample / batch_size;
         let v_batch_size = std::cmp::min(batches * batch_size / 5, 9999);        
         let mut lowest_loss = f32::INFINITY;
 
         // Create layers
         let convo = Convolution2d::new(
-            24, 
+            8, 
             1, 
             Dimensions { width: 3, height: 3 } ,
             Dimensions { width: 28, height: 28 });
@@ -80,7 +82,13 @@ pub fn handwritten_digits(load_from_file: bool) {
         // Create Layers in network
         let mut forward_stack: Vec<Matrix>;
 
+        println!("-Beginning training-");
         for epoch in epoch_offset + 1..=epoch_offset + total_epochs {
+            print!("Epoch # {epoch} ... ");
+            std::io::stdout().flush().unwrap();
+
+            if include_batch_output { println!(); }
+
             training_sample.reset();
             for _batch in 0..batches {
                 let (il, targets) = from_sample_digit_images(&mut training_sample, batch_size);
@@ -94,23 +102,20 @@ pub fn handwritten_digits(load_from_file: bool) {
                 NeuralNetwork::backward(&mut nn_nodes, &dvalues6, &mut forward_stack);
 
                 // Only uncomment if network training is slow to see if accuracy and data loss is actually improving
-                if _batch % 50 == 0 {
-                    let batch = _batch + 1;
+                if include_batch_output && _batch > 0 && _batch % 100 == 0 {
                     // Only needed when outputting data loss for debugging purposes.
+                    let accuracy = 100. * accuracy(&predictions, &targets);
                     let sample_losses = forward_categorical_cross_entropy_loss(&predictions, &targets);
                     let data_loss = sample_losses.read_values().into_iter().sum::<f32>() / sample_losses.len() as f32;            
-                    print!("Training to batch #{batch} complete | Data Loss: {data_loss}");
-                
-                    let accuracy = accuracy(&predictions, &targets);
-                    println!(" | Accuracy: {accuracy}");
+                    println!("   Training through batch #{_batch} complete | Accuracy: {accuracy:7.3}% | Loss: {data_loss}");
                 }
             }
 
             let backup_to_write = 1 + (epoch - 1) % backup_cycle;
-            print!("Epoch #{epoch} completed. Saving cycle {backup_to_write}...");
+            print!("Complete. Saving cycle # {backup_to_write} ... ");
             let mut network_saver = OutputBinWriter::new(format!("{trained_model_location}{backup_to_write}.nn").as_str());
             NeuralNetwork::save_network(epoch, &nn_nodes, &mut network_saver);
-            print!("Completed");
+            print!("Complete");
 
             // Validate updated neural network against validation inputs it hasn't been trained on.
             // Clone the validation layer, so it is not consumed
@@ -118,12 +123,12 @@ pub fn handwritten_digits(load_from_file: bool) {
             forward_stack = NeuralNetwork::forward(vl.clone(), &mut nn_nodes);
             let v_predictions = &(SOFTMAX.f)(&forward_stack.pop().unwrap());
             
-            let accuracy = accuracy(&v_predictions, &v_targets);
+            let accuracy = 100. * accuracy(&v_predictions, &v_targets);
             let v_sample_losses = forward_categorical_cross_entropy_loss(&v_predictions, &v_targets);
             let v_data_loss = v_sample_losses.read_values().into_iter().sum::<f32>() / v_sample_losses.len() as f32;
-            println!(" | Accuracy: {accuracy} | Validation Loss: {v_data_loss}");
+            print!(" | Accuracy: {accuracy:7.3}% | Loss: {v_data_loss}");
 
-            if v_data_loss < lowest_loss { lowest_loss = v_data_loss } else { println!("Warning, validation has not improved! Consider stopping training here."); }
+            if v_data_loss < lowest_loss { lowest_loss = v_data_loss; println!(); } else { println!(" *Warning, validation has not improved! Consider stopping training here."); }
         }
     });
 
@@ -132,5 +137,5 @@ pub fn handwritten_digits(load_from_file: bool) {
 
 // Runs a neural network for handwritten digit recogniton.
 fn main() {
-    handwritten_digits(true);
+    handwritten_digits(true, false);
 }
