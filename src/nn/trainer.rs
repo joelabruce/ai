@@ -4,14 +4,15 @@ use crate::{digit_image::DigitImage, geoalg::f32_math::matrix::Matrix, nn::{acti
 
 use super::{layers::input::Input, neural::NeuralNetworkNode};
 
-
 pub struct TrainingHyperParameters {
     pub backup_cycle: usize,
     pub total_epochs: usize,
     pub training_sample: usize,
     pub batch_size: usize,
     pub trained_model_location: String,
-    pub batch_inform_size: usize
+    pub batch_inform_size: usize,
+    pub output_accuracy: bool,
+    pub output_loss: bool
 }
 
 /// Creates an input layer drawn randomly from a sample.
@@ -36,10 +37,6 @@ pub fn from_sample_digit_images(sample: &mut Sample<DigitImage>, requested_batch
 /// Unstable.
 pub fn train_network(nn_nodes: &mut Vec<NeuralNetworkNode>, tp: TrainingHyperParameters, load_from_file: bool, include_batch_output: bool) {
     // Training hyper-parameters
-    // let backup_cycle = 1;
-    // let total_epochs = 10;
-    // let training_sample = 60000;
-    // let batch_size = 125;
     let batches = tp.training_sample / tp.batch_size;
     let v_batch_size = std::cmp::min(batches * tp.batch_size / 5, 9999);        
     let trained_model_location = &tp.trained_model_location;
@@ -81,7 +78,7 @@ pub fn train_network(nn_nodes: &mut Vec<NeuralNetworkNode>, tp: TrainingHyperPar
         training_sample.reset();
         for _batch in 0..batches {
             let (il, targets) = from_sample_digit_images(&mut training_sample, tp.batch_size);
-            forward_stack = NeuralNetwork::forward(il,  nn_nodes);
+            forward_stack = NeuralNetwork::forward(il, nn_nodes);
 
             // Forward pass on training data btch
             let predictions = (SOFTMAX.f)(&forward_stack.pop().unwrap());
@@ -92,19 +89,31 @@ pub fn train_network(nn_nodes: &mut Vec<NeuralNetworkNode>, tp: TrainingHyperPar
 
             // Only uncomment if network training is slow to see if accuracy and data loss is actually improving
             if include_batch_output && _batch > 0 && _batch % tp.batch_inform_size == 0 {
+                print!("  Training through batch #{_batch:4} complete ");
+                std::io::stdout().flush().unwrap();
+
                 // Only needed when outputting data loss for debugging purposes.
-                let accuracy = 100. * accuracy(&predictions, &targets);
-                let sample_losses = forward_categorical_cross_entropy_loss(&predictions, &targets);
-                let data_loss = sample_losses.read_values().into_iter().sum::<f32>() / sample_losses.len() as f32;            
-                println!("   Training through batch #{_batch:3} complete | Accuracy: {accuracy:7.3}% | Loss: {data_loss:.5}");
+                if tp.output_accuracy {
+                    let accuracy = 100. * accuracy(&predictions, &targets);
+                    print!("| Accuracy: {accuracy:7.3}% ");
+                }
+
+                if tp.output_loss {
+                    let sample_losses = forward_categorical_cross_entropy_loss(&predictions, &targets);
+                    let data_loss = sample_losses.read_values().into_iter().sum::<f32>() / sample_losses.len() as f32;            
+                    println!("| Loss: {data_loss:.5}");
+                }
             }
         }
 
         let backup_to_write = 1 + (epoch - 1) % tp.backup_cycle;
         print!("Complete. Saving cycle # {backup_to_write} ... ");
+        std::io::stdout().flush().unwrap();
+
         let mut network_saver = OutputBinWriter::new(format!("{trained_model_location}{backup_to_write}.nn").as_str());
         NeuralNetwork::save_network(epoch, &nn_nodes, &mut network_saver);
-        print!("Complete");
+        print!("Complete ");
+        std::io::stdout().flush().unwrap();
 
         // Validate updated neural network against validation inputs it hasn't been trained on.
         // Clone the validation layer, so it is not consumed
@@ -112,11 +121,19 @@ pub fn train_network(nn_nodes: &mut Vec<NeuralNetworkNode>, tp: TrainingHyperPar
         forward_stack = NeuralNetwork::forward(vl.clone(),  nn_nodes);
         let v_predictions = &(SOFTMAX.f)(&forward_stack.pop().unwrap());
         
-        let accuracy = 100. * accuracy(&v_predictions, &v_targets);
+        if tp.output_accuracy {
+            let accuracy = 100. * accuracy(&v_predictions, &v_targets);
+            print!("| Accuracy: {accuracy:7.3}% ");
+        }
+
         let v_sample_losses = forward_categorical_cross_entropy_loss(&v_predictions, &v_targets);
         let v_data_loss = v_sample_losses.read_values().into_iter().sum::<f32>() / v_sample_losses.len() as f32;
-        print!(" | Accuracy: {accuracy:7.3}% | Loss: {v_data_loss:.5}");
+    
+        if tp.output_loss {
+            print!("| Loss: {v_data_loss:.5}");
+        }
 
-        if v_data_loss < lowest_loss { lowest_loss = v_data_loss; println!(); } else { println!(" *Warning, validation has not improved! Consider stopping training here."); }
+        if v_data_loss < lowest_loss { lowest_loss = v_data_loss; } else { print!(" *Warning, validation has not improved! Consider stopping training here."); }
+        println!();
     }
 }
