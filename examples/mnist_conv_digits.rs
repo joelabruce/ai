@@ -2,29 +2,21 @@
 // Use the following command to run in release mode:
 // cargo run --release --example mnist_digits
 
-use ai::{digit_image::DigitImage, geoalg::f32_math::matrix::Matrix, nn::{activation_functions::RELU, layers::{convolution2d::{Convolution2d, Dimensions}, input::Input}, neural::NeuralNetworkNode, trainer::train_network}, statistics::sample::Sample, timed};
-
-/// Creates an input layer drawn randomly from a sample.
-pub fn from_sample_digit_images(sample: &mut Sample<DigitImage>, requested_batch_size: usize) -> (Input, Matrix) {
-    let data_from_sample = sample.random_batch(requested_batch_size);
-
-    let mut pixel_vector = Vec::with_capacity(data_from_sample.len() * 785);
-    let mut target_vector = Vec::with_capacity(data_from_sample.len() * 10);
-    let rows = data_from_sample.len();
-    for datum in data_from_sample {
-        pixel_vector.extend(datum.pixels.clone());
-        target_vector.extend(datum.one_hot_encoded_label());
-    }
-
-    (
-        Input::from(rows, 784, pixel_vector), 
-        Matrix::from(rows, 10, target_vector)
-    )
-}
+use ai::{nn::{activation_functions::RELU, layers::convolution2d::{Convolution2d, Dimensions}, neural::NeuralNetworkNode, trainer::{train_network, TrainingHyperParameters}}, timed};
 
 pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
     let time_to_run = timed::timed(|| {
-        // Create layers
+        // Create hyper-parameters fine-tuned for this example.
+        let tp = TrainingHyperParameters {
+            backup_cycle: 1,
+            total_epochs: 5,
+            training_sample: 60000,
+            batch_size: 125,
+            trained_model_location: "convo_model".to_string(),
+            batch_inform_size: 50
+        };
+
+        // Create layers for network to train on
         let convo = Convolution2d::new(
             8, 
             1, 
@@ -47,7 +39,7 @@ pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
         nn_nodes.push(NeuralNetworkNode::ActivationLayer(RELU));
         nn_nodes.push(NeuralNetworkNode::DenseLayer(dense2));
 
-        train_network(&mut nn_nodes, load_from_file, include_batch_output)
+        train_network(&mut nn_nodes, tp, load_from_file, include_batch_output)
     });
 
     println!("Total time to run: {time_to_run}");
@@ -55,5 +47,6 @@ pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
 
 // Runs a neural network for handwritten digit recogniton.
 fn main() {
-    handwritten_digits(true, false);
+    // Since this example runs slower, we turn include_batch_output to true
+    handwritten_digits(true, true);
 }
