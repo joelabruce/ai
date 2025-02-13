@@ -46,8 +46,14 @@ pub fn train_network(nn_nodes: &mut Vec<NeuralNetworkNode>, tp: TrainingHyperPar
 
     let mut epoch_offset = 0;
     if load_from_file {
-        println!("Trying to load trained neural network...");
-        epoch_offset = NeuralNetwork::attempt_load_network(&tp.trained_model_location, 1, nn_nodes);
+        print!("Try to load trained neural network ... ");
+        match NeuralNetwork::attempt_load_network(&tp.trained_model_location, 1, nn_nodes) {
+            Ok(epochs) => {
+                epoch_offset = epochs;
+                println!("Successful in loading trained neural network!")
+            },
+            Err(msg) => println!("{msg}")
+        }
     }
 
     // Validtion setup

@@ -136,13 +136,13 @@ impl NeuralNetwork {
         floats
     }
 
-    pub fn attempt_load_network(from_file_path: &str, cycle: usize, to_nodes: &mut Vec<NeuralNetworkNode>) -> usize {
+    pub fn attempt_load_network(from_file_path: &str, cycle: usize, to_nodes: &mut Vec<NeuralNetworkNode>) -> Result<usize, String> {
         let file_open_try = File::open(format!("{from_file_path}{cycle}.nn"));
  
         // 4 for 32-bit, 8 for 64-bit
         const CHUNK_SIZE: usize = 4;
 
-        let mut epoch: usize = 0;
+        let epoch;
 
         match file_open_try {
             Ok(mut file) => {   // File could be opened for read
@@ -159,7 +159,7 @@ impl NeuralNetwork {
                             (rows, columns) = n.biases.shape();                            
                             let biases_floats = NeuralNetwork::read_section(&mut file, columns * rows, CHUNK_SIZE);
                             n.biases = Matrix::from(rows, columns, biases_floats);
-                            println!("Loaded weights and biases for dense layer.")
+                            //println!("Loaded weights and biases for dense layer.")
                         },
                         NeuralNetworkNode::Convolution2dLayer(n) => {
                             // Load weights first
@@ -170,20 +170,18 @@ impl NeuralNetwork {
                             (rows, columns) = n.biases.shape();                            
                             let biases_floats = NeuralNetwork::read_section(&mut file, columns * rows, CHUNK_SIZE);
                             n.biases = Matrix::from(rows, columns, biases_floats);
-                            println!("Loaded kernels and biases for convolution2d layer.")
+                            //println!("Loaded kernels and biases for convolution2d layer.")
                         }
                         _ => { }
                     }
                 }
-
-                println!("Success in loading the neural network!");
             }
             _ => {
-                println!("Could not find or open file specified, starting new model.");
+                return Err("Could not find or open file specified, starting new model.".to_string());
             }
         }
 
-        epoch
+        Ok(epoch)
     }
 }
 
