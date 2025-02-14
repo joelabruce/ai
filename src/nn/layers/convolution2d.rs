@@ -104,8 +104,7 @@ impl Propagates for Convolution2d {
 #[cfg(test)]
 
 mod tests {
-    use colored::Colorize;
-
+    use crate::prettify::*;
     use crate::{geoalg::f32_math::matrix::Matrix, nn::layers::Propagates};
 
     use super::*;
@@ -146,7 +145,6 @@ mod tests {
         ]);
 
         let output = cv2d.forward(&inputs);
-        let conv_result = format!("{:?}", output).bright_cyan();
-        println!("{conv_result}");
+        println!("{BRIGHT_CYAN}{:?}", output);
     }
 }
