@@ -1,4 +1,6 @@
-use std::thread;
+use std::{ops::Index, thread};
+use rand_distr::{Distribution, Normal, Uniform};
+
 use crate::partitions::{Partition, Partitioner};
 
 use super::{shape::Shape, simd_extensions::dot_product_simd3};
@@ -9,10 +11,34 @@ pub struct Tensor {
     values: Vec<f32>
 }
 
+impl Index<usize> for Tensor {
+    type Output = f32;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.values[index]
+    }
+}
+
 impl Tensor {
     /// Creates a new tensor with specified shape.
     pub fn new(shape: Shape, values: Vec<f32>) -> Self { 
         Tensor { shape, values } 
+    }
+
+    pub fn new_randomized_uniform(shape: Shape, uniform: Uniform<f32>) -> Self {
+        let mut rng = rand::thread_rng();
+        let element_count = shape.size();
+        let values = uniform.sample_iter(&mut rng).take(element_count).collect();
+
+        Tensor::new(shape, values)
+    }
+
+    pub fn new_randomized_normal(shape: Shape, normal: Normal<f32>) -> Self {
+        let mut rng = rand::thread_rng();
+        let element_count = shape.size();        
+        let values = normal.sample_iter(&mut rng).take(element_count).collect();
+
+        Tensor::new(shape, values)
     }
 
     /// Creates a tensor specified by values, the shapes is 1-d with size set to values.len().
@@ -25,6 +51,11 @@ impl Tensor {
         Tensor::new(Shape::d2(rows, columns), values)
     }
 
+    /// Get a stream to underlying values.
+    pub fn stream(&self) -> &[f32] {
+        &self.values
+    }
+
     /// Gets a contiguous subset of values.
     /// Experimental.
     pub fn slice(&self, start: Shape, end: Shape) -> &[f32] {
@@ -32,6 +63,25 @@ impl Tensor {
         let end = self.shape.index_at(&end);
 
         &self.values[start..end]
+    }
+
+    pub fn mul_element_wise(&self, rhs: &Tensor) -> Self {
+        let partition_strategy = &Partitioner::with_partitions_simd(
+            self.shape.size(), 
+            thread::available_parallelism().unwrap().get());
+
+        let inner_process = |partition: &Partition| {
+            let mut partition_values: Vec<f32> = Vec::with_capacity(partition.get_size());
+            for i in partition.get_range() {
+                partition_values.push(self.values[i] * rhs.values[i]);
+            }
+
+            partition_values
+        };
+
+        let values = partition_strategy.parallelized(inner_process);
+
+        Self::new(self.shape.clone(), values)
     }
 
     /// Lhs: Assumed shape is (batches, image height, image width, input channels) where inpput channels is 1 for grey scale, 3 for rgb, 4 for rgba
@@ -54,7 +104,6 @@ impl Tensor {
                         for column in 0..o_columns {
                             let mut c_accum = 0.;
 
-                            // Slide kernel window horizontally and then vertically
                             // Since we are doing optimized dot_products, only need to move down the rows
                             for kernel_row in 0..filters.shape.axis_len(1) {
                                 let start = self.shape.index_at(&Shape::new(vec![batch_index, row + kernel_row, column, 0]));

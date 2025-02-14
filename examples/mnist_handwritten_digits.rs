@@ -15,7 +15,8 @@ pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
             trained_model_location: "dense_model".to_string(),
             batch_inform_size: 10,
             output_accuracy: true,
-            output_loss: false
+            output_loss: false,
+            save: true
         };
         
         // Create layers

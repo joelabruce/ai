@@ -15,7 +15,8 @@ pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
             trained_model_location: "convo_model".to_string(),
             batch_inform_size: 50,
             output_accuracy: true,
-            output_loss: true
+            output_loss: true,
+            save: true
         };
 
         // Create layers for network to train on

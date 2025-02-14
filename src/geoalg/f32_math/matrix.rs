@@ -19,17 +19,21 @@ pub struct Matrix {
 
 impl Matrix {
     /// Returns size of underlying vector.
+    /// Tensor.shape.size
     pub fn len(&self) -> usize { self.values.len() }
 
     /// Returns number of rows this matrix has.
+    /// Tensor.shape.axis_len
     pub fn row_count(&self) -> usize { self.rows }
 
     /// Returns number of columns this matrix has.
+    /// Tensor.shape.axis_len
     pub fn column_count(&self) -> usize { self.columns }
 
     pub fn shape(&self) -> (usize, usize) { (self.rows, self.columns) }
 
     /// Returns a slice of the values this matrix has.
+    /// Tensor.stream
     pub fn read_values(&self) -> &[f32] { &self.values }
 
     pub fn add_at(&mut self, i: usize, value: f32) {
@@ -37,6 +41,7 @@ impl Matrix {
     }
 
     /// Reads value at specified index.
+    /// Tensor.index
     pub fn read_at(&self, index: usize) -> f32 {
         assert!(index < self.len());
         self.values[index]
@@ -53,6 +58,7 @@ impl Matrix {
     }
 
     /// Returns a contiguous slice of data representing columns in the matrix.
+    /// Tensor.Slice
     pub fn row(&self, row_index: usize) -> &[f32] {
         assert!(row_index < self.rows, "Tried to get a row that was out of bounds.");
 
@@ -75,6 +81,7 @@ impl Matrix {
     }
 
     /// Returns an rows x column matrix filled with random values specified by uniform distribution.
+    /// In Tensor
     pub fn new_randomized_uniform(rows: usize, columns: usize, uniform: Uniform<f32>) -> Self {
         assert!(columns > 0);
         assert!(rows > 0);
@@ -86,6 +93,7 @@ impl Matrix {
         Self::from(rows, columns, values)
     }
 
+    /// In Tensor
     pub fn new_randomized_normal(rows: usize, columns: usize, normal: Normal<f32>) -> Self {
         let mut rng = rand::thread_rng();
         let element_count = columns * rows;        
@@ -96,6 +104,7 @@ impl Matrix {
 
     /// Returns transpose of matrix.
     /// Partitioner implementation complete.
+    /// Todo: Port to Tensor
     pub fn transpose(&self) -> Self {
         if self.rows == 1 || self.columns == 1 {
             return Self::from(self.columns, self.rows, self.values.clone());

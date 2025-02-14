@@ -12,7 +12,8 @@ pub struct TrainingHyperParameters {
     pub trained_model_location: String,
     pub batch_inform_size: usize,
     pub output_accuracy: bool,
-    pub output_loss: bool
+    pub output_loss: bool,
+    pub save: bool
 }
 
 /// Creates an input layer drawn randomly from a sample.
@@ -106,12 +107,15 @@ pub fn train_network(nn_nodes: &mut Vec<NeuralNetworkNode>, tp: TrainingHyperPar
             }
         }
 
-        let backup_to_write = 1 + (epoch - 1) % tp.backup_cycle;
-        print!("Complete. Saving cycle # {backup_to_write} ... ");
-        std::io::stdout().flush().unwrap();
+        if tp.save {
+            let backup_to_write = 1 + (epoch - 1) % tp.backup_cycle;
+            print!("Complete. Saving cycle # {backup_to_write} ... ");
+            std::io::stdout().flush().unwrap();
 
-        let mut network_saver = OutputBinWriter::new(format!("{trained_model_location}{backup_to_write}.nn").as_str());
-        NeuralNetwork::save_network(epoch, &nn_nodes, &mut network_saver);
+            let mut network_saver = OutputBinWriter::new(format!("{trained_model_location}{backup_to_write}.nn").as_str());
+            NeuralNetwork::save_network(epoch, &nn_nodes, &mut network_saver);
+        }
+
         print!("Complete ");
         std::io::stdout().flush().unwrap();
 
