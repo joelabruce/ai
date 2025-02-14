@@ -172,8 +172,7 @@ impl Partitioner {
 
 #[cfg(test)]
 mod tests {
-    use colored::Colorize;
-
+    use crate::prettify::*;
     use crate::{geoalg::f32_math::{matrix::Matrix, optimized_functions::dot_product_of_vector_slices}, partitions::Partitioner};
 
     use super::dot_product_simd3;
@@ -255,9 +254,8 @@ mod tests {
         let expected = dot_product_of_vector_slices(&lhs, &rhs);
         let actual = dot_product_simd3(&lhs, &rhs);
         
-        let error = (actual - expected).abs().log10();        
-        let msg = format!("Dot product error: {error}").bright_green();
-        println!("{msg}");
+        let error = (actual - expected).abs().log10();
+        println!("{GREEN}Dot product error: {error}{RESET}");
     }
 
     #[test]
