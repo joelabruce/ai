@@ -1,3 +1,5 @@
+use std::ops::Index;
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct Shape {
     dimensions: Vec<usize>,
@@ -7,6 +9,12 @@ pub struct Shape {
     size: usize,
 }
 
+impl Index<usize> for Shape {
+    type Output = usize;
+
+    fn index(&self, index: usize) -> &Self::Output { &self.dimensions[index] }
+}
+
 impl Shape {
     /// Creates a 1-dimensional shape.
     pub fn d1(columns: usize) -> Self { Self::new(vec![columns]) }
@@ -14,7 +22,13 @@ impl Shape {
     /// Creates a 2-dimensional shape (row-major).
     pub fn d2(rows: usize, columns: usize) -> Self { Self::new(vec![rows, columns]) } 
 
-    /// Generalized shape creation
+    /// Creates a 3-dimensional shape.
+    pub fn d3(i: usize, j: usize, k: usize) -> Self { Self::new(vec![i, j, k]) }
+
+    /// Creates a 4-dimensional shape.
+    pub fn d4(i: usize, j: usize, k: usize, l: usize) -> Self { Self::new(vec![i, j, k, l]) }
+
+    /// Generalized shape creation.
     pub fn new(dimensions: Vec<usize>) -> Self {
         let (strides, size) = Shape::compute_strides(&dimensions);
 
@@ -36,12 +50,8 @@ impl Shape {
     /// Gets total size of shape.
     pub fn size(&self) -> usize { self.size }
 
-    /// Get length of dimension.
-    /// Might consider renaming.
-    pub fn axis_len(&self, axis: usize) -> usize {
-        assert!(axis < self.dimensions.len(), "Cannot get axis_len for non-existant axis.");
-        self.dimensions[axis]
-    }
+    /// Gets number of dimensions in shape.
+    pub fn len(&self) -> usize { self.dimensions.len() }
 
     /// Gets offset for specific axis.
     pub fn stride_for(&self, axis: usize) -> usize {
@@ -54,7 +64,7 @@ impl Shape {
         assert_eq!(self.dimensions.len(), coordinate.dimensions.len(), "Coordinate outside of shape bounds.");
         let mut index = 0;
         for axis in 0..self.dimensions.len() {            
-            assert!(self.axis_len(axis) > coordinate.dimensions[axis]);
+            assert!(self[axis] > coordinate.dimensions[axis]);
             index += self.stride_for(axis) * coordinate.dimensions[axis];
         }
 
@@ -70,22 +80,22 @@ mod tests {
     fn test_axis() {
         let shape = Shape::new(vec![5, 4, 3, 2]);
 
-        let actual = shape.axis_len(0);
+        let actual = shape[0];
         assert_eq!(actual, 5);
 
-        let actual = shape.axis_len(1);
+        let actual = shape[1];
         assert_eq!(actual, 4);
 
-        let actual = shape.axis_len(2);
+        let actual = shape[2];
         assert_eq!(actual, 3);
 
-        let actual = shape.axis_len(3);
+        let actual = shape[3];
         assert_eq!(actual, 2);
     }
 
     #[test]
 
-    fn test_stride() {
+    fn test_stride_and_size() {
         let shape = Shape::new(vec![5, 4, 3, 2]);
 
         let actual = shape.stride_for(3);
@@ -99,6 +109,9 @@ mod tests {
 
         let actual = shape.stride_for(0);
         assert_eq!(actual, 24);
+
+        let actual = shape.size;
+        assert_eq!(actual, 120);
     }
 
     #[test]

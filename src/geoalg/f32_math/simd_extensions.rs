@@ -36,6 +36,7 @@ pub fn dot_product_simd3(lhs: &[f32], rhs: &[f32]) -> f32 {
 // }
 
 impl Matrix {
+    /// Now in Tensor
     pub fn scale_simd(&self, scalar: f32) -> Self {
         let partitioner = Partitioner::with_partitions_simd(self.len(), 16);
 
@@ -73,7 +74,7 @@ impl Matrix {
         Self::from(self.row_count(), self.column_count(), values)
     }
 
-    /// TODO
+    /// Now in Tensor.
     pub fn mul_element_wise_simd(&self, rhs: &Matrix) -> Self {
         assert!(self.row_count() == rhs.row_count() && self.column_count() == rhs.column_count(), "When element-wise multiplying two matrices, they must have same order.");
         
@@ -124,7 +125,7 @@ impl Partitioner {
         // How many total simds can we accomodate?
         let simd_per_lane = count / SIMD_LANES;
         if simd_per_lane < 1 {
-        // Not enough data for a full SIMD operation.
+        // Not enough data for a full SIMD operation, let alone multi-threading.
             partitions = vec![Partition::new(0, count - 1)];
             return Partitioner { partitions };
         }

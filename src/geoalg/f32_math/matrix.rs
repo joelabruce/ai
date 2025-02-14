@@ -68,6 +68,7 @@ impl Matrix {
     }
 
     /// Returns a row x column matrix filled with random values between -1.0 and 1.0 inclusive.
+    /// Deprecated
     pub fn new_randomized_z(rows: usize, columns: usize) -> Self {
         assert!(columns > 0);
         assert!(rows > 0);
@@ -162,6 +163,7 @@ impl Matrix {
     /// Faster multiplcation when you need to multiply the transposed matrix of rhs.
     /// Avoids calculating the transpose twice.
     /// Partitioner implementation complete.
+    /// Now in Tensor.
     pub fn mul_with_transpose(&self, rhs: &Matrix) -> Matrix {
         assert_eq!(self.columns, rhs.columns, "When multiplying with transposed, columns must be equal for lhs and rhs.");
 

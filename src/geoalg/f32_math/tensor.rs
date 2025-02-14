@@ -25,6 +25,7 @@ impl Tensor {
         Tensor { shape, values } 
     }
 
+    /// Creates a tensor with uniform distribution of random values.
     pub fn new_randomized_uniform(shape: Shape, uniform: Uniform<f32>) -> Self {
         let mut rng = rand::thread_rng();
         let element_count = shape.size();
@@ -33,6 +34,7 @@ impl Tensor {
         Tensor::new(shape, values)
     }
 
+    /// Creates a tensor with normal distribution of random values.
     pub fn new_randomized_normal(shape: Shape, normal: Normal<f32>) -> Self {
         let mut rng = rand::thread_rng();
         let element_count = shape.size();        
@@ -41,20 +43,18 @@ impl Tensor {
         Tensor::new(shape, values)
     }
 
-    /// Creates a tensor specified by values, the shapes is 1-d with size set to values.len().
+    /// Creates a vector tensor specified by values.
     pub fn vector(values: Vec<f32>) -> Self {
         Tensor::new(Shape::d1(values.len()), values)
     }
 
-    /// Creates a tensor that is a row-major matrix with supplied values.
+    /// Creates a row-major matrix tensor.
     pub fn matrix(rows: usize, columns: usize, values: Vec<f32>) -> Self {
         Tensor::new(Shape::d2(rows, columns), values)
     }
 
     /// Get a stream to underlying values.
-    pub fn stream(&self) -> &[f32] {
-        &self.values
-    }
+    pub fn stream(&self) -> &[f32] { &self.values }
 
     /// Gets a contiguous subset of values.
     /// Experimental.
@@ -65,6 +65,59 @@ impl Tensor {
         &self.values[start..end]
     }
 
+    /// Will matrix multiply two tensors, with the assumption that rhs has already been transposed.
+    /// Will use the last two dimensions, does not yet support batching or broadcasting.
+    /// * For now assumes only 1 matrix per tensor, will update when needed.
+    pub fn mul_transpose_simd(&self, rhs: &Self) -> Self {
+        assert!(self.shape.len() >= 2 && rhs.shape.len() >= 2, "Both tensors must have a minimum of 2 dimensions each.");
+
+        let lhs_row_dimension = self.shape.len() - 2;
+        let lhs_rows = self.shape[lhs_row_dimension];
+        let lhs_stride = self.shape.stride_for(lhs_row_dimension);
+
+        let rhs_row_dimension = rhs.shape.len() - 2;
+        let rhs_rows = rhs.shape[rhs_row_dimension];
+        let rhs_stride = rhs.shape.stride_for(rhs_row_dimension);
+        
+        let partition_strategy = Partitioner::with_partitions(
+            lhs_rows,
+            thread::available_parallelism().unwrap().get());
+
+        let inner_process = move |partition: &Partition| {
+            let mut partition_values: Vec<f32> = Vec::with_capacity(partition.get_size() * rhs_rows);
+            
+            let mut lhs_start = 0;
+            let mut lhs_end = lhs_stride;
+            for _row in partition.get_range() {
+                // Grab the row from self
+                let l_slice = &self.stream()[lhs_start..lhs_end];
+
+                let mut rhs_start = 0;
+                let mut rhs_end = rhs_stride;
+                for _transposed_row in 0..rhs_rows {
+                    // Grab the row from rhs
+                    let r_slice = &rhs.stream()[rhs_start..rhs_end];
+
+                    let dot_product = dot_product_simd3(&l_slice, &r_slice);
+                    partition_values.push(dot_product);
+
+                    rhs_start = rhs_end;
+                    rhs_end += rhs_stride;
+                }
+
+                lhs_start = lhs_end;
+                lhs_end += lhs_stride;
+            }
+            partition_values
+        };
+
+        let values = partition_strategy.parallelized(inner_process);
+        Self::new(Shape::d2(lhs_rows, rhs_rows), values)
+    }
+
+    /// Multiplies each element in lhs with the rhs element.
+    /// Does not require the same shape, only that the size of both tensors are the same.
+    ///  * May lead to unexpected behavior, will change if needed.
     pub fn mul_element_wise_simd(&self, rhs: &Tensor) -> Self {
         let partition_strategy = &Partitioner::with_partitions_simd(
             self.shape.size(), 
@@ -75,9 +128,10 @@ impl Tensor {
     
                 // Avoids doing division and unnecessary multiplications
                 let return_slice: &mut Vec<f32> = &mut vec![0.; SIMD_LANES];            
-                let mut cursor = partition.get_start();
-                while cursor + SIMD_LANES <= partition.get_end() {
-                    let range = cursor..cursor + SIMD_LANES;
+                let mut cursor_start = partition.get_start();
+                let mut cursor_end = cursor_start + SIMD_LANES;
+                while cursor_end <= partition.get_end() {
+                    let range = cursor_start..cursor_start + SIMD_LANES;
                     let x_simd = Simd::<f32, SIMD_LANES>::from_slice(&self.stream()[range.clone()]);
                     let y_simd = Simd::<f32, SIMD_LANES>::from_slice(&rhs.stream()[range.clone()]);
     
@@ -85,15 +139,17 @@ impl Tensor {
     
                     r_simd.copy_to_slice(return_slice);
                     partition_values.extend_from_slice(return_slice);
-                    cursor += SIMD_LANES;
+
+                    cursor_start = cursor_end;
+                    cursor_end += SIMD_LANES;
                 }
     
                 // Checks to see if there are any remainder chunks to deal with
-                if cursor > partition.get_end() { cursor -= SIMD_LANES; }
+                if cursor_end > partition.get_end() { cursor_end -= SIMD_LANES; }
     
                 // Does normal multiplication for remaining elements that cannot fit into simd.
                 // If using Partitioner::with_partitions_simd, this should only execute at most 1 time for the last thread.
-                for i in cursor..=partition.get_end() {
+                for i in cursor_end..=partition.get_end() {
                     partition_values.push(self[i] * rhs[i]);
                 }
     
@@ -105,34 +161,77 @@ impl Tensor {
         Self::new(self.shape.clone(), values)
     }
 
+    /// Multiplies every element in tensor by scalar and returns the result.
+    /// Optimized via multi-threading and SIMD.
+    pub fn scale_simd(&self, scalar: f32) -> Self {
+        let partitioner = Partitioner::with_partitions_simd(
+            self.shape.size(), 
+            thread::available_parallelism().unwrap().get());
+
+        let y_simd = Simd::<f32, SIMD_LANES>::splat(scalar);
+        let inner_process = |partition: &Partition| {
+            let mut partition_values: Vec<f32> = Vec::with_capacity(partition.get_size());
+        
+            // Avoids doing division and unnecessary multiplications
+            let return_slice: &mut Vec<f32> = &mut vec![0.; SIMD_LANES];
+            let mut cursor_start = partition.get_start();
+            let mut cursor_end = cursor_start + SIMD_LANES;
+            while cursor_end <= partition.get_end() {
+                let x_simd = Simd::<f32, SIMD_LANES>::from_slice(&self.stream()[cursor_start..cursor_end]);
+
+                let r_simd = x_simd * y_simd;
+
+                r_simd.copy_to_slice(return_slice);
+                partition_values.extend_from_slice(return_slice);
+
+                cursor_start = cursor_end;
+                cursor_end += SIMD_LANES;
+            }
+
+            // Checks to see if there are any remainder chunks to deal with
+            if cursor_end > partition.get_end() { cursor_end -= SIMD_LANES; }
+
+            // Does normal multiplication for remaining elements that cannot fit into simd.
+            // If using Partitioner::with_partitions_simd, this should only execute at most 1 time for the last thread.
+            for i in cursor_end..=partition.get_end() {
+                partition_values.push(self[i] * scalar);
+            }
+
+            partition_values
+        };
+
+        let values = partitioner.parallelized(inner_process);
+        Self::new(self.shape.clone(), values)
+    }
+
     /// Lhs: Assumed shape is (batches, image height, image width, input channels) where inpput channels is 1 for grey scale, 3 for rgb, 4 for rgba
     /// filters: Assumed shape is (output channels, kernel height, kernel width, input channels)
     /// Output: Shape is (batches, output channels, output height, output width)
     /// When using more than 1 channel and larger filter sizes, takes better advantage of SIMD
     pub fn batch_valid_cross_correlation_simd(&self, filters: &Tensor) -> Self {
-        let o_rows = self.shape.axis_len(1) - filters.shape.axis_len(1) + 1;
-        let o_columns = self.shape.axis_len(2) - filters.shape.axis_len(2) + 1;
+        let o_rows = self.shape[1] - filters.shape[1] + 1;
+        let o_columns = self.shape[2] - filters.shape[2] + 1;
 
         let partitioner = &Partitioner::with_partitions_simd(
-            self.shape.axis_len(0),
+            self.shape[0],
             thread::available_parallelism().unwrap().get());
 
         let inner_process = move |parition: &Partition| {
             let mut partition_values = Vec::with_capacity(parition.get_size() * filters.shape.size());
             for batch_index in parition.get_range() {
-                for filter_index in 0..filters.shape.axis_len(0) {
+                for filter_index in 0..filters.shape[0] {
                     for row in 0..o_rows {
                         for column in 0..o_columns {
                             let mut c_accum = 0.;
 
                             // Since we are doing optimized dot_products, only need to move down the rows
-                            for kernel_row in 0..filters.shape.axis_len(1) {
+                            for kernel_row in 0..filters.shape[1] {
                                 let start = self.shape.index_at(&Shape::new(vec![batch_index, row + kernel_row, column, 0]));
-                                let end = start + filters.shape.axis_len(2);
+                                let end = start + filters.shape[2];
                                 let input = &self.values[start..end];
 
                                 let start = filters.shape.index_at(&Shape::new(vec![filter_index, kernel_row, 0, 0]));
-                                let end = start + filters.shape.axis_len(2);
+                                let end = start + filters.shape[2];
                                 let filter = &filters.values[start..end];
 
                                 c_accum += dot_product_simd3(input, filter);
@@ -149,7 +248,7 @@ impl Tensor {
 
         let values = partitioner.parallelized(inner_process);
         Self::new(
-            Shape::new(vec![self.shape.axis_len(0), filters.shape.axis_len(0), o_rows, o_columns]),
+            Shape::new(vec![self.shape[0], filters.shape[0], o_rows, o_columns]),
             values
         )
     }
@@ -195,6 +294,54 @@ mod tests {
                 vec![1, 0, 1]),
             Shape::new(vec![2, 0, 0]));
         println!("{:?}", actual);
+    }
+
+    #[test]
+    fn test_scale_simd() {
+        let tc = Tensor::vector(vec![10., 100., 0., 20.]);
+
+        let actual = tc.scale_simd(10.);
+        let expected = Tensor::vector(vec![100., 1000., 0., 200.]);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_mul_transpose_simd() {
+        let lhs = Tensor::new(
+            Shape::new(vec![1, 4, 3]),
+            vec![
+                1., 2., 3.,
+                4., 5., 6.,
+                7., 8., 9.,
+                10., 11., 12.
+            ]
+        );
+
+        // Assume already transposed.
+        let rhs = Tensor::new(
+            Shape::new(vec![1, 1, 5, 3]),
+            vec![
+                1., 6., 11.,
+                2., 7., 12.,
+                3., 8., 13.,
+                4., 9., 14.,
+                5., 10., 15.
+            ]
+        );
+
+        let expected = Tensor::new(
+            Shape::d2(4, 5),
+            vec! [
+                46., 52., 58., 64., 70.,
+                100., 115., 130., 145., 160.,
+                154., 178., 202., 226., 250.,
+                208., 241., 274., 307., 340.
+            ]
+        );
+
+        let actual = lhs.mul_transpose_simd(&rhs);
+        assert_eq!(actual, expected);
     }
 
     #[test]
