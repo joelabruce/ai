@@ -62,8 +62,7 @@ impl Propagates for MaxPooling {
 
 #[cfg(test)]
 mod tests {
-    use colored::Colorize;
-
+    use crate::prettify::*;
     use crate::{geoalg::f32_math::matrix::Matrix, nn::layers::{convolution2d::Dimensions, Propagates}};
 
     use super::MaxPooling;
@@ -102,8 +101,7 @@ mod tests {
         assert_eq!(forward_output, expected);
 
         // After the forward pass, the output should be a matrix that represents 2 filters of 2x2.
-        let msg = format!("Forward pooling: {:?} <{:?}>", forward_output, pooling.max_indices).bright_magenta();
-        println!("{msg}");
+        println!("{BRIGHT_MAGENTA}Forward pooling: {:?} <{:?}>{RESET}", forward_output, pooling.max_indices);
 
         // Assume these values came from the previous layers back-propagation.
         let dvalues = Matrix::from(1, 2 * 4, vec![
@@ -129,7 +127,6 @@ mod tests {
         assert_eq!(backward_output, expected);
 
         // After backprop, we should get back to 2 filters of 4x4
-        let msg = format!("Backprop pooling: {:?}", backward_output).bright_magenta();
-        println!("{msg}");
+        println!("{BRIGHT_MAGENTA}Backprop pooling: {:?}{RESET}", backward_output);
     }
 }

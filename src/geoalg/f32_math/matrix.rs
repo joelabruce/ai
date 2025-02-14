@@ -534,9 +534,7 @@ impl Matrix {
 
 #[cfg(test)]
 mod tests {
-    //use colored::Colorize;
-
-    use colored::Colorize;
+    use crate::prettify::*;
 
     use super::*;
 
@@ -738,7 +736,6 @@ mod tests {
             &Dimensions { width: 5, height: 5 }
         );
 
-        let msg = format!("{:?}", actual).bright_purple();
-        println!("{msg}");
+        println!("{BRIGHT_MAGENTA}{:?}{RESET}", actual);
     }
 }
