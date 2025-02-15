@@ -36,6 +36,7 @@ impl Matrix {
     /// Tensor.stream
     pub fn read_values(&self) -> &[f32] { &self.values }
 
+    /// Todo: implement in Tensor?
     pub fn add_at(&mut self, i: usize, value: f32) {
         self.values[i] += value;
     }

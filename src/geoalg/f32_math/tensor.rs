@@ -51,7 +51,8 @@ impl Tensor {
         Tensor::new(Shape::d2(rows, columns), values)
     }
 
-    /// Get a stream to underlying values.
+    /// Get a read-only stream to underlying values.
+    /// Needed for simd to be super fast! :D
     pub fn stream(&self) -> &[f32] { &self.values }
 
     /// Gets a contiguous subset of values.

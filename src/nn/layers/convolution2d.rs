@@ -14,7 +14,7 @@ impl Dimensions {
 }
 
 ///
-pub struct Convolution2d {
+pub struct Convolution2dDeprecated {
     pub filters: usize,
     pub kernels: Matrix,        // Same as weights
     pub biases: Matrix,
@@ -23,7 +23,7 @@ pub struct Convolution2d {
     //pub stride: usize,        // Assumes stride of 1 for now.
 }
 
-impl Convolution2d {
+impl Convolution2dDeprecated {
     /// Set channels to 1 for greyscale, 3 for RGB.
     /// *RGB support not implemented yet, so ensure channels is 1.
     pub fn new(filters: usize, channels: usize, k_d: Dimensions, i_d: Dimensions) -> Self {
@@ -33,7 +33,7 @@ impl Convolution2d {
         let normal_term = (2. / fanin).sqrt();
         let normal = Normal::new(0., normal_term).unwrap();
         
-        Convolution2d {
+        Convolution2dDeprecated {
             filters,
             kernels: Matrix::new_randomized_normal(filters, channels * k_d.height * k_d.width, normal),
             biases: Matrix::from(1, filters, biases),
@@ -58,7 +58,7 @@ impl Convolution2d {
     }
 }
 
-impl Propagates for Convolution2d {
+impl Propagates for Convolution2dDeprecated {
     fn forward(&mut self, inputs: &Matrix) -> Matrix {
         let r = inputs 
             .valid_cross_correlation(&self.kernels, &self.k_d, &self.i_d);
@@ -125,7 +125,7 @@ mod tests {
         ]);
 
         // Have two filters
-        let mut cv2d = Convolution2d::new(
+        let mut cv2d = Convolution2dDeprecated::new(
             3,
             1, 
             Dimensions { width: 3, height: 3 } , 

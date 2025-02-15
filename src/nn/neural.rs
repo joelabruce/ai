@@ -12,12 +12,12 @@ use crate::input_csv_reader::*;
 use crate::output_bin_writer::OutputBinWriter;
 use crate::statistics::sample::Sample;
 
-use super::layers::convolution2d::Convolution2d;
+use super::layers::convolution2d::Convolution2dDeprecated;
 use super::layers::max_pooling::MaxPooling;
 
 pub enum NeuralNetworkNode {
     DenseLayer(Dense),
-    Convolution2dLayer(Convolution2d),
+    Convolution2dLayer(Convolution2dDeprecated),
     ActivationLayer(Activation),
     MaxPoolLayer(MaxPooling)
 }

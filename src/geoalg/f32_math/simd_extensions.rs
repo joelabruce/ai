@@ -206,6 +206,8 @@ mod tests {
 
     use super::dot_product_simd3;
 
+    use super::*;
+
     #[test]
     fn test_element_wise_mul_simd() {
         let lhs = Matrix::from(4, 4, vec![
@@ -316,6 +318,24 @@ mod tests {
         // let msg = format!("Partitions: {:?}", x).bright_red();
         // println!("{msg}");
     }
+
+    #[test]
+    pub fn test_partition_unary_simd_with_remainder() {
+        let tc = Partition::new(0, 16);
+
+        let lhs_slice = vec![1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16., 17.];
+
+        let y = 3.;
+        let y_simd = Simd::<f32, SIMD_LANES>::splat(y);
+        let mut partition_values = Vec::with_capacity(17);
+        tc.unary_simd(&mut partition_values, &lhs_slice, 
+            |x_simd| x_simd * y_simd, 
+            |x| x + y);
+
+        let expected = vec![3., 6., 9., 12., 15., 18., 21., 24., 27., 30., 33., 36., 39., 42., 45., 48., 20.];
+        assert_eq!(partition_values, expected);
+    }
+
 
     #[test]
     fn test_scale_simd() {

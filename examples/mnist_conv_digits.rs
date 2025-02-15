@@ -2,7 +2,7 @@
 // Use the following command to run in release mode:
 // cargo run --release --example mnist_digits
 
-use ai::{nn::{activation_functions::RELU, layers::convolution2d::{Convolution2d, Dimensions}, neural::NeuralNetworkNode, trainer::{train_network, TrainingHyperParameters}}, timed};
+use ai::{nn::{activation_functions::RELU, layers::convolution2d::{Convolution2dDeprecated, Dimensions}, neural::NeuralNetworkNode, trainer::{train_network, TrainingHyperParameters}}, timed};
 
 pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
     let time_to_run = timed::timed(|| {
@@ -20,7 +20,7 @@ pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
         };
 
         // Create layers for network to train on
-        let convo = Convolution2d::new(
+        let convo = Convolution2dDeprecated::new(
             8, 
             1, 
             Dimensions { width: 3, height: 3 } ,
