@@ -41,7 +41,7 @@ impl Matrix {
         let partitioner = Partitioner::with_partitions_simd(self.len(), 16);
 
         let inner_process = |partition: &Partition| {
-            let mut partition_values: Vec<f32> = Vec::with_capacity(partition.get_size());
+            let mut partition_values: Vec<f32> = Vec::with_capacity(partition.size());
 
             // Avoids doing division and unnecessary multiplications
             let return_slice: &mut Vec<f32> = &mut vec![0.; SIMD_LANES];            
@@ -81,7 +81,7 @@ impl Matrix {
         let partitioner = Partitioner::with_partitions_simd(self.len(), 16);
 
         let inner_process = |partition: &Partition| {
-            let mut partition_values: Vec<f32> = Vec::with_capacity(partition.get_size());
+            let mut partition_values: Vec<f32> = Vec::with_capacity(partition.size());
 
             // Avoids doing division and unnecessary multiplications
             let return_slice: &mut Vec<f32> = &mut vec![0.; SIMD_LANES];            
@@ -127,7 +127,7 @@ impl Partitioner {
         if simd_per_lane < 1 {
         // Not enough data for a full SIMD operation, let alone multi-threading.
             partitions = vec![Partition::new(0, count - 1)];
-            return Partitioner { partitions };
+            return Partitioner::new(partitions);
         }
 
         //How many simds per thread can we accommodate?
@@ -136,7 +136,7 @@ impl Partitioner {
         // Not enough simd_chunks to make multi-threaded worth it.
         // Consideration: choosing actual parallelization based on modulo.
             partitions = vec![Partition::new(0, count - 1)];
-            return Partitioner { partitions };
+            return Partitioner::new(partitions);
         } else {
             partitions = Vec::with_capacity(count / partition_count);
         }
@@ -165,7 +165,7 @@ impl Partitioner {
 
         partitions.push(Partition::new(cursor, count - 1));
 
-        Partitioner { partitions }
+        Partitioner::new(partitions)
     }
 }
 

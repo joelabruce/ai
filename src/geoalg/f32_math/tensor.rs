@@ -19,9 +19,7 @@ impl Index<usize> for Tensor {
 
 impl Tensor {
     /// Creates a new tensor with specified shape.
-    pub fn new(shape: Shape, values: Vec<f32>) -> Self { 
-        Tensor { shape, values } 
-    }
+    pub fn new(shape: Shape, values: Vec<f32>) -> Self { Tensor { shape, values } }
 
     /// Creates a tensor with uniform distribution of random values.
     pub fn new_randomized_uniform(shape: Shape, uniform: Uniform<f32>) -> Self {
@@ -72,7 +70,7 @@ impl Tensor {
 
         let y_simd = Simd::<f32, SIMD_LANES>::splat(0.);
         let inner_process = |partition: &Partition| {
-            let mut partition_values: Vec<f32> = Vec::with_capacity(partition.get_size());
+            let mut partition_values: Vec<f32> = Vec::with_capacity(partition.size());
 
             partition.unary_simd(
                 &mut partition_values, 
@@ -97,7 +95,7 @@ impl Tensor {
         let y_simd = Simd::<f32, SIMD_LANES>::splat(0.);
         let true_mask = Simd::<f32, SIMD_LANES>::splat(1.);
         let inner_process = |partition: &Partition| {
-            let mut partition_values: Vec<f32> = Vec::with_capacity(partition.get_size());
+            let mut partition_values: Vec<f32> = Vec::with_capacity(partition.size());
             partition.unary_simd(
                 &mut partition_values, 
                 &self.stream(),
@@ -135,11 +133,11 @@ impl Tensor {
             thread::available_parallelism().unwrap().get());
 
         let inner_process = move |partition: &Partition| {
-            let mut partition_values: Vec<f32> = Vec::with_capacity(partition.get_size() * rhs_rows);
+            let mut partition_values: Vec<f32> = Vec::with_capacity(partition.size() * rhs_rows);
             
             let mut lhs_start = partition.get_start() * lhs_stride;
             let mut lhs_end = lhs_start + lhs_stride;
-            for _row in partition.get_range() {
+            for _row in partition.range() {
                 // Grab the row from self
                 let l_slice = &self.stream()[lhs_start..lhs_end];
 
@@ -175,7 +173,7 @@ impl Tensor {
             thread::available_parallelism().unwrap().get());
 
             let inner_process = |partition: &Partition| {
-                let mut partition_values: Vec<f32> = Vec::with_capacity(partition.get_size());
+                let mut partition_values: Vec<f32> = Vec::with_capacity(partition.size());
     
                 // Avoids doing division and unnecessary multiplications
                 let return_slice: &mut Vec<f32> = &mut vec![0.; SIMD_LANES];            
@@ -221,7 +219,7 @@ impl Tensor {
 
         let y_simd = Simd::<f32, SIMD_LANES>::splat(scalar);
         let inner_process = |partition: &Partition| {
-            let mut partition_values: Vec<f32> = Vec::with_capacity(partition.get_size());        
+            let mut partition_values: Vec<f32> = Vec::with_capacity(partition.size());        
             partition.unary_simd(
                 &mut partition_values, 
                 &self.stream(),
@@ -249,8 +247,8 @@ impl Tensor {
             thread::available_parallelism().unwrap().get());
 
         let inner_process = move |parition: &Partition| {
-            let mut partition_values = Vec::with_capacity(parition.get_size() * filters.shape.size());
-            for batch_index in parition.get_range() {
+            let mut partition_values = Vec::with_capacity(parition.size() * filters.shape.size());
+            for batch_index in parition.range() {
                 for filter_index in 0..filters.shape[0] {
                     for row in 0..o_rows {
                         for column in 0..o_columns {

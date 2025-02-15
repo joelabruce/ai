@@ -1,4 +1,4 @@
-use std::thread;
+use std::{ops::Index, thread};
 
 use crate::partition::Partition;
 
@@ -10,10 +10,20 @@ pub struct Partitioned<T> {
 /// Partions data to be operated on, and provides for multi-threading.
 #[derive(Hash, Debug, Clone, PartialEq, Default)]
 pub struct Partitioner {
-    pub partitions: Vec<Partition>
+    partitions: Vec<Partition>
+}
+
+impl Index<usize> for Partitioner {
+    type Output = Partition;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.partitions[index]
+    }
 }
 
 impl Partitioner {
+    pub fn new(partitions: Vec<Partition>) -> Self { Partitioner { partitions } }
+
     /// Creates a partitioner with partitions that are mostly equal in size, with no more than a difference of 1.    
     pub fn with_partitions(count: usize, partition_count: usize) -> Self {
         let partition_size = count / partition_count;
@@ -42,12 +52,6 @@ impl Partitioner {
         } 
 
         Partitioner { partitions }
-    }
-
-    /// Returns partition if it exists.
-    pub fn get_partition(&self, partition_index: usize) -> &Partition {
-        assert!(partition_index < self.partitions.len(), "Index for partition out of bounds.");
-        &self.partitions[partition_index]
     }
 
     /// Parallelizes work among partitions as evenly as possible.
@@ -96,7 +100,7 @@ mod tests {
         let tc = Partitioner::with_partitions(tc1, 8);
 
         let actual = tc.parallelized(|partition| {
-            let partition_values = (partition.get_range()).collect();
+            let partition_values = (partition.range()).collect();
             partition_values
         });
 
@@ -111,8 +115,8 @@ mod tests {
         let tc = Partitioner::with_partitions(tc1, 8);
 
         let actual = tc.parallelized(|partition| {
-            let mut partition_values = Vec::with_capacity(partition.get_size());
-            for index in partition.get_range() {
+            let mut partition_values = Vec::with_capacity(partition.size());
+            for index in partition.range() {
                 partition_values.push(2 * index);
             }
             partition_values
@@ -129,8 +133,8 @@ mod tests {
         let tc = Partitioner::with_partitions(tc1, 16);
 
         let actual = tc.parallelized(|partition| {
-            let mut partition_values = Vec::with_capacity(partition.get_size());
-            for index in partition.get_range() {
+            let mut partition_values = Vec::with_capacity(partition.size());
+            for index in partition.range() {
                 partition_values.push(2 * index);
             }
             partition_values

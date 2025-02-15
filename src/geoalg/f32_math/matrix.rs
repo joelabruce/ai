@@ -120,8 +120,8 @@ impl Matrix {
         };
 
         let inner_process = move |partition: &Partition| {
-            let mut partition_values = Vec::with_capacity(partition.get_size());
-            for i in partition.get_range() {
+            let mut partition_values = Vec::with_capacity(partition.size());
+            for i in partition.range() {
                 let index_to_read = self.columns * (i % self.rows) + i / self.rows;
                 partition_values.push(self.values[index_to_read]);
             }
@@ -148,8 +148,8 @@ impl Matrix {
         };
 
         let inner_process = |partition: &Partition| {
-            let mut partition_values: Vec<f32> = Vec::with_capacity(partition.get_size());
-            for i in partition.get_range() {
+            let mut partition_values: Vec<f32> = Vec::with_capacity(partition.size());
+            for i in partition.range() {
                 partition_values.push(self.values[i] * rhs.values[i]);
             }
 
@@ -177,8 +177,8 @@ impl Matrix {
         };
 
         let inner_process = move |partition: &Partition| {
-            let mut partition_values: Vec<f32> = Vec::with_capacity(partition.get_size() * rhs.rows);
-            for row in partition.get_range() {
+            let mut partition_values: Vec<f32> = Vec::with_capacity(partition.size() * rhs.rows);
+            for row in partition.range() {
                 let ls = self.row(row);
                 for transposed_row in 0..rhs.rows {
                     let rs = rhs.row(transposed_row);
@@ -207,8 +207,8 @@ impl Matrix {
         };
 
         let inner_process = move |partition: &Partition| {
-            let mut partition_values = Vec::with_capacity(partition.get_size());
-            for i in partition.get_range() {
+            let mut partition_values = Vec::with_capacity(partition.size());
+            for i in partition.range() {
                 partition_values.push(func(&self.values[i]));
             }
 
@@ -233,8 +233,8 @@ impl Matrix {
         };
 
         let inner_process = move |partition: &Partition| {
-            let mut partition_values = Vec::with_capacity(partition.get_size());
-            for i in partition.get_range() {
+            let mut partition_values = Vec::with_capacity(partition.size());
+            for i in partition.range() {
                 partition_values.push(self.values[i] - rhs.values[i]);
             }
 
@@ -257,8 +257,8 @@ impl Matrix {
         };
 
         let inner_process = move |partition: &Partition| {
-            let mut partition_values = Vec::with_capacity(partition.get_size());
-            for i in partition.get_range() {
+            let mut partition_values = Vec::with_capacity(partition.size());
+            for i in partition.range() {
                 partition_values.push(self.values[i] + rhs.values[i]);
             }
 
@@ -284,9 +284,9 @@ impl Matrix {
         };
 
         let inner_process = move |partition: &Partition| {
-            let mut partition_values= Vec::with_capacity(partition.get_size() * self.columns);
+            let mut partition_values= Vec::with_capacity(partition.size() * self.columns);
             let rs = rhs.row(0); 
-            for row in partition.get_range() {
+            for row in partition.range() {
                 let ls = self.row(row);
 
                 for column in 0..ls.len() {
@@ -313,8 +313,8 @@ impl Matrix {
         };
 
         let inner_process =move |partition: &Partition| {
-            let mut partition_values = Vec::with_capacity(partition.get_size());
-            for column in partition.get_range() {
+            let mut partition_values = Vec::with_capacity(partition.size());
+            for column in partition.range() {
                 let mut accumulator = 0.;
                 for row in 0..self.rows {
                     accumulator += self.values[column + row * self.columns];
@@ -343,8 +343,8 @@ impl Matrix {
         };
 
         let inner_process = move |partition: &Partition| {
-            let mut partition_values = Vec::with_capacity(partition.get_size());
-            for i in partition.get_range() {
+            let mut partition_values = Vec::with_capacity(partition.size());
+            for i in partition.range() {
                 partition_values.push(self.values[i] * scalar);
             }
 
@@ -371,8 +371,8 @@ impl Matrix {
         let filters_size = kernels.row_count() * n_rows * n_columns;
 
         let inner_process = move |partition: &Partition| {
-            let mut partition_values = Vec::with_capacity(partition.get_size() * filters_size);
-            for batch_index in partition.get_range() {
+            let mut partition_values = Vec::with_capacity(partition.size() * filters_size);
+            for batch_index in partition.range() {
                 let input = self.row(batch_index);
                 for filter_index in 0..kernels.row_count() {
                     let filter = kernels.row(filter_index);
@@ -427,8 +427,8 @@ impl Matrix {
         let filters_size = kernels.row_count() * o_rows * o_columns;
 
         let inner_process = move |partition: &Partition| {
-            let mut partition_values = vec![0.; partition.get_size() * filters_size];
-            for batch_index in partition.get_range() {
+            let mut partition_values = vec![0.; partition.size() * filters_size];
+            for batch_index in partition.range() {
                 //let input = self.row(batch_index);
 
                 let batch_offset = batch_index * o_rows * o_columns;
@@ -504,8 +504,8 @@ impl Matrix {
         let rows_x_columns = rows * columns;
 
         let inner_process = move |partition: &Partition| {
-            let mut partition_values = Vec::with_capacity(partition.get_size() * filters * rows_x_columns);
-            for batch in partition.get_range() {
+            let mut partition_values = Vec::with_capacity(partition.size() * filters * rows_x_columns);
+            for batch in partition.range() {
                 let input_row = self.row(batch);
                 for filter in 0..filters {
                     let filter_offset = filter * i_d.height * i_d.width;

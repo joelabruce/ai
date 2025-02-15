@@ -17,10 +17,10 @@ impl Partition {
     pub fn get_end(&self) -> usize { self.end }
 
     /// Returns size of the partition.
-    pub fn get_size(&self) -> usize { self.end - self.start + 1 }
+    pub fn size(&self) -> usize { self.end - self.start + 1 }
 
     /// Creates a range to work with when processing data for the partition.
-    pub fn get_range(&self) -> RangeInclusive<usize> { self.start..=self.end }
+    pub fn range(&self) -> RangeInclusive<usize> { self.start..=self.end }
 }
 
 
@@ -36,25 +36,25 @@ mod tests {
         let partition_count = 4;
         let actual = Partitioner::with_partitions(tc1_count, partition_count);
 
-        assert_eq!(actual.get_partition(0).start, 0);
-        assert_eq!(actual.get_partition(0).end, 24);
-        assert_eq!(actual.get_partition(0).get_range(), (0..=24));
-        assert_eq!(actual.get_partition(0).get_size(), 25);
+        assert_eq!(actual[0].start, 0);
+        assert_eq!(actual[0].range(), (0..=24));
+        assert_eq!(actual[0].end, 24);
+        assert_eq!(actual[0].size(), 25);
 
-        assert_eq!(actual.get_partition(1).start, 25);
-        assert_eq!(actual.get_partition(1).end, 49);
-        assert_eq!(actual.get_partition(1).get_range(), (25..=49));
-        assert_eq!(actual.get_partition(1).get_size(), 25);
+        assert_eq!(actual[1].start, 25);
+        assert_eq!(actual[1].end, 49);
+        assert_eq!(actual[1].range(), (25..=49));
+        assert_eq!(actual[1].size(), 25);
 
-        assert_eq!(actual.get_partition(2).start, 50);
-        assert_eq!(actual.get_partition(2).end, 73);
-        assert_eq!(actual.get_partition(2).get_range(), (50..=73));
-        assert_eq!(actual.get_partition(2).get_size(), 24);
+        assert_eq!(actual[2].start, 50);
+        assert_eq!(actual[2].end, 73);
+        assert_eq!(actual[2].range(), (50..=73));
+        assert_eq!(actual[2].size(), 24);
 
-        assert_eq!(actual.get_partition(3).start, 74);
-        assert_eq!(actual.get_partition(3).end, 97);
-        assert_eq!(actual.get_partition(3).get_range(), (74..=97));
-        assert_eq!(actual.get_partition(3).get_size(), 24);
+        assert_eq!(actual[3].start, 74);
+        assert_eq!(actual[3].end, 97);
+        assert_eq!(actual[3].range(), (74..=97));
+        assert_eq!(actual[3].size(), 24);
     }
 
     #[test]
@@ -64,6 +64,6 @@ mod tests {
         let partition_count = 4;
         let actual = Partitioner::with_partitions(tc1_count, partition_count);
 
-        actual.get_partition(4);        
+        actual[4];        
     }
 }

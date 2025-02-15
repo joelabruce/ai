@@ -2,7 +2,7 @@
 // Use the following command to run in release mode:
 // cargo run --release --example mnist_digits
 
-use ai::{nn::{self, activation_functions::RELU, layers::convolution2d::{Convolution2dDeprecated, Dimensions}, neural::NeuralNetworkNode, trainer::{train_network, TrainingHyperParameters}}, timed};
+use ai::{nn::{activation_functions::RELU, layers::convolution2d::{Convolution2dDeprecated, Dimensions}, neural::NeuralNetworkNode, trainer::{train_network, TrainingHyperParameters}}, timed};
 
 pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
     let time_to_run = timed::timed(|| {
@@ -11,7 +11,7 @@ pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
             backup_cycle: 1,
             total_epochs: 5,
             training_sample: 60000,
-            batch_size: 125,
+            batch_size: 60,
             trained_model_location: "convo_model".to_string(),
             batch_inform_size: 50,
             output_accuracy: true,
@@ -39,7 +39,7 @@ pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
             Dimensions { width: 2, height: 2},
             2);
 
-        let dense1 = maxpool2.influences_dense(100);
+        let dense1 = maxpool2.influences_dense(64);
         let dense2 = dense1.influences_dense(10);
 
         // Add layers to the network for forward and backward propagation.
