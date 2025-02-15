@@ -1,6 +1,6 @@
 use std::thread;
 use rand_distr::{Distribution, Normal, Uniform};
-use crate::{geoalg::f32_math::simd_extensions::dot_product_simd3, nn::layers::convolution2d::Dimensions, Partition, Partitioner};
+use crate::{geoalg::f32_math::simd_extensions::dot_product_simd3, nn::layers::convolution2d::Dimensions, partition::Partition, partitioner::Partitioner};
 
 /// Matrix is implemented as a single dimensional vector of f32s.
 /// This implementation of Matrix is row-major. 

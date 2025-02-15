@@ -1,7 +1,7 @@
 use std::{ops::Index, simd::{cmp::SimdPartialOrd, num::SimdFloat, Simd}, thread};
 use rand_distr::{Distribution, Normal, Uniform};
 
-use crate::partitions::{Partition, Partitioner};
+use crate::{partition::Partition, partitioner::Partitioner};
 
 use super::{shape::Shape, simd_extensions::{dot_product_simd3, SIMD_LANES}};
 

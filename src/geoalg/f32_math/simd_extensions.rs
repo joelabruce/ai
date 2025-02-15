@@ -1,4 +1,4 @@
-use crate::partitions::{Partition, Partitioner};
+use crate::{partition::Partition, partitioner::Partitioner};
 use std::simd::{num::SimdFloat, *};
 use super::matrix::*;
 
@@ -202,7 +202,7 @@ impl Partition {
 #[cfg(test)]
 mod tests {
     use crate::prettify::*;
-    use crate::{geoalg::f32_math::{matrix::Matrix, optimized_functions::dot_product_of_vector_slices}, partitions::Partitioner};
+    use crate::{geoalg::f32_math::{matrix::Matrix, optimized_functions::dot_product_of_vector_slices}, partitioner::Partitioner};
 
     use super::dot_product_simd3;
 

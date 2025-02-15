@@ -3,7 +3,8 @@
 #![feature(portable_simd)]
 
 pub mod geoalg;
-pub mod partitions;
+pub mod partitioner;
+pub mod partition;
 pub mod statistics;
 pub mod digit_image;
 pub mod input_csv_reader;
@@ -15,4 +16,4 @@ pub mod timed;
 pub mod prettify;
 
 // Consier taking this out altogether?
-use crate::partitions::*;
+//use crate::partitioner::*;

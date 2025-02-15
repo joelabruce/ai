@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use crate::Partitioner;
+use crate::partitioner::Partitioner;
 
 pub struct PartitionerCache {
     cache: HashMap<usize, Partitioner>
