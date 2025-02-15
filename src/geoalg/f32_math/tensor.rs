@@ -79,6 +79,7 @@ impl Tensor {
         let rhs_rows = rhs.shape[rhs_row_dimension];
         let rhs_stride = rhs.shape.stride_for(rhs_row_dimension);
         
+        // Do not partition by simd here because we are parallelizing off of lhs rows.
         let partition_strategy = Partitioner::with_partitions(
             lhs_rows,
             thread::available_parallelism().unwrap().get());
@@ -86,8 +87,8 @@ impl Tensor {
         let inner_process = move |partition: &Partition| {
             let mut partition_values: Vec<f32> = Vec::with_capacity(partition.get_size() * rhs_rows);
             
-            let mut lhs_start = 0;
-            let mut lhs_end = lhs_stride;
+            let mut lhs_start = partition.get_start() * lhs_stride;
+            let mut lhs_end = lhs_start + lhs_stride;
             for _row in partition.get_range() {
                 // Grab the row from self
                 let l_slice = &self.stream()[lhs_start..lhs_end];
@@ -131,7 +132,7 @@ impl Tensor {
                 let mut cursor_start = partition.get_start();
                 let mut cursor_end = cursor_start + SIMD_LANES;
                 while cursor_end <= partition.get_end() {
-                    let range = cursor_start..cursor_start + SIMD_LANES;
+                    let range = cursor_start..cursor_end;
                     let x_simd = Simd::<f32, SIMD_LANES>::from_slice(&self.stream()[range.clone()]);
                     let y_simd = Simd::<f32, SIMD_LANES>::from_slice(&rhs.stream()[range.clone()]);
     
@@ -308,6 +309,7 @@ mod tests {
 
     #[test]
     fn test_mul_transpose_simd() {
+        // Test for if parallelism is between 2 and 4
         let lhs = Tensor::new(
             Shape::new(vec![1, 4, 3]),
             vec![
@@ -342,6 +344,53 @@ mod tests {
 
         let actual = lhs.mul_transpose_simd(&rhs);
         assert_eq!(actual, expected);
+
+        // Test for if par
+        let lhs = Tensor::new(
+            Shape::new(vec![1, 16, 2]),
+            vec![
+                1., 2.,
+                3., 4.,
+                5., 6., 
+                7., 8.,
+                9., 10.,
+                11., 12.,
+                13., 14.,
+                15., 16.,
+                1., 2.,
+                3., 4.,
+                5., 6., 
+                7., 8.,
+                9., 10.,
+                11., 12.,
+                13., 14.,
+                15., 16.,      
+            ]
+        );
+
+        // Assume already transposed.
+        let rhs = Tensor::new(
+            Shape::new(vec![1, 1, 3, 2]),
+            vec![
+                1., 4.,
+                2., 5.,
+                3., 6.
+            ]
+        );
+
+        // let expected = Tensor::new(
+        //     Shape::d2(4, 5),
+        //     vec! [
+        //         9., 12., 15.,
+        //         19., 26., 33.
+
+        //     ]
+        // );
+
+        let actual = lhs.mul_transpose_simd(&rhs);
+        println!("{BRIGHT_RED}{:?}{RESET}", actual);
+        //assert_eq!(actual, expected);
+
     }
 
     #[test]
