@@ -11,7 +11,6 @@ pub mod output_bin_writer;
 pub mod nn;
 pub mod partitioner_cache;
 pub mod weight_initializers;
-pub mod experimental;
 pub mod timed;
 pub mod prettify;
 
