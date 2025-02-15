@@ -2,7 +2,7 @@
 // Use the following command to run in release mode:
 // cargo run --release --example mnist_digits
 
-use ai::{nn::{activation_functions::RELU, layers::convolution2d::{Convolution2dDeprecated, Dimensions}, neural::NeuralNetworkNode, trainer::{train_network, TrainingHyperParameters}}, timed};
+use ai::{nn::{self, activation_functions::RELU, layers::convolution2d::{Convolution2dDeprecated, Dimensions}, neural::NeuralNetworkNode, trainer::{train_network, TrainingHyperParameters}}, timed};
 
 pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
     let time_to_run = timed::timed(|| {
@@ -20,24 +20,36 @@ pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
         };
 
         // Create layers for network to train on
-        let convo = Convolution2dDeprecated::new(
-            8, 
+        let convo1 = Convolution2dDeprecated::new(
+            32, 
             1, 
             Dimensions { width: 3, height: 3 } ,
             Dimensions { width: 28, height: 28 });
 
-        let maxpool = convo.influences_maxpool(
+        let maxpool1 = convo1.influences_maxpool(
             Dimensions { width: 2, height: 2 },
             2);
 
-        let dense1 = maxpool.influences_dense(100);
+        let convo2 = maxpool1.influences_convolution2d(
+            64, 
+            1, 
+            Dimensions { width: 3, height: 3 });
+
+        let maxpool2 = convo2.influences_maxpool(
+            Dimensions { width: 2, height: 2},
+            2);
+
+        let dense1 = maxpool2.influences_dense(100);
         let dense2 = dense1.influences_dense(10);
 
         // Add layers to the network for forward and backward propagation.
         let mut nn_nodes: Vec<NeuralNetworkNode> = Vec::new();
-        nn_nodes.push(NeuralNetworkNode::Convolution2dLayer(convo));
+        nn_nodes.push(NeuralNetworkNode::Convolution2dLayer(convo1));
         nn_nodes.push(NeuralNetworkNode::ActivationLayer(RELU));
-        nn_nodes.push(NeuralNetworkNode::MaxPoolLayer(maxpool));
+        nn_nodes.push(NeuralNetworkNode::MaxPoolLayer(maxpool1));
+        nn_nodes.push(NeuralNetworkNode::Convolution2dLayer(convo2));
+        nn_nodes.push(NeuralNetworkNode::ActivationLayer(RELU));
+        nn_nodes.push(NeuralNetworkNode::MaxPoolLayer(maxpool2));
         nn_nodes.push(NeuralNetworkNode::DenseLayer(dense1));
         nn_nodes.push(NeuralNetworkNode::ActivationLayer(RELU));
         nn_nodes.push(NeuralNetworkNode::DenseLayer(dense2));

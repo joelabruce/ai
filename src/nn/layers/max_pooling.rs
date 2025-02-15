@@ -1,5 +1,5 @@
 use crate::geoalg::f32_math::matrix::Matrix;
-use super::{convolution2d::Dimensions, dense::Dense, Propagates};
+use super::{convolution2d::{Convolution2dDeprecated, Dimensions}, dense::Dense, Propagates};
 
 /// Currently only supports valid pooling layers, with no padding.
 pub struct MaxPooling {
@@ -24,6 +24,10 @@ impl MaxPooling {
 
         let features = self.filters * rows * columns;
         Dense::new(features, neuron_count)
+    }
+
+    pub fn influences_convolution2d(&self, filters: usize, channels: usize, k_d: Dimensions) -> Convolution2dDeprecated {
+        Convolution2dDeprecated::new(filters, channels, k_d, self.output_dimensions())
     }
 
     fn output_dimensions(&self) -> Dimensions {

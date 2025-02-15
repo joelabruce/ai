@@ -136,6 +136,7 @@ impl Matrix {
     /// Makes use of supplied partitions to parallelize the operation.
     /// If partitions is cached, can be reused (to hopefully save even more time).
     /// Partitioner implementation complete.
+    /// // In Tensor.
     pub fn mul_element_wise(&self, rhs: &Matrix) -> Self {
         assert!(self.rows == rhs.rows && self.columns == rhs.columns, "When element-wise multiplying two matrices, they must have same order.");
         
@@ -196,6 +197,7 @@ impl Matrix {
     /// Useful for applying an activation function to the entire matrix.
     /// Partitioner implementation complete.
     /// Rethink this, as it doesn't optimize well.
+    /// Deprecated.
     pub fn map(&self, func: fn(&f32) -> f32) -> Self {
         let partition_strategy = match self.all_partitioner.as_ref() {
             Some(p) => p,
@@ -219,6 +221,7 @@ impl Matrix {
 
     /// Subtracts rhs Matrix from lhs Matrix.
     /// Partitioner implementation complete.
+    /// Todo: Put in Tensor
     pub fn sub(&self, rhs: &Matrix) -> Self {
         assert!(self.rows == rhs.rows && self.columns == rhs.columns, "When subtracting two matrices, they must have same order.");
  
@@ -242,6 +245,7 @@ impl Matrix {
         Self::from(self.row_count(), self.column_count(), values)
     }
 
+    /// Todo: Put in tensor.
     pub fn add(&self, rhs: &Matrix) -> Self {
         assert!(self.rows == rhs.rows && self.columns == rhs.columns, "When subtracting two matrices, they must have same order.");
     
@@ -452,7 +456,7 @@ impl Matrix {
                                 }
                             }
 
-                            print!("{c_accum}, ");
+                            //print!("{c_accum}, ");
                             partition_values[batch_offset + row * o_columns + column] = c_accum;
                             //partition_values.push(c_accum);
                         }

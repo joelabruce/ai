@@ -95,9 +95,12 @@ impl Propagates for Convolution2dDeprecated {
             }
         }
 
-        let capacity = self.kernels.row_count() * self.i_d.height * self.i_d.width;
+        inputs.full_outer_convolution(&self.kernels, &self.k_d, &self.i_d)
 
-        Matrix::from(inputs.row_count(), self.i_d.height * self.i_d.width, vec![0.; capacity])
+
+        //let capacity = self.kernels.row_count() * self.i_d.height * self.i_d.width;
+
+        //Matrix::from(inputs.row_count(), self.i_d.height * self.i_d.width, vec![0.; capacity])
     }
 }
 
