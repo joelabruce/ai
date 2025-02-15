@@ -5,8 +5,6 @@ use crate::partitions::{Partition, Partitioner};
 
 use super::{shape::Shape, simd_extensions::{dot_product_simd3, SIMD_LANES}};
 
-use crate::prettify::*;
-
 #[derive(Debug, PartialEq)]
 pub struct Tensor {
     shape: Shape,
@@ -75,18 +73,12 @@ impl Tensor {
         let inner_process = |partition: &Partition| {
             let mut partition_values: Vec<f32> = Vec::with_capacity(partition.get_size());
 
-            let cursor_end = Partitioner::unary_simd(
+            partition.unary_simd(
                 &mut partition_values, 
-                &self.stream(), 
-                partition.get_start(), 
-                partition.get_end(),
-                |x_simd| x_simd.simd_max(y_simd));
-
-            // Does normal multiplication for remaining elements that cannot fit into simd.
-            // If using Partitioner::with_partitions_simd, this should only execute at most 1 time for the last thread.
-            for i in cursor_end..=partition.get_end() {
-                partition_values.push(self[i].max(0.));
-            }
+                &self.stream(),
+                |x_simd| x_simd.simd_max(y_simd),
+                |x| x.max(0.)
+            );
 
             partition_values
         };
@@ -105,28 +97,15 @@ impl Tensor {
         let true_mask = Simd::<f32, SIMD_LANES>::splat(1.);
         let inner_process = |partition: &Partition| {
             let mut partition_values: Vec<f32> = Vec::with_capacity(partition.get_size());
-
-            let cursor_end = Partitioner::unary_simd(
+            partition.unary_simd(
                 &mut partition_values, 
-                &self.stream(), 
-                partition.get_start(), 
-                partition.get_end(),
+                &self.stream(),
                 |x_simd| {
                     let mask = x_simd.simd_gt(y_simd);
                     mask.select(true_mask, y_simd)
-                }
+                },
+                |x| if x > 0. { 1. } else { 0. }
             );
-
-            // Cursor should only be 1 more than partition.get_end() if all data was consumed via SIMD.
-            // More than 1 if left-over chunks to consume
-            //let end = partition.get_end();
-            //println!("{GREEN}d_relu: {cursor_end} vs {end}{RESET}");
-
-            // Does normal multiplication for remaining elements that cannot fit into simd.
-            // If using Partitioner::with_partitions_simd, this should only execute at most 1 time for the last thread.
-            for i in cursor_end..=partition.get_end() {
-                partition_values.push(if self[i] > 0. { 1. } else { 0. });
-            }
 
             partition_values
         };
@@ -242,18 +221,12 @@ impl Tensor {
         let y_simd = Simd::<f32, SIMD_LANES>::splat(scalar);
         let inner_process = |partition: &Partition| {
             let mut partition_values: Vec<f32> = Vec::with_capacity(partition.get_size());        
-            let cursor_end = Partitioner::unary_simd(
+            partition.unary_simd(
                 &mut partition_values, 
-                &self.stream(), 
-                partition.get_start(), 
-                partition.get_end(),
-                |x_simd| x_simd * y_simd);
-
-            // Does normal multiplication for remaining elements that cannot fit into simd.
-            // If using Partitioner::with_partitions_simd, this should only execute at most 1 time for the last thread.
-            for i in cursor_end..=partition.get_end() {
-                partition_values.push(self[i] * scalar);
-            }
+                &self.stream(),
+                |x_simd| x_simd * y_simd,
+                |x| x * scalar
+            );
 
             partition_values
         };

@@ -167,14 +167,20 @@ impl Partitioner {
 
         Partitioner { partitions }
     }
+}
 
-    /// Allows for repeated Simd operations on lhs_slice vector based on start and end.
-    pub fn unary_simd(partition_values: &mut Vec<f32>, lhs_slice: &[f32], start: usize, end: usize, simd_op: impl Fn(Simd<f32, SIMD_LANES>) -> Simd<f32, SIMD_LANES>) -> usize {
+impl Partition {
+    pub fn unary_simd(&self,
+        partition_values: &mut Vec<f32>, 
+        lhs_slice: &[f32], 
+        simd_op: impl Fn(Simd<f32, SIMD_LANES>) -> Simd<f32, SIMD_LANES>,
+        remainder_op: impl Fn(f32) -> f32
+    ) {
         let return_slice: &mut Vec<f32> = &mut vec![0.; SIMD_LANES];
 
-        let mut cursor_start = start;
+        let mut cursor_start = self.get_start();
         let mut cursor_end = cursor_start + SIMD_LANES;
-        while cursor_end <= end + 1 {
+        while cursor_end <= self.get_end() + 1 {
             let x_simd = Simd::<f32, SIMD_LANES>::from_slice(&lhs_slice[cursor_start..cursor_end]);
 
             let r_simd = simd_op(x_simd);
@@ -185,9 +191,11 @@ impl Partitioner {
             cursor_end += SIMD_LANES;
         }
 
-        if cursor_end > end { cursor_end -= SIMD_LANES; }
+        if cursor_end > self.get_end() { cursor_end -= SIMD_LANES; }
 
-        cursor_end
+        for i in cursor_end..=self.get_end() {
+            partition_values.push(remainder_op(lhs_slice[i]));
+        }
     }
 }
 
