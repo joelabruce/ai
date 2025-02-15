@@ -1,9 +1,11 @@
-use std::{ops::Index, simd::{num::SimdFloat, Simd}, thread};
+use std::{ops::Index, simd::{cmp::SimdPartialOrd, num::SimdFloat, Simd}, thread};
 use rand_distr::{Distribution, Normal, Uniform};
 
 use crate::partitions::{Partition, Partitioner};
 
 use super::{shape::Shape, simd_extensions::{dot_product_simd3, SIMD_LANES}};
+
+use crate::prettify::*;
 
 #[derive(Debug, PartialEq)]
 pub struct Tensor {
@@ -14,9 +16,7 @@ pub struct Tensor {
 impl Index<usize> for Tensor {
     type Output = f32;
 
-    fn index(&self, index: usize) -> &Self::Output {
-        &self.values[index]
-    }
+    fn index(&self, index: usize) -> &Self::Output { &self.values[index] }
 }
 
 impl Tensor {
@@ -65,7 +65,7 @@ impl Tensor {
         &self.values[start..end]
     }
 
-    /// Performs function on value for each value in Tensor.
+    /// Performs relu on each value in Tensor.
     pub fn relu_simd(&self) -> Self {
         let partitioner = Partitioner::with_partitions_simd(
             self.shape.size(), 
@@ -74,30 +74,58 @@ impl Tensor {
         let y_simd = Simd::<f32, SIMD_LANES>::splat(0.);
         let inner_process = |partition: &Partition| {
             let mut partition_values: Vec<f32> = Vec::with_capacity(partition.get_size());
-        
-            // Avoids doing division and unnecessary multiplications
-            let return_slice: &mut Vec<f32> = &mut vec![0.; SIMD_LANES];
-            let mut cursor_start = partition.get_start();
-            let mut cursor_end = cursor_start + SIMD_LANES;
-            while cursor_end <= partition.get_end() {
-                let x_simd = Simd::<f32, SIMD_LANES>::from_slice(&self.stream()[cursor_start..cursor_end]);
 
-                let r_simd = x_simd.simd_max(y_simd);
-
-                r_simd.copy_to_slice(return_slice);
-                partition_values.extend_from_slice(return_slice);
-
-                cursor_start = cursor_end;
-                cursor_end += SIMD_LANES;
-            }
-
-            // Checks to see if there are any remainder chunks to deal with
-            if cursor_end > partition.get_end() { cursor_end -= SIMD_LANES; }
+            let cursor_end = Partitioner::unary_simd(
+                &mut partition_values, 
+                &self.stream(), 
+                partition.get_start(), 
+                partition.get_end(),
+                |x_simd| x_simd.simd_max(y_simd));
 
             // Does normal multiplication for remaining elements that cannot fit into simd.
             // If using Partitioner::with_partitions_simd, this should only execute at most 1 time for the last thread.
             for i in cursor_end..=partition.get_end() {
                 partition_values.push(self[i].max(0.));
+            }
+
+            partition_values
+        };
+
+        let values = partitioner.parallelized(inner_process);
+        Self::new(self.shape.clone(), values)
+    }
+
+    /// Derivative of relu on each element
+    pub fn d_relu_simd(&self) -> Self {
+        let partitioner = Partitioner::with_partitions_simd(
+            self.shape.size(), 
+            thread::available_parallelism().unwrap().get());
+
+        let y_simd = Simd::<f32, SIMD_LANES>::splat(0.);
+        let true_mask = Simd::<f32, SIMD_LANES>::splat(1.);
+        let inner_process = |partition: &Partition| {
+            let mut partition_values: Vec<f32> = Vec::with_capacity(partition.get_size());
+
+            let cursor_end = Partitioner::unary_simd(
+                &mut partition_values, 
+                &self.stream(), 
+                partition.get_start(), 
+                partition.get_end(),
+                |x_simd| {
+                    let mask = x_simd.simd_gt(y_simd);
+                    mask.select(true_mask, y_simd)
+                }
+            );
+
+            // Cursor should only be 1 more than partition.get_end() if all data was consumed via SIMD.
+            // More than 1 if left-over chunks to consume
+            //let end = partition.get_end();
+            //println!("{GREEN}d_relu: {cursor_end} vs {end}{RESET}");
+
+            // Does normal multiplication for remaining elements that cannot fit into simd.
+            // If using Partitioner::with_partitions_simd, this should only execute at most 1 time for the last thread.
+            for i in cursor_end..=partition.get_end() {
+                partition_values.push(if self[i] > 0. { 1. } else { 0. });
             }
 
             partition_values
@@ -213,26 +241,13 @@ impl Tensor {
 
         let y_simd = Simd::<f32, SIMD_LANES>::splat(scalar);
         let inner_process = |partition: &Partition| {
-            let mut partition_values: Vec<f32> = Vec::with_capacity(partition.get_size());
-        
-            // Avoids doing division and unnecessary multiplications
-            let return_slice: &mut Vec<f32> = &mut vec![0.; SIMD_LANES];
-            let mut cursor_start = partition.get_start();
-            let mut cursor_end = cursor_start + SIMD_LANES;
-            while cursor_end <= partition.get_end() {
-                let x_simd = Simd::<f32, SIMD_LANES>::from_slice(&self.stream()[cursor_start..cursor_end]);
-
-                let r_simd = x_simd * y_simd;
-
-                r_simd.copy_to_slice(return_slice);
-                partition_values.extend_from_slice(return_slice);
-
-                cursor_start = cursor_end;
-                cursor_end += SIMD_LANES;
-            }
-
-            // Checks to see if there are any remainder chunks to deal with
-            if cursor_end > partition.get_end() { cursor_end -= SIMD_LANES; }
+            let mut partition_values: Vec<f32> = Vec::with_capacity(partition.get_size());        
+            let cursor_end = Partitioner::unary_simd(
+                &mut partition_values, 
+                &self.stream(), 
+                partition.get_start(), 
+                partition.get_end(),
+                |x_simd| x_simd * y_simd);
 
             // Does normal multiplication for remaining elements that cannot fit into simd.
             // If using Partitioner::with_partitions_simd, this should only execute at most 1 time for the last thread.
@@ -340,7 +355,7 @@ mod tests {
     }
 
     #[test]
-    fn test_max() {
+    fn test_relu() {
         let tc = Tensor::matrix(2, 16, vec![
             -3., 5., -9., 10., -8., 4., 7., -10., 3., 1., -5., 8., 2., -4., 6., 9.,
             -2., 6., -6., 0., 10., -1., 7., -7., -3., 3., 4., -10., -9., 1., 2., 5.
@@ -352,6 +367,13 @@ mod tests {
         ]);
 
         let actual = tc.relu_simd();
+        assert_eq!(actual, expected);
+
+        let actual = tc.d_relu_simd();
+        let expected = Tensor::matrix(2, 16, vec![
+            0., 1., 0., 1., 0., 1., 1., 0., 1., 1., 0., 1., 1., 0., 1., 1.,
+            0., 1., 0., 0., 1., 0., 1., 0., 0., 1., 1., 0., 0., 1., 1., 1.
+        ]);
         assert_eq!(actual, expected);
     }
 

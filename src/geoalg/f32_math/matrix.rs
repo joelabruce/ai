@@ -194,6 +194,7 @@ impl Matrix {
 
     /// Useful for applying an activation function to the entire matrix.
     /// Partitioner implementation complete.
+    /// Rethink this, as it doesn't optimize well.
     pub fn map(&self, func: fn(&f32) -> f32) -> Self {
         let partition_strategy = match self.all_partitioner.as_ref() {
             Some(p) => p,
@@ -265,6 +266,7 @@ impl Matrix {
 
     /// Adds a row to each row in matrix.
     /// Partitioner implementation complete.
+    /// Todo: Implement in Tensor
     pub fn add_row_partitioned(&self, rhs: &Matrix) -> Self {
         assert_eq!(rhs.rows, 1, "Rhs matrix must have 1 row.");
         assert_eq!(self.columns, rhs.columns, "Lhs and rhs must have equal number of columns.");
@@ -296,6 +298,7 @@ impl Matrix {
 
     /// Returns a 1 row matrix where each column is the sum of all values for that column.
     /// Partitioner implementation complete.
+    /// Todo: Implement in Tensor
     pub fn reduce_rows_by_add(&self) -> Self {
         let partition_strategy = match self.column_partitioner.as_ref() {
             Some(p) => p,
@@ -325,6 +328,7 @@ impl Matrix {
     /// Scales matrix by a scalar.
     /// Instead of making a division operator, please pass in reciprocal of scalar.
     /// Partitioner implementation complete.
+    /// Now in Tensor
     pub fn scale(&self, scalar: f32) -> Self {
         let partition_strategy = match self.all_partitioner.as_ref() {
             Some(p) => p,
@@ -348,6 +352,7 @@ impl Matrix {
 
     /// Used for convolutional layers.
     /// Might consider creating outside of matrix.
+    /// Now in Tensor
     pub fn valid_cross_correlation(&self, kernels: &Matrix, k_d: &Dimensions, i_d: &Dimensions) -> Self {
         let batches = self.row_count();
 
@@ -482,6 +487,7 @@ impl Matrix {
     /// i_d: input dimensions
     /// p_d: pooling dimensions
     /// o_d: output_dimensions
+    /// Todo: Put in tensor
     pub fn maxpool(&self, filters: usize, stride: usize, i_d: &Dimensions, p_d: &Dimensions, o_d: &Dimensions) -> (Self, Vec<usize>) {
         let batches = self.row_count();
 

@@ -145,6 +145,6 @@ mod tests {
         ]);
 
         let output = cv2d.forward(&inputs);
-        println!("{BRIGHT_CYAN}{:?}", output);
+        println!("{BRIGHT_CYAN}{:?}{RESET}", output);
     }
 }
