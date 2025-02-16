@@ -36,7 +36,7 @@ impl Matrix {
     /// Tensor.stream
     pub fn read_values(&self) -> &[f32] { &self.values }
 
-    /// Todo: implement in Tensor?
+    /// Deprecated, use mutable indexer now
     pub fn add_at(&mut self, i: usize, value: f32) {
         self.values[i] += value;
     }
@@ -136,7 +136,7 @@ impl Matrix {
     /// Makes use of supplied partitions to parallelize the operation.
     /// If partitions is cached, can be reused (to hopefully save even more time).
     /// Partitioner implementation complete.
-    /// // In Tensor.
+    /// In Tensor.
     pub fn mul_element_wise(&self, rhs: &Matrix) -> Self {
         assert!(self.rows == rhs.rows && self.columns == rhs.columns, "When element-wise multiplying two matrices, they must have same order.");
         

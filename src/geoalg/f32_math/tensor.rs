@@ -1,4 +1,4 @@
-use std::{ops::Index, simd::{cmp::SimdPartialOrd, num::SimdFloat, Simd}, thread};
+use std::{ops::{Index, IndexMut}, simd::{cmp::SimdPartialOrd, num::SimdFloat, Simd}, thread};
 use rand_distr::{Distribution, Normal, Uniform};
 
 use crate::{partition::Partition, partitioner::Partitioner};
@@ -15,6 +15,12 @@ impl Index<usize> for Tensor {
     type Output = f32;
 
     fn index(&self, index: usize) -> &Self::Output { &self.values[index] }
+}
+
+impl IndexMut<usize> for Tensor {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.values[index]
+    }
 }
 
 impl Tensor {
@@ -174,33 +180,13 @@ impl Tensor {
 
             let inner_process = |partition: &Partition| {
                 let mut partition_values: Vec<f32> = Vec::with_capacity(partition.size());
-    
-                // Avoids doing division and unnecessary multiplications
-                let return_slice: &mut Vec<f32> = &mut vec![0.; SIMD_LANES];            
-                let mut cursor_start = partition.get_start();
-                let mut cursor_end = cursor_start + SIMD_LANES;
-                while cursor_end <= partition.get_end() {
-                    let range = cursor_start..cursor_end;
-                    let x_simd = Simd::<f32, SIMD_LANES>::from_slice(&self.stream()[range.clone()]);
-                    let y_simd = Simd::<f32, SIMD_LANES>::from_slice(&rhs.stream()[range.clone()]);
-    
-                    let r_simd = x_simd * y_simd;
-    
-                    r_simd.copy_to_slice(return_slice);
-                    partition_values.extend_from_slice(return_slice);
-
-                    cursor_start = cursor_end;
-                    cursor_end += SIMD_LANES;
-                }
-    
-                // Checks to see if there are any remainder chunks to deal with
-                if cursor_end > partition.get_end() { cursor_end -= SIMD_LANES; }
-    
-                // Does normal multiplication for remaining elements that cannot fit into simd.
-                // If using Partitioner::with_partitions_simd, this should only execute at most 1 time for the last thread.
-                for i in cursor_end..=partition.get_end() {
-                    partition_values.push(self[i] * rhs[i]);
-                }
+                partition.binary_simd(
+                    &mut partition_values, 
+                    &self.stream(),
+                    &rhs.stream(),
+                    |x_simd, y_simd| x_simd * y_simd,
+                    |x, y| x * y
+                );
     
                 partition_values
             };
@@ -289,6 +275,18 @@ mod tests {
     use crate::prettify::*;
 
     use super::*;
+
+    #[test]
+    fn test_mutating_tensor_index() {
+        let mut tc = Tensor::vector(vec![1., 2., 3.]);
+        tc[0] = 5.;
+
+        let expected = vec![5., 2., 3.];
+        assert_eq!(tc.values, expected);
+
+        tc[1] += 5.;
+        assert_eq!(tc.values, vec![5., 7., 3.]);
+    }
 
     #[test]
     fn test_shape_contiguousness() {
