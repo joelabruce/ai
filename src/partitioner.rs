@@ -81,7 +81,7 @@ impl Partitioner {
                     Ok(result) => { 
                         values.extend(result); 
                     },
-                    Err(_err) => { println!("{:?}", _err); }
+                    Err(_err) => panic!("{:?}", _err)
                 }
             }
         });
@@ -143,5 +143,19 @@ mod tests {
         let expected:Vec<_> = (0..tc1).map(|x| x * 2).collect();
 
         assert_eq!(actual, expected);        
+    }
+
+    #[test]
+    #[should_panic]
+    #[allow(unreachable_code)]
+    fn test_thread_errored() {
+        let partitioner = Partitioner::with_partitions(10, 2);
+
+        let _p = partitioner.parallelized(|_| {
+            let mut _partition_values = vec![0.];
+
+            panic!("Thread panicjed! (TEST)");
+            _partition_values
+        });
     }
 }
