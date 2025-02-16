@@ -36,5 +36,8 @@ mod tests {
         
         let vec = vec![1.3; 8];
         writer.write_slice_f32(&vec);
+
+        let u = 5;
+        writer.write_usize(u);
     }
 }

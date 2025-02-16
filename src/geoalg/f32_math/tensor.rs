@@ -134,7 +134,7 @@ impl Tensor {
             let mut partition_values = Vec::with_capacity(partition.size());
             for i in partition.range() {
                 let index_to_read = columns * (i % rows) + i / rows;
-                partition_values.push(self.values[index_to_read]);
+                partition_values.push(self[index_to_read]);
             }
 
             partition_values
@@ -290,6 +290,15 @@ impl Tensor {
         Self::new(self.shape.clone(), values)
     }
 
+    pub fn broadcast_vector_add(&self, rhs: &Tensor) -> Self {
+        rhs.shape.len();
+        todo!()
+    }
+
+    pub fn reduce_vector_add(&self) -> Self {
+        todo!()
+    }
+
     /// A Batch valid cross-correlation ensure that the output is smaller than the input.
     /// * `self`: Assumed shape is (batches, image height, image width, input channels) where inpput channels is 1 for grey scale, 3 for rgb, 4 for rgba.
     /// * `filters`: Assumed shape is (output channels, kernel height, kernel width, input channels).
@@ -338,6 +347,15 @@ impl Tensor {
             Shape::new(vec![self.shape[0], filters.shape[0], o_rows, o_columns]),
             values
         )
+    }
+
+    pub fn full_outer_convolution(&self, filters: &Tensor) -> Self {
+        filters.shape.len();
+        todo!()
+    }
+
+    pub fn maxpool2d(&self) -> Self {
+        todo!()
     }
 }
 

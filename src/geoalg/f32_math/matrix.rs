@@ -412,7 +412,7 @@ impl Matrix {
     }
 
     /// Todo: Put in Tensor.
-    pub fn full_outer_convolution(&self, kernels: &Matrix, k_d: &Dimensions, i_d: &Dimensions) -> Self {
+    pub fn full_outer_convolution(&self, filters: &Matrix, k_d: &Dimensions, i_d: &Dimensions) -> Self {
         let batches = self.row_count();
 
         let partitioner = &Partitioner::with_partitions(
@@ -425,7 +425,7 @@ impl Matrix {
 
         let o_rows = i_d.height;
         let o_columns =i_d.width;
-        let filters_size = kernels.row_count() * o_rows * o_columns;
+        let filters_size = filters.row_count() * o_rows * o_columns;
 
         let inner_process = move |partition: &Partition| {
             let mut partition_values = vec![0.; partition.size() * filters_size];
@@ -433,7 +433,7 @@ impl Matrix {
                 //let input = self.row(batch_index);
 
                 let batch_offset = batch_index * o_rows * o_columns;
-                for filter_index in 0..kernels.row_count() {
+                for filter_index in 0..filters.row_count() {
                     //let filter = kernels.row(filter_index);
                     let filter_offset = filter_index * k_d.height * k_d.width; 
 
@@ -450,7 +450,7 @@ impl Matrix {
                                         let input_offset = (batch_index as isize) * i_rows * i_columns;
 
                                         c_accum += self.values[(input_offset + input_row * i_columns + input_column) as usize] 
-                                            * kernels.values[filter_offset + kernel_row * k_d.width + kernel_column];
+                                            * filters.values[filter_offset + kernel_row * k_d.width + kernel_column];
                                     }
 
                                     //c_accum += dot_product_simd3(x, y)

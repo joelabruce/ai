@@ -61,10 +61,10 @@ impl Shape {
 
     /// Useful for constructing slice start and end.
     pub fn index_at(&self, coordinate: &Shape) -> usize {
-        assert_eq!(self.dimensions.len(), coordinate.dimensions.len(), "Coordinate outside of shape bounds.");
+        assert_eq!(self.dimensions.len(), coordinate.dimensions.len(), "Coordinate does not have same dimensionality as shape.");
         let mut index = 0;
         for axis in 0..self.dimensions.len() {            
-            assert!(self[axis] > coordinate.dimensions[axis]);
+            assert!(self[axis] > coordinate.dimensions[axis], "Coordinate outside of shape bounds.");
             index += self.stride_for(axis) * coordinate.dimensions[axis];
         }
 
@@ -80,8 +80,8 @@ mod tests {
     use super::Shape;
 
     #[test]
-    fn test_axis() {
-        let shape = Shape::new(vec![5, 4, 3, 2]);
+    fn test_d4() {
+        let shape = Shape::d4(5, 4, 3, 2);
 
         let actual = shape[0];
         assert_eq!(actual, 5);
@@ -118,6 +118,20 @@ mod tests {
     }
 
     #[test]
+    #[should_panic]
+    fn test_invalid_stride_for() {
+        let shape = Shape::d1(3);
+        shape.stride_for(1);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_invalid_dimension() {
+        let shape = Shape::d2(3, 7);
+        shape[3];
+    }
+
+    #[test]
     fn test_index_at() {
         let shape = Shape::new(vec![100, 30, 14, 500]);
 
@@ -127,4 +141,22 @@ mod tests {
         // 1* 8 + 500* 7 + 500*14* 4 + 500*14*30* 1 = 241508
         assert_eq!(actual, 241508);
     }
+
+    #[test]
+    #[should_panic]
+    fn test_out_of_bounds_index_at() {
+        let shape = Shape::d2(3, 5);
+        let coordinate = Shape::d1(19);
+
+        shape.index_at(&coordinate);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_invalid_index_at() {
+        let shape = Shape::d2(3, 5);
+        let coordinate = Shape::d2(1,9);
+
+        shape.index_at(&coordinate);
+    }    
 }
