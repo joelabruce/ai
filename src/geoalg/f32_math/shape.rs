@@ -70,6 +70,9 @@ impl Shape {
 
         index
     }
+
+    /// Grabs a slice of the dimensions
+    pub fn dims(&self) -> &[usize] { &self.dimensions }
 }
 
 #[cfg(test)]

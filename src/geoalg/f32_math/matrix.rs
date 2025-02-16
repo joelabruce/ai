@@ -106,7 +106,7 @@ impl Matrix {
 
     /// Returns transpose of matrix.
     /// Partitioner implementation complete.
-    /// Todo: Port to Tensor
+    /// Now in Tensor
     pub fn transpose(&self) -> Self {
         if self.rows == 1 || self.columns == 1 {
             return Self::from(self.columns, self.rows, self.values.clone());
@@ -411,6 +411,7 @@ impl Matrix {
         Matrix::from(batches, filters_size, values)
     }
 
+    /// Todo: Put in Tensor.
     pub fn full_outer_convolution(&self, kernels: &Matrix, k_d: &Dimensions, i_d: &Dimensions) -> Self {
         let batches = self.row_count();
 

@@ -114,6 +114,36 @@ impl Tensor {
         Self::new(self.shape.clone(), values)
     }
 
+    /// Transposes the last 2 dimensions for only the first batch.
+    /// Might consider doing a batch transpose, but not implemented yet.
+    pub fn transpose(&self) -> Self {
+        let partition_strategy = &Partitioner::with_partitions(
+            self.shape.size(), 
+            thread::available_parallelism().unwrap().get());
+
+        let row_dimension = self.shape.len() - 2;
+        let rows = self.shape[row_dimension];
+        let columns = self.shape[self.shape.len() - 1];
+
+        let mut dimensions = self.shape.dims()[0..row_dimension].to_vec();
+        dimensions.push(columns);
+        dimensions.push(rows);
+        let shape = Shape::new(dimensions);
+
+        let inner_process = move |partition: &Partition| {
+            let mut partition_values = Vec::with_capacity(partition.size());
+            for i in partition.range() {
+                let index_to_read = columns * (i % rows) + i / rows;
+                partition_values.push(self.values[index_to_read]);
+            }
+
+            partition_values
+        };
+
+        let values = partition_strategy.parallelized(inner_process);
+        Self::new(shape, values)
+    }
+
     /// Will matrix multiply two tensors, with the assumption that rhs has already been transposed.
     /// Will use the last two dimensions, does not yet support batching or broadcasting.
     /// * For now assumes only 1 matrix per tensor, will update when needed.
@@ -165,7 +195,7 @@ impl Tensor {
         Self::new(Shape::d2(lhs_rows, rhs_rows), values)
     }
 
-    /// Multiplies each element in lhs with the rhs element.
+    /// Multiplies each element in lhs with the corresponding rhs element.
     /// Does not require the same shape, only that the size of both tensors are the same.
     ///  * May lead to unexpected behavior, will change if needed.
     pub fn mul_element_wise_simd(&self, rhs: &Tensor) -> Self {
@@ -260,10 +290,11 @@ impl Tensor {
         Self::new(self.shape.clone(), values)
     }
 
-    /// Lhs: Assumed shape is (batches, image height, image width, input channels) where inpput channels is 1 for grey scale, 3 for rgb, 4 for rgba
-    /// filters: Assumed shape is (output channels, kernel height, kernel width, input channels)
-    /// Output: Shape is (batches, output channels, output height, output width)
-    /// When using more than 1 channel and larger filter sizes, takes better advantage of SIMD
+    /// A Batch valid cross-correlation ensure that the output is smaller than the input.
+    /// * `self`: Assumed shape is (batches, image height, image width, input channels) where inpput channels is 1 for grey scale, 3 for rgb, 4 for rgba.
+    /// * `filters`: Assumed shape is (output channels, kernel height, kernel width, input channels).
+    /// * `Output`: Shape is (batches, output channels, output height, output width). \
+    /// **Using more than 1 channel and/or filter sizes larger than 3x3, takes better advantage of SIMD.**
     pub fn batch_valid_cross_correlation_simd(&self, filters: &Tensor) -> Self {
         let o_rows = self.shape[1] - filters.shape[1] + 1;
         let o_columns = self.shape[2] - filters.shape[2] + 1;
@@ -389,6 +420,27 @@ mod tests {
             0., 1., 0., 1., 0., 1., 1., 0., 1., 1., 0., 1., 1., 0., 1., 1.,
             0., 1., 0., 0., 1., 0., 1., 0., 0., 1., 1., 0., 0., 1., 1., 1.
         ]);
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_transpose() {
+        let m = Tensor::matrix(5, 4, vec![
+            0f32, 1f32, 2f32, 3f32,
+            4f32, 5f32, 6f32, 7f32,
+            8f32, 9f32, 10f32, 11f32,
+            12f32, 13f32, 14f32, 15f32,
+            16f32, 17f32, 18f32, 19f32
+        ]);
+
+        let expected = Tensor::matrix(4, 5, vec![
+            0f32, 4f32, 8f32, 12f32, 16f32,
+            1f32, 5f32, 9f32, 13f32, 17f32,
+            2f32, 6f32, 10f32, 14f32, 18f32,
+            3f32, 7f32, 11f32, 15f32, 19f32
+        ]);
+        
+        let actual = m.transpose();
         assert_eq!(actual, expected);
     }
 
