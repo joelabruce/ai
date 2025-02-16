@@ -14,8 +14,15 @@ pub struct Dense {
 }
 
 impl Dense {
+    /// Initializes using He initialization.
+    /// Might consider allowing for more flexibility here, but have to think carefuly about the cleanest way to do this.
     fn random_weight_biases(prev_layer_input_count: usize, neuron_count: usize) -> (Matrix, Matrix) {
-        let uniform = Uniform::new_inclusive(-0.5, 0.5);
+        //let std_dev = 2. / (prev_layer_input_count as f32);
+        //let normal = Normal::new(0., std_dev).unwrap();
+        //let weights = Matrix::new_randomized_normal(prev_layer_input_count, neuron_count, normal);
+        
+        let term = (6. / (prev_layer_input_count as f32)).sqrt();
+        let uniform = Uniform::new_inclusive(-term, term);
         let weights = Matrix::new_randomized_uniform(prev_layer_input_count, neuron_count, uniform);
         let biases = Matrix::from(1, neuron_count, vec![0.0; neuron_count]);
 
@@ -25,10 +32,7 @@ impl Dense {
     pub fn new(input_size: usize, neuron_count: usize) -> Dense {
         let (weights, biases) = Dense::random_weight_biases(input_size, neuron_count);
 
-        Dense {
-            weights,
-            biases,
-        }
+        Dense { weights, biases }
     }
 
     /// Instantiates and returns a new Hidden Layer based off self's shape.

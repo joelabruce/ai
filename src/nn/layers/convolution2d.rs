@@ -1,4 +1,4 @@
-use rand_distr::Normal;
+use rand_distr::Uniform;
 
 use super::{learning_rate, max_pooling::MaxPooling, Matrix, Propagates};
 
@@ -25,17 +25,20 @@ pub struct Convolution2dDeprecated {
 
 impl Convolution2dDeprecated {
     /// Set channels to 1 for greyscale, 3 for RGB.
-    /// *RGB support not implemented yet, so ensure channels is 1.
+    /// * RGB support not implemented yet, so ensure channels is 1.
+    /// * Might consider allowing for more flexibility here, but have to think carefuly about the cleanest way to do this.
     pub fn new(filters: usize, channels: usize, k_d: Dimensions, i_d: Dimensions) -> Self {
         let biases = vec![0.; filters];
 
         let fanin = (k_d.height * k_d.width * channels) as f32;
-        let normal_term = (2. / fanin).sqrt();
-        let normal = Normal::new(0., normal_term).unwrap();
+        let term = (6. / fanin).sqrt();
+        //let normal = Normal::new(0., normal_term).unwrap();
+        let uniform = Uniform::new_inclusive(-term, term);
         
         Convolution2dDeprecated {
             filters,
-            kernels: Matrix::new_randomized_normal(filters, channels * k_d.height * k_d.width, normal),
+            //kernels: Matrix::new_randomized_normal(filters, channels * k_d.height * k_d.width, normal),
+            kernels: Matrix::new_randomized_uniform(filters, channels * k_d.height * k_d.width, uniform),
             biases: Matrix::from(1, filters, biases),
             k_d,
             i_d

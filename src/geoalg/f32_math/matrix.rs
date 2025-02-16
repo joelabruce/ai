@@ -221,7 +221,7 @@ impl Matrix {
 
     /// Subtracts rhs Matrix from lhs Matrix.
     /// Partitioner implementation complete.
-    /// Todo: Put in Tensor
+    /// In Tensor
     pub fn sub(&self, rhs: &Matrix) -> Self {
         assert!(self.rows == rhs.rows && self.columns == rhs.columns, "When subtracting two matrices, they must have same order.");
  
@@ -245,7 +245,7 @@ impl Matrix {
         Self::from(self.row_count(), self.column_count(), values)
     }
 
-    /// Todo: Put in tensor.
+    /// In tensor.
     pub fn add(&self, rhs: &Matrix) -> Self {
         assert!(self.rows == rhs.rows && self.columns == rhs.columns, "When subtracting two matrices, they must have same order.");
     

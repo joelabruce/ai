@@ -24,8 +24,11 @@ impl IndexMut<usize> for Tensor {
 }
 
 impl Tensor {
-    /// Creates a new tensor with specified shape.
-    pub fn new(shape: Shape, values: Vec<f32>) -> Self { Tensor { shape, values } }
+    /// Creates a vector tensor specified by values.
+    pub fn vector(values: Vec<f32>) -> Self { Tensor::new(Shape::d1(values.len()), values) }
+
+    /// Creates a row-major matrix tensor.
+    pub fn matrix(rows: usize, columns: usize, values: Vec<f32>) -> Self { Tensor::new(Shape::d2(rows, columns), values) }
 
     /// Creates a tensor with uniform distribution of random values.
     pub fn new_randomized_uniform(shape: Shape, uniform: Uniform<f32>) -> Self {
@@ -45,15 +48,8 @@ impl Tensor {
         Tensor::new(shape, values)
     }
 
-    /// Creates a vector tensor specified by values.
-    pub fn vector(values: Vec<f32>) -> Self {
-        Tensor::new(Shape::d1(values.len()), values)
-    }
-
-    /// Creates a row-major matrix tensor.
-    pub fn matrix(rows: usize, columns: usize, values: Vec<f32>) -> Self {
-        Tensor::new(Shape::d2(rows, columns), values)
-    }
+    /// Creates a new tensor with specified shape.
+    pub fn new(shape: Shape, values: Vec<f32>) -> Self { Tensor { shape, values } }
 
     /// Get a read-only stream to underlying values.
     /// Needed for simd to be super fast! :D
@@ -77,7 +73,6 @@ impl Tensor {
         let y_simd = Simd::<f32, SIMD_LANES>::splat(0.);
         let inner_process = |partition: &Partition| {
             let mut partition_values: Vec<f32> = Vec::with_capacity(partition.size());
-
             partition.unary_simd(
                 &mut partition_values, 
                 &self.stream(),
@@ -92,7 +87,7 @@ impl Tensor {
         Self::new(self.shape.clone(), values)
     }
 
-    /// Derivative of relu on each element
+    /// Derivative of relu on each element in Tensor.
     pub fn d_relu_simd(&self) -> Self {
         let partitioner = Partitioner::with_partitions_simd(
             self.shape.size(), 
@@ -178,21 +173,66 @@ impl Tensor {
             self.shape.size(), 
             thread::available_parallelism().unwrap().get());
 
-            let inner_process = |partition: &Partition| {
-                let mut partition_values: Vec<f32> = Vec::with_capacity(partition.size());
-                partition.binary_simd(
-                    &mut partition_values, 
-                    &self.stream(),
-                    &rhs.stream(),
-                    |x_simd, y_simd| x_simd * y_simd,
-                    |x, y| x * y
-                );
-    
-                partition_values
-            };
+        let inner_process = |partition: &Partition| {
+            let mut partition_values: Vec<f32> = Vec::with_capacity(partition.size());
+            partition.binary_simd(
+                &mut partition_values, 
+                &self.stream(),
+                &rhs.stream(),
+                |x_simd, y_simd| x_simd * y_simd,
+                |x, y| x * y
+            );
+
+            partition_values
+        };
 
         let values = partition_strategy.parallelized(inner_process);
+        Self::new(self.shape.clone(), values)
+    }
 
+    /// Subtracts two tensors.
+    pub fn sub_element_wise_simd(&self, rhs: &Tensor) -> Self {
+        let partition_strategy = &Partitioner::with_partitions_simd(
+            self.shape.size(), 
+            thread::available_parallelism().unwrap().get());
+
+        let inner_process = |partition: &Partition| {
+            let mut partition_values: Vec<f32> = Vec::with_capacity(partition.size());
+            partition.binary_simd(
+                &mut partition_values, 
+                &self.stream(),
+                &rhs.stream(),
+                |x_simd, y_simd| x_simd - y_simd,
+                |x, y| x - y
+            );
+
+            partition_values
+        };
+
+        let values = partition_strategy.parallelized(inner_process);
+        Self::new(self.shape.clone(), values)
+    }
+
+    /// Adds two tensors.
+    pub fn add_element_wise_simd(&self, rhs: &Tensor) -> Self {
+        let partition_strategy = &Partitioner::with_partitions_simd(
+            self.shape.size(), 
+            thread::available_parallelism().unwrap().get());
+
+        let inner_process = |partition: &Partition| {
+            let mut partition_values: Vec<f32> = Vec::with_capacity(partition.size());
+            partition.binary_simd(
+                &mut partition_values, 
+                &self.stream(),
+                &rhs.stream(),
+                |x_simd, y_simd| x_simd + y_simd,
+                |x, y| x + y
+            );
+
+            partition_values
+        };
+
+        let values = partition_strategy.parallelized(inner_process);
         Self::new(self.shape.clone(), values)
     }
 
@@ -289,9 +329,9 @@ mod tests {
     }
 
     #[test]
-    fn test_shape_contiguousness() {
-        let _x = Tensor::new(
-            Shape::new(vec![4, 3, 2]), vec![
+    fn test_contiguousness_by_index() {
+        let x = Tensor::new(
+            Shape::d3(4, 3, 2), vec![
             1., 2.,
             3., 4.,
             5., 6.,
@@ -308,6 +348,11 @@ mod tests {
             32., 6.,
             23., 34.
         ]);
+
+        assert_eq!(x[1], 2.);
+        assert_eq!(x[2], 3.);
+        assert_eq!(x[6], 10.);
+        assert_eq!(x[13], 200.);
     }
 
     #[test]
@@ -325,7 +370,7 @@ mod tests {
     }
 
     #[test]
-    fn test_relu() {
+    fn test_relu_and_d_relu() {
         let tc = Tensor::matrix(2, 16, vec![
             -3., 5., -9., 10., -8., 4., 7., -10., 3., 1., -5., 8., 2., -4., 6., 9.,
             -2., 6., -6., 0., 10., -1., 7., -7., -3., 3., 4., -10., -9., 1., 2., 5.
@@ -344,70 +389,6 @@ mod tests {
             0., 1., 0., 1., 0., 1., 1., 0., 1., 1., 0., 1., 1., 0., 1., 1.,
             0., 1., 0., 0., 1., 0., 1., 0., 0., 1., 1., 0., 0., 1., 1., 1.
         ]);
-        assert_eq!(actual, expected);
-    }
-
-    #[test]
-    fn test_scale_simd() {
-        // Test for single thread, and not enough data to fill SIMD_LANES
-        let tc = Tensor::vector(vec![10., 100., 0., 20.]);
-        let actual = tc.scale_simd(10.);
-        let expected = Tensor::vector(vec![100., 1000., 0., 200.]);
-        assert_eq!(actual, expected);
-
-        // Test for checking overflow works on 16 SIMD_LANES
-        let tc = Tensor::matrix(2, 17, vec![
-            2., 6., 10., 5., 7., 1., 3., 1., 7., 4., 3., 9., 7., 4., 6., 1., 10.,
-            4., 9., 5., 4., 2., 4., 4., 5., 5., 2., 4., 4., 4., 2., 2., 2., 4.
-        ]);
-        let actual = tc.scale_simd(20.);
-        let expected = Tensor::matrix(2, 17, vec![
-            40., 120., 200., 100., 140., 20., 60., 20., 140., 80., 60., 180., 140., 80., 120., 20., 200.,
-            80., 180., 100., 80., 40., 80., 80., 100., 100., 40., 80., 80., 80., 40., 40., 40., 80.
-        ]);
-
-        assert_eq!(actual, expected);
-
-        // Great test for testing against 16 parallel threads on 16 SIMD_LANES
-        let tc = Tensor::matrix(16, 16, vec![
-            2., 6., 10., 5., 7., 1., 3., 1., 7., 4., 3., 9., 7., 4., 6., 1.,
-            10., 7., 4., 10., 3., 2., 10., 7., 4., 8., 10., 6., 10., 8., 1., 4.,
-            4., 1., 9., 1., 9., 8., 10., 9., 1., 1., 8., 8., 1., 7., 10., 6.,
-            1., 6., 8., 1., 8., 9., 3., 10., 1., 4., 5., 4., 4., 7., 10., 5.,
-            5., 1., 10., 5., 1., 9., 5., 10., 10., 5., 1., 1., 2., 1., 4., 8.,
-            6., 4., 9., 5., 4., 2., 4., 4., 5., 5., 2., 4., 4., 4., 2., 2.,
-            2., 4., 8., 4., 1., 2., 6., 1., 2., 3., 3., 8., 5., 1., 5., 1.,
-            1., 7., 2., 7., 5., 3., 5., 1., 9., 5., 8., 7., 4., 1., 4., 1.,
-            10., 5., 2., 2., 6., 10., 8., 3., 10., 5., 10., 9., 7., 5., 10., 7.,
-            4., 9., 6., 3., 5., 10., 4., 1., 3., 4., 3., 1., 10., 7., 8., 1.,
-            6., 9., 10., 8., 6., 4., 7., 4., 10., 7., 2., 9., 8., 8., 6., 9.,
-            2., 10., 8., 8., 7., 6., 7., 1., 1., 4., 2., 5., 1., 3., 10., 2.,
-            9., 9., 9., 6., 4., 5., 1., 4., 10., 6., 9., 2., 6., 9., 7., 3.,
-            3., 5., 4., 8., 4., 9., 8., 6., 2., 8., 4., 6., 8., 2., 9., 1.,
-            9., 5., 5., 10., 10., 8., 10., 3., 10., 2., 6., 7., 6., 5., 7., 6.,
-            5., 3., 3., 10., 3., 4., 1., 7., 3., 3., 9., 1., 1., 5., 1., 7.
-        ]);
-        
-        let actual = tc.scale_simd(10.);
-        let expected = Tensor::matrix(16, 16, vec![
-            20., 60., 100., 50., 70., 10., 30., 10., 70., 40., 30., 90., 70., 40., 60., 10.,
-            100., 70., 40., 100., 30., 20., 100., 70., 40., 80., 100., 60., 100., 80., 10., 40.,
-            40., 10., 90., 10., 90., 80., 100., 90., 10., 10., 80., 80., 10., 70., 100., 60.,
-            10., 60., 80., 10., 80., 90., 30., 100., 10., 40., 50., 40., 40., 70., 100., 50.,
-            50., 10., 100., 50., 10., 90., 50., 100., 100., 50., 10., 10., 20., 10., 40., 80.,
-            60., 40., 90., 50., 40., 20., 40., 40., 50., 50., 20., 40., 40., 40., 20., 20.,
-            20., 40., 80., 40., 10., 20., 60., 10., 20., 30., 30., 80., 50., 10., 50., 10.,
-            10., 70., 20., 70., 50., 30., 50., 10., 90., 50., 80., 70., 40., 10., 40., 10.,
-            100., 50., 20., 20., 60., 100., 80., 30., 100., 50., 100., 90., 70., 50., 100., 70.,
-            40., 90., 60., 30., 50., 100., 40., 10., 30., 40., 30., 10., 100., 70., 80., 10.,
-            60., 90., 100., 80., 60., 40., 70., 40., 100., 70., 20., 90., 80., 80., 60., 90.,
-            20., 100., 80., 80., 70., 60., 70., 10., 10., 40., 20., 50., 10., 30., 100., 20.,
-            90., 90., 90., 60., 40., 50., 10., 40., 100., 60., 90., 20., 60., 90., 70., 30.,
-            30., 50., 40., 80., 40., 90., 80., 60., 20., 80., 40., 60., 80., 20., 90., 10.,
-            90., 50., 50., 100., 100., 80., 100., 30., 100., 20., 60., 70., 60., 50., 70., 60.,
-            50., 30., 30., 100., 30., 40., 10., 70., 30., 30., 90., 10., 10., 50., 10., 70.
-        ]);
-
         assert_eq!(actual, expected);
     }
 
@@ -545,6 +526,140 @@ mod tests {
 
         let output = inputs.batch_valid_cross_correlation_simd(&filters);
         println!("{BRIGHT_CYAN}{:?}{RESET}", output);
+    }
+
+    #[test]
+    fn test_scale_simd() {
+        // Test for single thread, and not enough data to fill SIMD_LANES
+        let tc = Tensor::vector(vec![10., 100., 0., 20.]);
+        let actual = tc.scale_simd(10.);
+        let expected = Tensor::vector(vec![100., 1000., 0., 200.]);
+        assert_eq!(actual, expected);
+
+        // Test for checking overflow works on 16 SIMD_LANES
+        let tc = Tensor::matrix(2, 17, vec![
+            2., 6., 10., 5., 7., 1., 3., 1., 7., 4., 3., 9., 7., 4., 6., 1., 10.,
+            4., 9., 5., 4., 2., 4., 4., 5., 5., 2., 4., 4., 4., 2., 2., 2., 4.
+        ]);
+        let actual = tc.scale_simd(20.);
+        let expected = Tensor::matrix(2, 17, vec![
+            40., 120., 200., 100., 140., 20., 60., 20., 140., 80., 60., 180., 140., 80., 120., 20., 200.,
+            80., 180., 100., 80., 40., 80., 80., 100., 100., 40., 80., 80., 80., 40., 40., 40., 80.
+        ]);
+
+        assert_eq!(actual, expected);
+
+        // Great test for testing against 16 parallel threads on 16 SIMD_LANES
+        let tc = Tensor::matrix(16, 16, vec![
+            2., 6., 10., 5., 7., 1., 3., 1., 7., 4., 3., 9., 7., 4., 6., 1.,
+            10., 7., 4., 10., 3., 2., 10., 7., 4., 8., 10., 6., 10., 8., 1., 4.,
+            4., 1., 9., 1., 9., 8., 10., 9., 1., 1., 8., 8., 1., 7., 10., 6.,
+            1., 6., 8., 1., 8., 9., 3., 10., 1., 4., 5., 4., 4., 7., 10., 5.,
+            5., 1., 10., 5., 1., 9., 5., 10., 10., 5., 1., 1., 2., 1., 4., 8.,
+            6., 4., 9., 5., 4., 2., 4., 4., 5., 5., 2., 4., 4., 4., 2., 2.,
+            2., 4., 8., 4., 1., 2., 6., 1., 2., 3., 3., 8., 5., 1., 5., 1.,
+            1., 7., 2., 7., 5., 3., 5., 1., 9., 5., 8., 7., 4., 1., 4., 1.,
+            10., 5., 2., 2., 6., 10., 8., 3., 10., 5., 10., 9., 7., 5., 10., 7.,
+            4., 9., 6., 3., 5., 10., 4., 1., 3., 4., 3., 1., 10., 7., 8., 1.,
+            6., 9., 10., 8., 6., 4., 7., 4., 10., 7., 2., 9., 8., 8., 6., 9.,
+            2., 10., 8., 8., 7., 6., 7., 1., 1., 4., 2., 5., 1., 3., 10., 2.,
+            9., 9., 9., 6., 4., 5., 1., 4., 10., 6., 9., 2., 6., 9., 7., 3.,
+            3., 5., 4., 8., 4., 9., 8., 6., 2., 8., 4., 6., 8., 2., 9., 1.,
+            9., 5., 5., 10., 10., 8., 10., 3., 10., 2., 6., 7., 6., 5., 7., 6.,
+            5., 3., 3., 10., 3., 4., 1., 7., 3., 3., 9., 1., 1., 5., 1., 7.
+        ]);
+        
+        let actual = tc.scale_simd(10.);
+        let expected = Tensor::matrix(16, 16, vec![
+            20., 60., 100., 50., 70., 10., 30., 10., 70., 40., 30., 90., 70., 40., 60., 10.,
+            100., 70., 40., 100., 30., 20., 100., 70., 40., 80., 100., 60., 100., 80., 10., 40.,
+            40., 10., 90., 10., 90., 80., 100., 90., 10., 10., 80., 80., 10., 70., 100., 60.,
+            10., 60., 80., 10., 80., 90., 30., 100., 10., 40., 50., 40., 40., 70., 100., 50.,
+            50., 10., 100., 50., 10., 90., 50., 100., 100., 50., 10., 10., 20., 10., 40., 80.,
+            60., 40., 90., 50., 40., 20., 40., 40., 50., 50., 20., 40., 40., 40., 20., 20.,
+            20., 40., 80., 40., 10., 20., 60., 10., 20., 30., 30., 80., 50., 10., 50., 10.,
+            10., 70., 20., 70., 50., 30., 50., 10., 90., 50., 80., 70., 40., 10., 40., 10.,
+            100., 50., 20., 20., 60., 100., 80., 30., 100., 50., 100., 90., 70., 50., 100., 70.,
+            40., 90., 60., 30., 50., 100., 40., 10., 30., 40., 30., 10., 100., 70., 80., 10.,
+            60., 90., 100., 80., 60., 40., 70., 40., 100., 70., 20., 90., 80., 80., 60., 90.,
+            20., 100., 80., 80., 70., 60., 70., 10., 10., 40., 20., 50., 10., 30., 100., 20.,
+            90., 90., 90., 60., 40., 50., 10., 40., 100., 60., 90., 20., 60., 90., 70., 30.,
+            30., 50., 40., 80., 40., 90., 80., 60., 20., 80., 40., 60., 80., 20., 90., 10.,
+            90., 50., 50., 100., 100., 80., 100., 30., 100., 20., 60., 70., 60., 50., 70., 60.,
+            50., 30., 30., 100., 30., 40., 10., 70., 30., 30., 90., 10., 10., 50., 10., 70.
+        ]);
+
+        assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_add_element_wise_simd() {
+        let lhs = Tensor::new(
+            Shape::d2(4, 4),
+            vec![
+                0., 1., 2., 3.,
+                4., 5., 6., 7.,
+                8., 9., 10., 11.,
+                12., 13., 14., 15.
+            ]
+        );
+
+        let rhs = Tensor::new(
+            Shape::d2(4, 4), vec![
+                0., 1., 1., 1.,
+                2., 3., 2., 2.,
+                3., 3., 1., 4.,
+                5., 4., 3., 2.
+            ]
+        );
+
+        let actual = lhs.add_element_wise_simd(&rhs);
+        let expected = Tensor::new(
+            Shape::d2(4, 4),
+            vec![
+                0., 2., 3., 4.,
+                6., 8., 8., 9.,
+                11., 12., 11., 15.,
+                17., 17., 17., 17.
+            ]
+        );
+
+        assert_eq!(actual, expected);
+    }
+    
+    #[test]
+    fn test_sub_element_wise_simd() {
+        let lhs = Tensor::new(
+            Shape::d2(4, 4),
+            vec![
+                0., 1., 2., 3.,
+                4., 5., 6., 7.,
+                8., 9., 10., 11.,
+                12., 13., 14., 15.
+            ]
+        );
+
+        let rhs = Tensor::new(
+            Shape::d2(4, 4), vec![
+                0., 1., 1., 1.,
+                2., 3., 2., 2.,
+                3., 3., 1., 4.,
+                5., 4., 3., 2.
+            ]
+        );
+
+        let actual = lhs.sub_element_wise_simd(&rhs);
+        let expected = Tensor::new(
+            Shape::d2(4, 4),
+            vec![
+                0., 0., 1., 2.,
+                2., 2., 4., 5.,
+                5., 6., 9., 7.,
+                7., 9., 11., 13.
+            ]
+        );
+
+        assert_eq!(actual, expected);
     }
 
     #[test]
