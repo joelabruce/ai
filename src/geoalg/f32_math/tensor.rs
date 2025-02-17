@@ -51,6 +51,15 @@ impl Tensor {
     /// Creates a new tensor with specified shape.
     pub fn new(shape: Shape, values: Vec<f32>) -> Self { Tensor { shape, values } }
 
+    /// Moves values into a new Tensor with a different shape.
+    pub fn reshape(self, new_shape: Shape) -> Self {
+        let old_size = self.shape.size();
+        let new_size = new_shape.size();
+        assert_eq!(old_size, new_size, "Cannot reshape tensor into a shape that doesn't have same size.");
+
+        Self::new(new_shape, self.values)
+    }
+
     /// Get a read-only stream to underlying values.
     /// Needed for simd to be super fast! :D
     pub fn stream(&self) -> &[f32] { &self.values }
@@ -465,6 +474,20 @@ mod tests {
         assert_eq!(x[2], 3.);
         assert_eq!(x[6], 10.);
         assert_eq!(x[13], 200.);
+    }
+
+    #[test]
+    fn test_reshape() {
+        let t = Tensor::vector(vec![0., 1., 2., 3., 4., 5.]);
+        let actual = t.reshape(Shape::d2(3, 2));
+        let _ = actual.reshape(Shape::d3(1, 2, 3));
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_reshape_invalid() {
+        let t = Tensor::vector(vec![0., 1., 2., 3., 4.,]);
+        let _ = t.reshape(Shape::d2(3, 2));
     }
 
     #[test]
