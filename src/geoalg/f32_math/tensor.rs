@@ -5,9 +5,9 @@ use crate::{nn::layers::convolution2d::Dimensions, partition::Partition, partiti
 
 use super::{shape::Shape, simd_extensions::{dot_product_simd3, SIMD_LANES}};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Tensor {
-    shape: Shape,
+    pub shape: Shape,
     values: Vec<f32>
 }
 

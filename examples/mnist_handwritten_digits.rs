@@ -2,7 +2,7 @@
 // Use the following command to run in release mode:
 // cargo run --release --example mnist_digits
 
-use ai::{nn::{activation_functions::RELU, layers::dense::Dense, neural::NeuralNetworkNode, trainer::{train_network, TrainingHyperParameters}}, timed};
+use ai::{nn::{layers::dense::Dense, neural::NeuralNetworkNode, trainer::{train_network, TrainingHyperParameters}}, timed};
 
 pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
     let time_to_run = timed::timed(|| {
@@ -27,9 +27,9 @@ pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
         // Add layers to the network for forward and backward propagation.
         let mut nn_nodes: Vec<NeuralNetworkNode> = Vec::new();
         nn_nodes.push(NeuralNetworkNode::DenseLayer(dense1));
-        nn_nodes.push(NeuralNetworkNode::ActivationLayer(RELU));
+        //nn_nodes.push(NeuralNetworkNode::ActivationLayer(RELU));
         nn_nodes.push(NeuralNetworkNode::DenseLayer(dense2));
-        nn_nodes.push(NeuralNetworkNode::ActivationLayer(RELU));
+        //nn_nodes.push(NeuralNetworkNode::ActivationLayer(RELU));
         nn_nodes.push(NeuralNetworkNode::DenseLayer(dense3));
 
         train_network(&mut nn_nodes, tp, load_from_file, include_batch_output);

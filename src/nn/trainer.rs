@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use crate::{digit_image::DigitImage, geoalg::f32_math::matrix::Matrix, nn::{activation_functions::{accuracy, backward_categorical_cross_entropy_loss_wrt_softmax, forward_categorical_cross_entropy_loss, SOFTMAX}, learning_rate::LearningRate, neural::NeuralNetwork}, output_bin_writer::OutputBinWriter, statistics::sample::Sample};
+use crate::{digit_image::DigitImage, geoalg::f32_math::tensor::Tensor, nn::{activation_functions::{accuracy, backward_categorical_cross_entropy_loss_wrt_softmax, forward_categorical_cross_entropy_loss, SOFTMAX}, learning_rate::LearningRate, neural::NeuralNetwork}, output_bin_writer::OutputBinWriter, statistics::sample::Sample};
 
 use super::{layers::input::Input, neural::NeuralNetworkNode};
 
@@ -17,7 +17,7 @@ pub struct TrainingHyperParameters {
 }
 
 /// Creates an input layer drawn randomly from a sample.
-pub fn from_sample_digit_images(sample: &mut Sample<DigitImage>, requested_batch_size: usize) -> (Input, Matrix) {
+pub fn from_sample_digit_images(sample: &mut Sample<DigitImage>, requested_batch_size: usize) -> (Input, Tensor) {
     let data_from_sample = sample.random_batch(requested_batch_size);
 
     let mut pixel_vector = Vec::with_capacity(data_from_sample.len() * 785);
@@ -30,7 +30,7 @@ pub fn from_sample_digit_images(sample: &mut Sample<DigitImage>, requested_batch
 
     (
         Input::from(rows, 784, pixel_vector), 
-        Matrix::from(rows, 10, target_vector)
+        Tensor::matrix(rows, 10, target_vector)
     )
 }
 
@@ -68,7 +68,7 @@ pub fn train_network(nn_nodes: &mut Vec<NeuralNetworkNode>, tp: TrainingHyperPar
 
     // Create Layers in network
     let mut lowest_loss = f32::INFINITY;
-    let mut forward_stack: Vec<Matrix>;
+    let mut forward_stack: Vec<Tensor>;
 
     println!("-Beginning training-");
     for epoch in epoch_offset + 1..=epoch_offset + tp.total_epochs {
@@ -102,7 +102,7 @@ pub fn train_network(nn_nodes: &mut Vec<NeuralNetworkNode>, tp: TrainingHyperPar
 
                 if tp.output_loss {
                     let sample_losses = forward_categorical_cross_entropy_loss(&predictions, &targets);
-                    let data_loss = sample_losses.read_values().into_iter().sum::<f32>() / sample_losses.len() as f32;            
+                    let data_loss = sample_losses.stream().into_iter().sum::<f32>() / sample_losses.shape.size() as f32;            
                     println!("| Loss: {data_loss:.5}");
                 }
             }
@@ -132,7 +132,7 @@ pub fn train_network(nn_nodes: &mut Vec<NeuralNetworkNode>, tp: TrainingHyperPar
         }
 
         let v_sample_losses = forward_categorical_cross_entropy_loss(&v_predictions, &v_targets);
-        let v_data_loss = v_sample_losses.read_values().into_iter().sum::<f32>() / v_sample_losses.len() as f32;
+        let v_data_loss = v_sample_losses.stream().into_iter().sum::<f32>() / v_sample_losses.shape.size() as f32;
     
         if tp.output_loss {
             print!("| Loss: {v_data_loss:.5}");

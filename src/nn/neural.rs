@@ -5,22 +5,23 @@ use dense::Dense;
 use input::Input;
 
 use crate::digit_image::DigitImage;
+use crate::geoalg::f32_math::tensor::Tensor;
 use crate::nn::layers::*;
-use crate::nn::activation_functions::*;
-use crate::geoalg::f32_math::matrix::*;
+//use crate::nn::activation_functions::*;
+//use crate::geoalg::f32_math::matrix::*;
 use crate::input_csv_reader::*;
 use crate::output_bin_writer::OutputBinWriter;
 use crate::statistics::sample::Sample;
 
-use super::layers::convolution2d::Convolution2dDeprecated;
-use super::layers::max_pooling::MaxPooling;
+//use super::layers::convolution2d::Convolution2dDeprecated;
+//use super::layers::max_pooling::MaxPooling;
 use super::learning_rate::LearningRate;
 
 pub enum NeuralNetworkNode {
     DenseLayer(Dense),
-    Convolution2dLayer(Convolution2dDeprecated),
-    ActivationLayer(Activation),
-    MaxPoolLayer(MaxPooling)
+    //Convolution2dLayer(Convolution2dDeprecated),
+    //ActivationLayer(Activation),
+    //MaxPoolLayer(MaxPooling)
 }
 
 /// Contains structure and hyper-parameters needed for a neural network
@@ -54,16 +55,16 @@ impl NeuralNetwork {
 
     /// Forward propagates the inputs through the layers.
     /// Calculates a Vec of matrices to be used for backpropagation.
-    pub fn forward(with_input: Input, to_nodes: &mut Vec<NeuralNetworkNode>) -> Vec<Matrix> {
+    pub fn forward(with_input: Input, to_nodes: &mut Vec<NeuralNetworkNode>) -> Vec<Tensor> {
         let mut forward_stack = Vec::with_capacity(to_nodes.len() + 1);
 
         forward_stack.push(with_input.input_matrix);
         for node in to_nodes.iter_mut() {
             match node {
-                NeuralNetworkNode::ActivationLayer(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
+                //NeuralNetworkNode::ActivationLayer(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
                 NeuralNetworkNode::DenseLayer(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
-                NeuralNetworkNode::Convolution2dLayer(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
-                NeuralNetworkNode::MaxPoolLayer(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
+                //NeuralNetworkNode::Convolution2dLayer(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
+                //NeuralNetworkNode::MaxPoolLayer(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
                 //_ => ()
             }
         } 
@@ -73,7 +74,7 @@ impl NeuralNetwork {
 
     /// Applies backpropagation.
     /// Pops the items off of fcalcs, but keeps nodes in the Vec so we can do the next forward pass.
-    pub fn backward(from_nodes: &mut Vec<NeuralNetworkNode>, learning_rate: &mut LearningRate, dz: &Matrix, fcalcs: &mut Vec<Matrix>) {
+    pub fn backward(from_nodes: &mut Vec<NeuralNetworkNode>, learning_rate: &mut LearningRate, dz: &Tensor, fcalcs: &mut Vec<Tensor>) {
         let mut dvalues = dz.clone();
         
         for i in (0..from_nodes.len()).rev() {
@@ -81,22 +82,22 @@ impl NeuralNetwork {
 
             if let Some(node) = node_opt {
                 match node {
-                    NeuralNetworkNode::ActivationLayer(n) => {
-                        let fcalc = fcalcs.pop().unwrap();
-                        dvalues = n.backward(learning_rate, &dvalues, &fcalc);
-                    },
+                    // NeuralNetworkNode::ActivationLayer(n) => {
+                    //     let fcalc = fcalcs.pop().unwrap();
+                    //     dvalues = n.backward(learning_rate, &dvalues, &fcalc);
+                    // },
                     NeuralNetworkNode::DenseLayer(n) => {
                         let fcalc = fcalcs.pop().unwrap();
                         dvalues = n.backward(learning_rate, &dvalues, &fcalc);
                     },
-                    NeuralNetworkNode::Convolution2dLayer(n) => {
-                        let fcalc = fcalcs.pop().unwrap();
-                        dvalues = n.backward(learning_rate, &dvalues, &fcalc);
-                    },
-                    NeuralNetworkNode::MaxPoolLayer(n) => {
-                        let fcalc = fcalcs.pop().unwrap();
-                        dvalues = n.backward(learning_rate, &dvalues, &fcalc);
-                    },
+                    // NeuralNetworkNode::Convolution2dLayer(n) => {
+                    //     let fcalc = fcalcs.pop().unwrap();
+                    //     dvalues = n.backward(learning_rate, &dvalues, &fcalc);
+                    // },
+                    // NeuralNetworkNode::MaxPoolLayer(n) => {
+                    //     let fcalc = fcalcs.pop().unwrap();
+                    //     dvalues = n.backward(learning_rate, &dvalues, &fcalc);
+                    // },
                 };
             };
        }
@@ -107,14 +108,14 @@ impl NeuralNetwork {
         for node in from_nodes {
             match node {
                 NeuralNetworkNode::DenseLayer(n) => {
-                    to_writer.write_slice_f32(&n.weights.read_values());
-                    to_writer.write_slice_f32(&n.biases.read_values());
+                    to_writer.write_slice_f32(&n.weights.stream());
+                    to_writer.write_slice_f32(&n.biases.stream());
                 },
-                NeuralNetworkNode::Convolution2dLayer(n) => {
-                    to_writer.write_slice_f32(&n.kernels.read_values());
-                    to_writer.write_slice_f32(&n.biases.read_values());
-                }
-                _ => { }
+                // NeuralNetworkNode::Convolution2dLayer(n) => {
+                //     to_writer.write_slice_f32(&n.kernels.read_values());
+                //     to_writer.write_slice_f32(&n.biases.read_values());
+                // }
+                //_ => { }
             }
         }
     }
@@ -152,28 +153,32 @@ impl NeuralNetwork {
                     match node {
                         NeuralNetworkNode::DenseLayer(n) => {
                             // Load weights first
-                            let (mut rows, mut columns) = n.weights.shape();
+                            //let (mut rows, mut columns) = n.weights.shape();
+                            let mut rows = n.weights.shape[0];
+                            let mut columns = n.weights.shape[1];
                             let weight_floats = NeuralNetwork::read_section(&mut file, columns * rows, CHUNK_SIZE);
-                            n.weights = Matrix::from(rows, columns, weight_floats);
+                            n.weights = Tensor::matrix(rows, columns, weight_floats);
 
                             // Load biases next
-                            (rows, columns) = n.biases.shape();                            
+                            //(rows, columns) = n.biases.shape();
+                            rows = n.biases.shape[0];
+                            columns = n.biases.shape[1];                        
                             let biases_floats = NeuralNetwork::read_section(&mut file, columns * rows, CHUNK_SIZE);
-                            n.biases = Matrix::from(rows, columns, biases_floats);
+                            n.biases = Tensor::matrix(rows, columns, biases_floats);
                             //println!("Loaded weights and biases for dense layer.")
                         },
-                        NeuralNetworkNode::Convolution2dLayer(n) => {
-                            // Load weights first
-                            let (mut rows, mut columns) = n.kernels.shape();
-                            let kernel_floats = NeuralNetwork::read_section(&mut file, columns * rows, CHUNK_SIZE);
-                            n.kernels = Matrix::from(rows, columns, kernel_floats);
+                        // NeuralNetworkNode::Convolution2dLayer(n) => {
+                        //     // Load weights first
+                        //     let (mut rows, mut columns) = n.kernels.shape();
+                        //     let kernel_floats = NeuralNetwork::read_section(&mut file, columns * rows, CHUNK_SIZE);
+                        //     n.kernels = Tensor::matrix(rows, columns, kernel_floats);
 
-                            (rows, columns) = n.biases.shape();                            
-                            let biases_floats = NeuralNetwork::read_section(&mut file, columns * rows, CHUNK_SIZE);
-                            n.biases = Matrix::from(rows, columns, biases_floats);
-                            //println!("Loaded kernels and biases for convolution2d layer.")
-                        }
-                        _ => { }
+                        //     (rows, columns) = n.biases.shape();                            
+                        //     let biases_floats = NeuralNetwork::read_section(&mut file, columns * rows, CHUNK_SIZE);
+                        //     n.biases = Tensor::matrix(rows, columns, biases_floats);
+                        //     //println!("Loaded kernels and biases for convolution2d layer.")
+                        // }
+                        //_ => { }
                     }
                 }
             }

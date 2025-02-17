@@ -1,12 +1,11 @@
 use crate::{partition::Partition, partitioner::Partitioner};
 use std::simd::{num::SimdFloat, *};
-use super::matrix::*;
 
 pub const SIMD_LANES: usize = 16;
 
 /// Taken from github exmples.
 pub fn dot_product_simd3(lhs: &[f32], rhs: &[f32]) -> f32 {
-    assert_eq!(lhs.len(), rhs.len());
+    assert_eq!(lhs.len(), rhs.len(), "Slices must be of equal length for dot product.");
 
     let (a_extra, a_chunks) = lhs.as_rchunks();
     let (b_extra, b_chunks) = rhs.as_rchunks();
@@ -22,97 +21,6 @@ pub fn dot_product_simd3(lhs: &[f32], rhs: &[f32]) -> f32 {
     });
 
     sums.reduce_sum()
-}
-
-// Taken from github examples.
-// This version is slower than not doing simd, why?
-// Too much reliance on abstractions??
-// pub fn dot_product_simd5(a: &[f32], b: &[f32]) -> f32 {
-//     a.array_chunks::<SIMD_LANES>()
-//         .map(|&a| Simd::<f32, SIMD_LANES>::from_array(a))
-//         .zip(b.array_chunks::<SIMD_LANES>().map(|&b| Simd::<f32, SIMD_LANES>::from_array(b)))
-//         .fold(Simd::<f32, SIMD_LANES>::splat(0.), |acc, (a, b)| a.mul_add(b, acc))
-//         .reduce_sum()
-// }
-
-impl Matrix {
-    /// Now in Tensor
-    pub fn scale_simd(&self, scalar: f32) -> Self {
-        let partitioner = Partitioner::with_partitions_simd(self.len(), 16);
-
-        let inner_process = |partition: &Partition| {
-            let mut partition_values: Vec<f32> = Vec::with_capacity(partition.size());
-
-            // Avoids doing division and unnecessary multiplications
-            let return_slice: &mut Vec<f32> = &mut vec![0.; SIMD_LANES];            
-            let mut cursor = partition.get_start();
-            while cursor + SIMD_LANES <= partition.get_end() {
-                let range = cursor..cursor + SIMD_LANES;
-                let x_simd = Simd::<f32, SIMD_LANES>::from_slice(&self.read_values()[range.clone()]);
-                let y_simd = Simd::<f32, SIMD_LANES>::splat(scalar);
-
-                let r_simd = x_simd * y_simd;
-
-                r_simd.copy_to_slice(return_slice);
-                partition_values.extend_from_slice(return_slice);
-                cursor += SIMD_LANES;
-            }
-
-            // Checks to see if there are any remainder chunks to deal with
-            if cursor > partition.get_end() { cursor -= SIMD_LANES; }
-
-            // Does normal multiplication for remaining elements that cannot fit into simd.
-            // If using Partitioner::with_partitions_simd, this should only execute at most 1 time for the last thread.
-            for i in cursor..=partition.get_end() {
-                partition_values.push(self.read_at(i) * scalar);
-            }
-
-            partition_values
-        };
-
-        let values = partitioner.parallelized(inner_process);
-        Self::from(self.row_count(), self.column_count(), values)
-    }
-
-    /// Now in Tensor.
-    pub fn mul_element_wise_simd(&self, rhs: &Matrix) -> Self {
-        assert!(self.row_count() == rhs.row_count() && self.column_count() == rhs.column_count(), "When element-wise multiplying two matrices, they must have same order.");
-        
-        let partitioner = Partitioner::with_partitions_simd(self.len(), 16);
-
-        let inner_process = |partition: &Partition| {
-            let mut partition_values: Vec<f32> = Vec::with_capacity(partition.size());
-
-            // Avoids doing division and unnecessary multiplications
-            let return_slice: &mut Vec<f32> = &mut vec![0.; SIMD_LANES];            
-            let mut cursor = partition.get_start();
-            while cursor + SIMD_LANES <= partition.get_end() {
-                let range = cursor..cursor + SIMD_LANES;
-                let x_simd = Simd::<f32, SIMD_LANES>::from_slice(&self.read_values()[range.clone()]);
-                let y_simd = Simd::<f32, SIMD_LANES>::from_slice(&rhs.read_values()[range.clone()]);
-
-                let r_simd = x_simd * y_simd;
-
-                r_simd.copy_to_slice(return_slice);
-                partition_values.extend_from_slice(return_slice);
-                cursor += SIMD_LANES;
-            }
-
-            // Checks to see if there are any remainder chunks to deal with
-            if cursor > partition.get_end() { cursor -= SIMD_LANES; }
-
-            // Does normal multiplication for remaining elements that cannot fit into simd.
-            // If using Partitioner::with_partitions_simd, this should only execute at most 1 time for the last thread.
-            for i in cursor..=partition.get_end() {
-                partition_values.push(self.read_at(i) * rhs.read_at(i));
-            }
-
-            partition_values
-        };
-
-        let values = partitioner.parallelized(inner_process);
-        Self::from(self.row_count(), self.column_count(), values)
-    }
 }
 
 impl Partitioner {
@@ -231,93 +139,9 @@ impl Partition {
 
 #[cfg(test)]
 mod tests {
-    use crate::prettify::*;
-    use crate::{geoalg::f32_math::{matrix::Matrix, optimized_functions::dot_product_of_vector_slices}, partitioner::Partitioner};
-
-    use super::dot_product_simd3;
+    use crate::partitioner::Partitioner;
 
     use super::*;
-
-    #[test]
-    fn test_element_wise_mul_simd() {
-        let lhs = Matrix::from(4, 4, vec![
-            0., 1., 2., 3.,
-            4., 5., 6., 7.,
-            8., 9., 10., 11.,
-            12., 13., 14., 15.
-        ]);
-
-        let rhs = Matrix::from(4, 4, vec![
-            0., 1., 1., 1.,
-            2., 3., 2., 2.,
-            3., 3., 1., 4.,
-            5., 4., 3., 2.
-        ]);
-
-        let actual = lhs.mul_element_wise_simd(&rhs);
-        let expected = Matrix::from(4, 4, vec![
-            0., 1., 2., 3.,
-            8., 15., 12., 14.,
-            24., 27., 10., 44.,
-            60., 52., 42., 30.
-        ]);
-
-        assert_eq!(actual, expected);
-
-        let actual = lhs.mul_element_wise(&rhs);
-        assert_eq!(actual, expected);
-
-
-        let lhs = Matrix::new_randomized_z(1000, 1000);
-        let rhs = Matrix::new_randomized_z(1000, 1000);
-        let actual = lhs.mul_element_wise_simd(&rhs);
-        let expected = lhs.mul_element_wise(&rhs);
-
-        let error = actual
-            .read_values()
-            .iter()
-            .zip(expected
-                .read_values()
-                .iter()
-            ).map(|(&a, &b)| a - b).sum::<f32>();
-
-        println!("Errors: {error}");
-        println!("{:?} vs {:?}", actual.read_values()[0..10].to_vec(), expected.read_values()[0..10].to_vec());
-        //let error = (actual.read_values().into_iter().sum::<f32>() - expected.read_values().into_iter().sum::<f32>()).abs().log10();        
-        //let msg = format!("elementwise aggregate error: {error}").bright_green();
-        //println!("{msg}");    
-    }
-
-    #[test]
-    fn test_dot_product_simd_long_vectors() {
-        let lhs = vec![
-            1., 2., 3., 4., 5., 6., 7., 8.,
-            1., 2., 3., 4., 5., 6., 7., 8.,
-            1., 1., 3., 4., 5., 6., 7., 8.,
-        ];
-
-        let rhs = vec![
-            1., 2., 3., 4.,
-            1., 2., 3., 4.,
-            1., 2., 3., 4.,
-            10., 11., 12., 13.,
-            10., 11., 12., 13.,
-            10., 11., 12., 13. 
-        ];
-
-        let expected = dot_product_of_vector_slices(&lhs, &rhs);
-        let actual = dot_product_simd3(&lhs, &rhs);
-
-        assert_eq!(actual, expected);
-
-        let lhs = Matrix::new_randomized_z(1, 100000).read_values().to_vec();
-        let rhs = Matrix::new_randomized_z(1, 100000).read_values().to_vec();
-        let expected = dot_product_of_vector_slices(&lhs, &rhs);
-        let actual = dot_product_simd3(&lhs, &rhs);
-        
-        let error = (actual - expected).abs().log10();
-        println!("{GREEN}Dot product error: {error}{RESET}");
-    }
 
     #[test]
     fn test_with_partitions_simd() {
@@ -384,13 +208,13 @@ mod tests {
         assert_eq!(partition_values, expected);
     }
 
-    #[test]
-    fn test_scale_simd() {
-        let tc = Matrix::new_randomized_z(1000, 1000);
+    // #[test]
+    // fn test_scale_simd() {
+    //     let tc = Matrix::new_randomized_z(1000, 1000);
 
-        let expected = tc.scale(1.2);
-        let actual = tc.scale_simd(1.2);
+    //     let expected = tc.scale(1.2);
+    //     let actual = tc.scale_simd(1.2);
 
-        assert_eq!(actual, expected);
-    }
+    //     assert_eq!(actual, expected);
+    // }
 }

@@ -38,7 +38,7 @@ cargo run --release --example mnist_digits
 ### Partitioner and Partition
 Partitioner can create partitions that split-up work to be done when multi-threading. When using SIMD extensions, the partitioner can create partitions that favor SIMD based on the SIMD_LANES you specify. By using the SIMD Partitioner function, it will guarantee whenever possible that all threads except for the last one will be evenly split to do accommodate SIMD. The last thread's partition is guaranteed to be the smallest since it will process anything that cannot be split into SIMD_LANES in the other threads to attempt to achieve an even workload across all threads.
 
-### Matrix
+### Tensor
 The major player in the library that has optimized implementations to work fast on modern CPUs that have multiple cores and supports SIMD via SIMD extensions.
 
 ### Sample
