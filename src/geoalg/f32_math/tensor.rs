@@ -555,7 +555,7 @@ mod tests {
         );
 
         let actual = lhs.mul_transpose_simd(&rhs);
-        println!("{BRIGHT_RED}{:?}{RESET}", actual);
+        println!("{BRIGHT_GREEN}{:?}{RESET}", actual);
         assert_eq!(actual, expected);
 
     }

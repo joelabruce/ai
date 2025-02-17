@@ -1,6 +1,8 @@
 use rand_distr::Uniform;
 
-use super::{learning_rate, max_pooling::MaxPooling, Matrix, Propagates};
+use crate::nn::learning_rate::LearningRate;
+
+use super::{max_pooling::MaxPooling, Matrix, Propagates};
 
 pub struct Dimensions {
     pub height: usize,
@@ -71,7 +73,7 @@ impl Propagates for Convolution2dDeprecated {
         r
     }
 
-    fn backward<'a>(&'a mut self, dvalues: &Matrix, inputs: &Matrix) -> Matrix {
+    fn backward<'a>(&'a mut self, learning_rate: &mut LearningRate, dvalues: &Matrix, inputs: &Matrix) -> Matrix {
         let dims = self.backward_dims();
         let size = dims.height * dims.width;
         let k_size = self.k_d.height * self.k_d.width;
@@ -94,7 +96,7 @@ impl Propagates for Convolution2dDeprecated {
 
             gradient = gradient.scale(1. / dvalues.row_count() as f32);
             for i in 0..k_size {
-                self.kernels.add_at(filter * k_size + i, -learning_rate() * gradient.read_at(i));
+                self.kernels.add_at(filter * k_size + i, -learning_rate.rate() * gradient.read_at(i));
             }
         }
 

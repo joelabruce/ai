@@ -1,4 +1,4 @@
-use crate::geoalg::f32_math::matrix::Matrix;
+use crate::{geoalg::f32_math::matrix::Matrix, nn::learning_rate::LearningRate};
 use super::{convolution2d::{Convolution2dDeprecated, Dimensions}, dense::Dense, Propagates};
 
 /// Currently only supports valid pooling layers, with no padding.
@@ -51,7 +51,8 @@ impl Propagates for MaxPooling {
         r
     }
 
-    fn backward<'a>(&'a mut self, dvalues: &Matrix, inputs: &Matrix) -> Matrix {
+    #[allow(unused_variables)]
+    fn backward<'a>(&'a mut self, learning_rate: &mut LearningRate, dvalues: &Matrix, inputs: &Matrix) -> Matrix {
         let batches = inputs.row_count();
         let columns = self.filters * self.i_d.height * self.i_d.width;
 
@@ -66,6 +67,7 @@ impl Propagates for MaxPooling {
 
 #[cfg(test)]
 mod tests {
+    use crate::nn::learning_rate::LearningRate;
     use crate::prettify::*;
     use crate::{geoalg::f32_math::matrix::Matrix, nn::layers::{convolution2d::Dimensions, Propagates}};
 
@@ -116,7 +118,8 @@ mod tests {
             3., 8.
         ]);
 
-        let backward_output = pooling.backward(&dvalues, &forward_output);
+        let learning_rate = &mut LearningRate::new(0.01);
+        let backward_output = pooling.backward(learning_rate, &dvalues, &forward_output);
         let expected = Matrix::from(1, 2 * 4 * 4, vec![
             0.0, 0.0, 0.0, 0.0,
             0.2, 0.0, 0.0, -0.5,

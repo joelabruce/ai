@@ -14,6 +14,7 @@ use crate::statistics::sample::Sample;
 
 use super::layers::convolution2d::Convolution2dDeprecated;
 use super::layers::max_pooling::MaxPooling;
+use super::learning_rate::LearningRate;
 
 pub enum NeuralNetworkNode {
     DenseLayer(Dense),
@@ -72,7 +73,7 @@ impl NeuralNetwork {
 
     /// Applies backpropagation.
     /// Pops the items off of fcalcs, but keeps nodes in the Vec so we can do the next forward pass.
-    pub fn backward(from_nodes: &mut Vec<NeuralNetworkNode>, dz: &Matrix, fcalcs: &mut Vec<Matrix>) {
+    pub fn backward(from_nodes: &mut Vec<NeuralNetworkNode>, learning_rate: &mut LearningRate, dz: &Matrix, fcalcs: &mut Vec<Matrix>) {
         let mut dvalues = dz.clone();
         
         for i in (0..from_nodes.len()).rev() {
@@ -82,19 +83,19 @@ impl NeuralNetwork {
                 match node {
                     NeuralNetworkNode::ActivationLayer(n) => {
                         let fcalc = fcalcs.pop().unwrap();
-                        dvalues = n.backward(&dvalues, &fcalc);
+                        dvalues = n.backward(learning_rate, &dvalues, &fcalc);
                     },
                     NeuralNetworkNode::DenseLayer(n) => {
                         let fcalc = fcalcs.pop().unwrap();
-                        dvalues = n.backward(&dvalues, &fcalc);
+                        dvalues = n.backward(learning_rate, &dvalues, &fcalc);
                     },
                     NeuralNetworkNode::Convolution2dLayer(n) => {
                         let fcalc = fcalcs.pop().unwrap();
-                        dvalues = n.backward(&dvalues, &fcalc);
+                        dvalues = n.backward(learning_rate, &dvalues, &fcalc);
                     },
                     NeuralNetworkNode::MaxPoolLayer(n) => {
                         let fcalc = fcalcs.pop().unwrap();
-                        dvalues = n.backward(&dvalues, &fcalc);
+                        dvalues = n.backward(learning_rate, &dvalues, &fcalc);
                     },
                 };
             };

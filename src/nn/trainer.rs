@@ -1,6 +1,6 @@
 use std::io::Write;
 
-use crate::{digit_image::DigitImage, geoalg::f32_math::matrix::Matrix, nn::{activation_functions::{accuracy, backward_categorical_cross_entropy_loss_wrt_softmax, forward_categorical_cross_entropy_loss, SOFTMAX}, neural::NeuralNetwork}, output_bin_writer::OutputBinWriter, statistics::sample::Sample};
+use crate::{digit_image::DigitImage, geoalg::f32_math::matrix::Matrix, nn::{activation_functions::{accuracy, backward_categorical_cross_entropy_loss_wrt_softmax, forward_categorical_cross_entropy_loss, SOFTMAX}, learning_rate::LearningRate, neural::NeuralNetwork}, output_bin_writer::OutputBinWriter, statistics::sample::Sample};
 
 use super::{layers::input::Input, neural::NeuralNetworkNode};
 
@@ -41,6 +41,7 @@ pub fn train_network(nn_nodes: &mut Vec<NeuralNetworkNode>, tp: TrainingHyperPar
     let batches = tp.training_sample / tp.batch_size;
     let v_batch_size = std::cmp::min(batches * tp.batch_size / 5, 9999);        
     let trained_model_location = &tp.trained_model_location;
+    let learning_rate = &mut LearningRate::new(0.01);
 
     let mut epoch_offset = 0;
     if load_from_file {
@@ -86,7 +87,7 @@ pub fn train_network(nn_nodes: &mut Vec<NeuralNetworkNode>, tp: TrainingHyperPar
             
             // Backward pass on training data batch
             let dvalues6 = backward_categorical_cross_entropy_loss_wrt_softmax(&predictions, &targets).scale_simd(1. / tp.batch_size as f32);
-            NeuralNetwork::backward( nn_nodes, &dvalues6, &mut forward_stack);
+            NeuralNetwork::backward( nn_nodes, learning_rate, &dvalues6, &mut forward_stack);
 
             // Only uncomment if network training is slow to see if accuracy and data loss is actually improving
             if include_batch_output && _batch > 0 && _batch % tp.batch_inform_size == 0 {

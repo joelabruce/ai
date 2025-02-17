@@ -3,6 +3,8 @@ use crate::geoalg::f32_math::matrix::Matrix;
 use crate::geoalg::f32_math::optimized_functions::vector_row_max;
 use crate::nn::layers::*;
 
+use super::learning_rate::LearningRate;
+
 pub struct Activation {
     pub f: fn(&f32) -> f32,
     pub d: fn(&f32) -> f32
@@ -12,7 +14,9 @@ impl Propagates for Activation {
     fn forward(&mut self, inputs: &Matrix) -> Matrix {
         inputs.map(self.f)
     }
-    fn backward<'a>(&mut self, dvalues: &'a Matrix, inputs: &'a Matrix) -> Matrix {
+
+    #[allow(unused_variables)]
+    fn backward<'a>(&mut self, learning_rate: &mut LearningRate, dvalues: &'a Matrix, inputs: &'a Matrix) -> Matrix {
         assert_eq!(dvalues.row_count(), inputs.row_count(), "Backpropagation for Activation needs inputs and dvalues to have same rows.");
         assert_eq!(dvalues.column_count(), inputs.column_count(), "Backpropagation for Activation needs inputs and dvalues to have same columns.");
 

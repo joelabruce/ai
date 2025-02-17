@@ -2,11 +2,6 @@ use std::{ops::Index, thread};
 
 use crate::partition::Partition;
 
-pub struct Partitioned<T> {
-    pub partitioned: T,
-    pub partitioner: Partitioner
-}
-
 /// Partions data to be operated on, and provides for multi-threading.
 #[derive(Hash, Debug, Clone, PartialEq, Default)]
 pub struct Partitioner {
@@ -151,11 +146,11 @@ mod tests {
     fn test_thread_errored() {
         let partitioner = Partitioner::with_partitions(10, 2);
 
-        let _p = partitioner.parallelized(|_| {
+        let _p: Vec<f32> = partitioner.parallelized(|_| {
             let mut _partition_values = vec![0.];
 
-            panic!("Thread panicjed! (TEST)");
-            _partition_values
+            panic!("Thread panicked! (TEST)");
+            //_partition_values
         });
     }
 }

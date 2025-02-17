@@ -1,6 +1,5 @@
 use rand_distr::Uniform;
 
-//use rand::distributions::Uniform;
 use crate::geoalg::f32_math::matrix::Matrix;
 use super::*;
 
@@ -8,9 +7,6 @@ use super::*;
 pub struct Dense {
     pub biases: Matrix,
     pub weights: Matrix,
-
-    //partitioner_cache: PartitionerCache,
-    //parallelism: usize
 }
 
 impl Dense {
@@ -55,16 +51,16 @@ impl Propagates for Dense {
 
     /// Back propagates.
     /// Will return dvalues to be used in next back propagation layer.
-    fn backward<'a>(& mut self, dvalues: &Matrix, inputs: &Matrix) -> Matrix {
+    fn backward<'a>(& mut self, learning_rate: &mut LearningRate, dvalues: &Matrix, inputs: &Matrix) -> Matrix {
         // Mutate the weights based on derivative weights
         let inputs_t = inputs.transpose();
         let dweights = inputs_t.mul_with_transpose(&dvalues.transpose());
 
-        self.weights = self.weights.sub(&dweights.scale_simd(learning_rate()));
+        self.weights = self.weights.sub(&dweights.scale_simd(learning_rate.rate()));
 
         // Mutate the biases based on derivative biases
         let dbiases = dvalues.reduce_rows_by_add();
-        self.biases = self.biases.sub(&dbiases.scale_simd(learning_rate()));
+        self.biases = self.biases.sub(&dbiases.scale_simd(learning_rate.rate()));
 
         let result = dvalues.mul_with_transpose(&self.weights);
         result
