@@ -64,6 +64,15 @@ impl Tensor {
         &self.values[start..end]
     }
 
+    /// Get a slice of contiguous data from the Tensor. Only grabs 1 slice from dimension.
+    /// * `axis`: Axis to pull data from.
+    /// * `index`: Index in dimension to start.
+    /// **Unstable**
+    pub fn dim_slice(&self, axis: usize, index: usize) -> &[f32] {
+        let size = self.shape.stride_for(axis);
+        &self.values[size * index..size * (index + 1)]
+    }
+
     /// Performs relu on each value in Tensor.
     pub fn relu_simd(&self) -> Self {
         let partitioner = Partitioner::with_partitions_simd(
@@ -116,6 +125,7 @@ impl Tensor {
 
     /// Transposes the last 2 dimensions for only the first batch.
     /// Might consider doing a batch transpose, but not implemented yet.
+    /// **Unstable**
     pub fn transpose(&self) -> Self {
         let partition_strategy = &Partitioner::with_partitions(
             self.shape.size(), 
@@ -290,13 +300,66 @@ impl Tensor {
         Self::new(self.shape.clone(), values)
     }
 
+    /// **Unstable**
+    /// Assumes `self` is a matrix tensor.
+    /// Assumes rhs is a vector that has same number of elements as columns in tensor.
     pub fn broadcast_vector_add(&self, rhs: &Tensor) -> Self {
-        rhs.shape.len();
-        todo!()
+        let row_axis = self.shape.len() - 2;
+        let rows = self.shape.dims()[row_axis];
+        let &columns = self.shape.dims().last().unwrap();
+        //assert_eq!(rhs.rows, 1, "Rhs tensor must have 1 row.");
+        //assert_eq!(self.columns, rhs.columns, "Lhs and rhs must have equal number of columns.");
+
+        let partition_strategy = &Partitioner::with_partitions(
+            rows, 
+            thread::available_parallelism().unwrap().get());
+
+        let rs = rhs.stream(); 
+        let inner_process = move |partition: &Partition| {
+            let mut partition_values= Vec::with_capacity(partition.size() * columns);
+
+            for row in partition.range() {
+                let ls = self.dim_slice(row_axis, row);
+
+                for column in 0..ls.len() {
+                    partition_values.push(ls[column] + rs[column]);
+                }
+            }
+
+            partition_values
+        };
+
+        let values = partition_strategy.parallelized(inner_process);
+        //Self::from(self.row_count(), self.column_count(), values)
+        Self::new(Shape::d2(rows, columns), values)
     }
 
+    /// Reduces tensor to 1 row by adding each column's element. \
+    /// **Unstable**
     pub fn reduce_vector_add(&self) -> Self {
-        todo!()
+        let &columns = self.shape.dims().last().unwrap();
+        let rows = self.shape.dims()[self.shape.len() - 2];
+
+        let partition_strategy = &Partitioner::with_partitions(
+            columns, 
+            thread::available_parallelism().unwrap().get());
+
+        let inner_process =move |partition: &Partition| {
+            let mut partition_values = Vec::with_capacity(partition.size());
+            for column in partition.range() {
+                let mut accumulator = 0.;
+                for row in 0..rows {
+                    accumulator += self.values[column + row * columns];
+                }
+
+                partition_values.push(accumulator);
+            }
+
+            partition_values
+        };
+
+        let values = partition_strategy.parallelized(inner_process);
+        Self::new(Shape::d2(1, columns), values)
     }
 
     /// A Batch valid cross-correlation ensure that the output is smaller than the input.
@@ -765,5 +828,41 @@ mod tests {
         );
 
         assert_eq!(actual, expected);
+    }
+
+    #[test]
+    fn test_reduce_vector_add() {
+        let tc = Tensor::matrix(3, 4, vec![
+            1., 1., 2., 10.,
+            2., 3., 3., 10.,
+            4., 4., 5., 10.
+        ]);
+
+        let expected = Tensor::matrix(1, 4, vec![
+                7., 8., 10., 30.
+            ]);
+
+        let actual2 = tc.reduce_vector_add();
+        assert_eq!(actual2, expected);
+    }
+    
+    #[test]
+    fn test_broadcast_add_vector() {
+        let tc = Tensor::matrix(3, 4, vec![
+                0., 0., 0., 0.,
+                1., 1., 1., 1.,
+                2., 2., 2., 2.
+            ]);
+
+        let row_to_add = Tensor::vector(vec![10., 20., 30., 40.]);
+
+        let expected = Tensor::new(Shape::d2(3, 4), vec![
+                10., 20., 30., 40.,
+                11., 21., 31., 41.,
+                12., 22., 32., 42.
+            ]);
+
+        let actual = tc.broadcast_vector_add(&row_to_add);
+        assert_eq!(actual, expected);        
     }
 }

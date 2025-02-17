@@ -142,7 +142,6 @@ mod tests {
 
     #[test]
     #[should_panic]
-    #[allow(unreachable_code)]
     fn test_thread_errored() {
         let partitioner = Partitioner::with_partitions(10, 2);
 
@@ -150,7 +149,6 @@ mod tests {
             let mut _partition_values = vec![0.];
 
             panic!("Thread panicked! (TEST)");
-            //_partition_values
         });
     }
 }

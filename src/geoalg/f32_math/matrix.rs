@@ -271,7 +271,7 @@ impl Matrix {
 
     /// Adds a row to each row in matrix.
     /// Partitioner implementation complete.
-    /// Todo: Implement in Tensor
+    /// In Tensor
     pub fn add_row_partitioned(&self, rhs: &Matrix) -> Self {
         assert_eq!(rhs.rows, 1, "Rhs matrix must have 1 row.");
         assert_eq!(self.columns, rhs.columns, "Lhs and rhs must have equal number of columns.");
@@ -303,7 +303,7 @@ impl Matrix {
 
     /// Returns a 1 row matrix where each column is the sum of all values for that column.
     /// Partitioner implementation complete.
-    /// Todo: Implement in Tensor
+    /// In Tensor
     pub fn reduce_rows_by_add(&self) -> Self {
         let partition_strategy = match self.column_partitioner.as_ref() {
             Some(p) => p,
