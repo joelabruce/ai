@@ -1,7 +1,7 @@
 use std::{ops::{Index, IndexMut}, simd::{cmp::SimdPartialOrd, num::SimdFloat, Simd}, thread};
 use rand_distr::{Distribution, Normal, Uniform};
 
-use crate::{partition::Partition, partitioner::Partitioner};
+use crate::{nn::layers::convolution2d::Dimensions, partition::Partition, partitioner::Partitioner};
 
 use super::{shape::Shape, simd_extensions::{dot_product_simd3, SIMD_LANES}};
 
@@ -426,8 +426,65 @@ impl Tensor {
         todo!()
     }
 
-    pub fn maxpool2d(&self) -> Self {
-        todo!()
+    /// Maxpool of tensor.
+    /// **In Progress, not finished**
+    /// `self`: Assume shape of (batches, filters * rows * columns)
+    /// `result`: Assumes shape of (batch, filters * rows * columns)
+    pub fn maxpool2d(&self,
+        filters: usize,
+        stride: usize,
+        i_d: &Dimensions,
+        p_d: &Dimensions,
+        o_d: &Dimensions
+    ) -> (Self, Vec<usize>) {
+        let batches = self.shape[0];
+
+        let partitioner = &Partitioner::with_partitions(
+            batches,
+            thread::available_parallelism().unwrap().get());
+
+        let (rows, columns) = o_d.shape();
+        let rows_x_columns = rows * columns;
+
+        let inner_process = move |partition: &Partition| {
+            let mut partition_values = Vec::with_capacity(partition.size() * filters * rows_x_columns);
+            for batch in partition.range() {
+                let input_row = self.dim_slice(0, batch);
+                for filter in 0..filters {
+                    let filter_offset = filter * i_d.height * i_d.width;
+                    for row in 0..rows {
+                        let w_row = row * stride;
+                        for column in 0..columns {
+                            let w_column = column * stride;
+
+                            let mut max = f32::MIN;
+                            let mut max_index = 0;
+                            for k_row in 0..p_d.height {
+                                for k_column in 0..p_d.width {
+                                    let index = filter_offset + (w_column + k_column) + (w_row + k_row) * i_d.width;
+                                    let index_value = input_row[index];
+                                    if index_value > max { 
+                                        max = index_value;
+                                        max_index = index;
+                                    } 
+                                }
+                            }
+
+                            partition_values.push((max, max_index));
+                        }
+                    }
+                }
+            }
+
+            partition_values
+        };
+
+        let (values, max_indices) = partitioner.parallelized(inner_process).into_iter().unzip();
+
+        //let msg = format!("{:?}", max_indices).bright_purple();
+        //println!("Max indices: {msg}");
+
+        (Tensor::matrix(batches, filters * rows_x_columns, values), max_indices)
     }
 }
 
@@ -887,5 +944,57 @@ mod tests {
 
         let actual = tc.broadcast_vector_add(&row_to_add);
         assert_eq!(actual, expected);        
+    }
+
+    #[test]
+    fn test_maxpool2d(){
+        let tc = Tensor::matrix(1, 2 * 4 * 4, vec![
+            1., 3., 2., 1.,  
+            4., 2., 1., 5.,
+            3., 1., 4., 2.,
+            8., 6., 7., 9.,
+
+            6., 4., 3., 8.,
+            2., 4., 3., 7.,
+            1., 5., 4., 3.,
+            4., 7., 6., 4.
+        ]);
+
+        let o_d = Dimensions {
+            height: (4 - 2) / 2 + 1,
+            width: (4 - 2) / 2 + 1
+        };
+
+        let (pooled, max_indices) = tc.maxpool2d(
+            2,
+            2,
+            &Dimensions { width: 4, height: 4 },
+            &Dimensions { width: 2, height: 2 },
+            &o_d);
+
+        let expected = Tensor::matrix(1, 2 * 2 * 2, vec![
+            4.0, 5.0,
+            8.0, 9.0,
+            
+            6.0, 8.0,
+            7.0, 6.0]);
+
+        let expected_indices = vec![4, 7, 12, 15, 16, 19, 29, 30];
+
+        println!("{BRIGHT_GREEN}Tensor maxpool {:?}{RESET}", pooled);
+        assert_eq!(pooled, expected);
+        assert_eq!(max_indices, expected_indices);
+
+        // // In use for backprop
+        // let dvalues = Tensor::matrix(1, 2 * 4, vec![
+        //     0.2, -0.5,
+        //     0.3, 0.1,
+
+        //     -1., 4.,
+        //     3., 8.
+        // ]);
+
+        // assert_eq!(pooled, dvalues);
+        
     }
 }
