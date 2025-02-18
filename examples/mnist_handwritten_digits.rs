@@ -13,7 +13,7 @@ pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
             backup_cycle: 4,
             total_epochs: 10,
             training_sample: 60000,
-            batch_size: 500,
+            batch_size: 2000,
             trained_model_location: "dense_model".to_string(),
             batch_inform_size: 10,
             output_accuracy: true,
@@ -29,9 +29,9 @@ pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
         // Add layers to the network for forward and backward propagation.
         let mut nn_nodes: Vec<NeuralNetworkNode> = Vec::new();
         nn_nodes.push(NeuralNetworkNode::DenseLayer(dense1));
-        nn_nodes.push(NeuralNetworkNode::Activaition(RELU));
+        nn_nodes.push(NeuralNetworkNode::Activation(RELU));
         nn_nodes.push(NeuralNetworkNode::DenseLayer(dense2));
-        nn_nodes.push(NeuralNetworkNode::Activaition(RELU));
+        nn_nodes.push(NeuralNetworkNode::Activation(RELU));
         nn_nodes.push(NeuralNetworkNode::DenseLayer(dense3));
 
         train_network(&mut nn_nodes, tp, load_from_file, include_batch_output);

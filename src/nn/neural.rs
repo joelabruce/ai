@@ -14,16 +14,17 @@ use crate::output_bin_writer::OutputBinWriter;
 use crate::statistics::sample::Sample;
 
 use super::activations::activation::{Activation, ActivationPropagates};
+use super::layers::convolution2d::Convolution2dDeprecated;
+use super::layers::max_pooling::MaxPooling;
 //use super::layers::convolution2d::Convolution2dDeprecated;
 //use super::layers::max_pooling::MaxPooling;
 use super::learning_rate::LearningRate;
 
 pub enum NeuralNetworkNode {
     DenseLayer(Dense),
-    Activaition(Activation)
-    //Convolution2dLayer(Convolution2dDeprecated),
-    //ActivationLayer(Activation),
-    //MaxPoolLayer(MaxPooling)
+    Activation(Activation),
+    Convolution2dLayer(Convolution2dDeprecated),
+    MaxPoolLayer(MaxPooling)
 }
 
 /// Contains structure and hyper-parameters needed for a neural network
@@ -63,11 +64,11 @@ impl NeuralNetwork {
         forward_stack.push(with_input.input_matrix);
         for node in to_nodes.iter_mut() {
             match node {
-                NeuralNetworkNode::Activaition(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
+                NeuralNetworkNode::Activation(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
                 //NeuralNetworkNode::ActivationLayer(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
                 NeuralNetworkNode::DenseLayer(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
-                //NeuralNetworkNode::Convolution2dLayer(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
-                //NeuralNetworkNode::MaxPoolLayer(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
+                NeuralNetworkNode::Convolution2dLayer(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
+                NeuralNetworkNode::MaxPoolLayer(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
                 //_ => ()
             }
         } 
@@ -85,7 +86,7 @@ impl NeuralNetwork {
 
             if let Some(node) = node_opt {
                 match node {
-                    NeuralNetworkNode::Activaition(n) => {
+                    NeuralNetworkNode::Activation(n) => {
                         let fcalc = fcalcs.pop().unwrap();
                         dvalues = n.backward(&dvalues, &fcalc);
                     },
@@ -93,14 +94,14 @@ impl NeuralNetwork {
                         let fcalc = fcalcs.pop().unwrap();
                         dvalues = n.backward(learning_rate, &dvalues, &fcalc);
                     },
-                    // NeuralNetworkNode::Convolution2dLayer(n) => {
-                    //     let fcalc = fcalcs.pop().unwrap();
-                    //     dvalues = n.backward(learning_rate, &dvalues, &fcalc);
-                    // },
-                    // NeuralNetworkNode::MaxPoolLayer(n) => {
-                    //     let fcalc = fcalcs.pop().unwrap();
-                    //     dvalues = n.backward(learning_rate, &dvalues, &fcalc);
-                    // },
+                    NeuralNetworkNode::Convolution2dLayer(n) => {
+                        let fcalc = fcalcs.pop().unwrap();
+                        dvalues = n.backward(learning_rate, &dvalues, &fcalc);
+                    },
+                    NeuralNetworkNode::MaxPoolLayer(n) => {
+                        let fcalc = fcalcs.pop().unwrap();
+                        dvalues = n.backward(learning_rate, &dvalues, &fcalc);
+                    },
                 };
             };
        }

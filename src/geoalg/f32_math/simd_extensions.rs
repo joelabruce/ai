@@ -207,14 +207,4 @@ mod tests {
 
         assert_eq!(partition_values, expected);
     }
-
-    // #[test]
-    // fn test_scale_simd() {
-    //     let tc = Matrix::new_randomized_z(1000, 1000);
-
-    //     let expected = tc.scale(1.2);
-    //     let actual = tc.scale_simd(1.2);
-
-    //     assert_eq!(actual, expected);
-    // }
 }
