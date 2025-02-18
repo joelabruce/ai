@@ -66,3 +66,53 @@ impl Propagates for Dense {
         result
     }
 }
+
+#[cfg(test)]
+mod test {
+    use crate::{geoalg::f32_math::matrix::Matrix, nn::{layers::Propagates, learning_rate::LearningRate}};
+
+    use super::Dense;
+    use crate::prettify::*;
+
+    #[test]
+    fn test_propagations() {
+        let features = 784;
+        let neuron_count = 128;
+
+        let mut dense = Dense::new(features, neuron_count);
+
+        let batches = 500;
+        let inputs = &Matrix::new_randomized_z(batches, features);
+
+        let forward = &dense.forward(inputs);
+        println!("{BRIGHT_YELLOW}{:?}{RESET}", forward.shape());
+
+        let learning_rate = &mut LearningRate::new(0.01);
+        let dvalues = &Matrix::new_randomized_z(batches, neuron_count);
+        let dz = dense.backward(learning_rate, dvalues, inputs);
+    }
+
+    #[test]
+    fn test_influences() {
+        let features = 784;
+        let neuron_count_1 = 128;
+        let mut dense1 = Dense::new(features, neuron_count_1);
+
+        let neuron_count_2 = 64;
+        let mut dense2 = dense1.influences_dense(neuron_count_2);
+
+        let batches = 500;
+        let inputs = &Matrix::new_randomized_z(batches, features);
+
+        let forward1 = &dense1.forward(inputs);
+        println!("{BRIGHT_YELLOW}{:?}{RESET}", forward1.shape());
+
+        let _forward2 = &dense2.forward(forward1);
+
+        let learning_rate = &mut LearningRate::new(0.01);
+        let dvalues = &Matrix::new_randomized_z(batches, neuron_count_2);
+        let dz2 = &dense2.backward(learning_rate, dvalues, forward1);
+
+        let _dz1 = dense1.backward(learning_rate, dz2, inputs);
+    }
+}
