@@ -43,7 +43,7 @@ impl Dense {
     }
 }
 
-impl Propagates for Dense {
+impl LayerPropagates for Dense {
     /// Forward propagates by performing weights dot inputs + biases.
     fn forward<'a>(&mut self, inputs: &'a Tensor) -> Tensor {
         let r = inputs
@@ -79,7 +79,7 @@ mod test {
     use rand_distr::Uniform;
 
     use super::*;
-    use crate::{geoalg::f32_math::{shape::Shape, tensor::Tensor}, nn::learning_rate::LearningRate, prettify::*};
+    use crate::{geoalg::f32_math::{shape::Shape, tensor::Tensor}, nn::learning_rate::LearningRate};
 
     #[test]
     fn test_propagations() {
@@ -92,13 +92,13 @@ mod test {
         let uniform = Uniform::new_inclusive(-1., 1.);
         let inputs = &Tensor::new_randomized_uniform(Shape::d2(batches, features), uniform);
 
-        let forward = &dense.forward(inputs);
+        let _forward = &dense.forward(inputs);
         //println!("{BRIGHT_YELLOW}{:?}{RESET}", forward.shape());
 
         let learning_rate = &mut LearningRate::new(0.01);
         let uniform = Uniform::new_inclusive(-1., 1.);
         let dvalues = &&Tensor::new_randomized_uniform(Shape::d2(batches, neuron_count), uniform);
-        let dz = dense.backward(learning_rate, dvalues, inputs);
+        let _dz = dense.backward(learning_rate, dvalues, inputs);
     }
 
     #[test]

@@ -2,14 +2,13 @@ pub mod dense;
 pub mod input;
 pub mod convolution2d;
 pub mod max_pooling;
-pub mod relu;
 
 extern crate rand;
 use crate::geoalg::f32_math::tensor::Tensor;
 
 use super::learning_rate::LearningRate;
 
-pub trait Propagates {
+pub trait LayerPropagates {
     /// Generates output to be fed into the next layer.
     /// The outputs should be saved for backward to work, but only when training.
     /// Since forward can be useful on its own and doesn't always need to backpropagate, we leave the saving of the output to the implementer.
