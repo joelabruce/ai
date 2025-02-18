@@ -44,6 +44,28 @@ mod tests {
             -7., 8., -9.
         ]);
 
-        let _forward = RELU.forward(inputs);
+        let forward = RELU.forward(inputs);
+        let expected = Tensor::matrix(3, 3, vec![
+            0., 2., 3.,
+            0., 0., 6.,
+            0., 8., 0.
+        ]);
+
+        assert_eq!(forward, expected);
+
+        let dvalues = &Tensor::matrix(3, 3, vec![
+            100., 100., 100.,
+            100., 100., 100.,
+            100., 100., 100.
+        ]);
+
+        let backward = RELU.backward(dvalues, inputs);
+        let expected = Tensor::matrix(3, 3, vec![
+            0., 100., 100.,
+            0., 0., 100.,
+            0., 100., 0.     
+        ]);
+
+        assert_eq!(backward, expected);
     }
 }
