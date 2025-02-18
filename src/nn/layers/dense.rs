@@ -73,57 +73,57 @@ impl Propagates for Dense {
 }
 
 #[cfg(test)]
-mod tests {
-    use rand_distr::Normal;
+mod test {
+    //use crate::{geoalg::f32_math::matrix::Matrix, nn::{layers::Propagates, learning_rate::LearningRate}};
 
-    use crate::{geoalg::f32_math::{shape::Shape, tensor::Tensor}, nn::{layers::Propagates, learning_rate::{self, LearningRate}}};
+    use rand_distr::Uniform;
 
-    use super::Dense;
-
-    use crate::prettify::*;
+    use super::*;
+    use crate::{geoalg::f32_math::{shape::Shape, tensor::Tensor}, nn::learning_rate::LearningRate, prettify::*};
 
     #[test]
     fn test_propagations() {
-        let features = 10;
-        let neuron_count = 6;
-        let mut dense = Dense::new(features, neuron_count);
-        
-        let batch_size = 200;
-        let inputs= &Tensor::matrix(batch_size, features, vec![1. ; batch_size * features]);
-        
-        let forward = dense.forward(inputs);
-        //assert_eq!(forward.shape[0], batch_size);
-        //assert_eq!(forward.shape[1], neuron_count);
+        let features = 784;
+        let neuron_count = 128;
 
-        let mut learning_rate = LearningRate::new(0.1);
-        let normal = Normal::new(0., 1.).unwrap();
-        let dz = Tensor::new_randomized_normal(
-            Shape::d2(batch_size, neuron_count * features),
-            normal);
-        let backward = dense.backward(&mut learning_rate, &forward, &forward);
-        //assert_eq!(backward.shape[0], batch_size);
-        //assert_eq!(backward.shape[1], features);
+        let mut dense = Dense::new(features, neuron_count);
+
+        let batches = 500;
+        let uniform = Uniform::new_inclusive(-1., 1.);
+        let inputs = &Tensor::new_randomized_uniform(Shape::d2(batches, features), uniform);
+
+        let forward = &dense.forward(inputs);
+        //println!("{BRIGHT_YELLOW}{:?}{RESET}", forward.shape());
+
+        let learning_rate = &mut LearningRate::new(0.01);
+        let uniform = Uniform::new_inclusive(-1., 1.);
+        let dvalues = &&Tensor::new_randomized_uniform(Shape::d2(batches, neuron_count), uniform);
+        let dz = dense.backward(learning_rate, dvalues, inputs);
     }
 
     #[test]
-    fn test_influences_dense() {
-        let features = 78;
-        let neuron_count_1 = 10;
-        let mut dense = Dense::new(features, neuron_count_1);
+    fn test_influences() {
+        let features = 784;
+        let neuron_count_1 = 128;
+        let mut dense1 = Dense::new(features, neuron_count_1);
 
         let neuron_count_2 = 64;
-        let mut dense_next = dense.influences_dense(neuron_count_2);
+        let mut dense2 = dense1.influences_dense(neuron_count_2);
 
-        assert_eq!(dense_next.weights.shape[0], neuron_count_1);
-        assert_eq!(dense_next.weights.shape[1], neuron_count_2);
+        let batches = 500;
+        let uniform = Uniform::new_inclusive(-1., 1.);
+        let inputs = &Tensor::new_randomized_uniform(Shape::d2(batches, features), uniform);
 
-        let batch_size = 1000;
-        let inputs= &Tensor::matrix(batch_size, features, vec![1. ; batch_size * features]);
+        let forward1 = &dense1.forward(inputs);
 
-        let forward1 = dense.forward(&inputs);
-        let forward2 = dense_next.forward(&forward1);
+        let _forward2 = &dense2.forward(forward1);
 
         let learning_rate = &mut LearningRate::new(0.01);
-        //let back2 = dense_next.backward(learning_rate, &forward2);
+        let uniform = Uniform::new_inclusive(-1., 1.);
+        let dvalues = &Tensor::new_randomized_uniform(Shape::d2(batches, neuron_count_2), uniform);
+
+        let dz2 = &dense2.backward(learning_rate, dvalues, forward1);
+
+        let _dz1 = dense1.backward(learning_rate, dz2, inputs);
     }
 }
