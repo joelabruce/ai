@@ -27,7 +27,7 @@ impl InputCsvReader {
     }
 
     /// Reads a single line. Assumes header was already read.
-    pub fn read_and_parse_data_line(&mut self, vec_size: usize) -> DigitImage {
+    pub fn read_and_parse_data_line(&mut self, vec_size: usize) -> GreyscaleDigitImage {
         let mut pixels = Vec::with_capacity(vec_size);
         let mut label = 0f32;
         let mut line = String::new();
@@ -59,7 +59,7 @@ impl InputCsvReader {
             }
         }
 
-        DigitImage {
+        GreyscaleDigitImage {
             label,
             pixels
         }

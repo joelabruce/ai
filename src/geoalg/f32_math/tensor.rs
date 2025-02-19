@@ -481,9 +481,6 @@ impl Tensor {
 
         let (values, max_indices) = partitioner.parallelized(inner_process).into_iter().unzip();
 
-        //let msg = format!("{:?}", max_indices).bright_purple();
-        //println!("Max indices: {msg}");
-
         (Tensor::new(Shape::d4(batches, filters, rows, columns), values), max_indices)
     }
 }

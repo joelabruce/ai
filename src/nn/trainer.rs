@@ -1,13 +1,14 @@
 use std::io::Write;
 
-use crate::{digit_image::DigitImage, geoalg::f32_math::tensor::Tensor, nn::{activation_functions::{accuracy, backward_categorical_cross_entropy_loss_wrt_softmax, forward_categorical_cross_entropy_loss, SOFTMAX}, learning_rate::LearningRate, neural::NeuralNetwork}, output_bin_writer::OutputBinWriter, statistics::sample::Sample};
+use crate::{digit_image::GreyscaleDigitImage, geoalg::f32_math::tensor::Tensor, nn::{activation_functions::{accuracy, backward_categorical_cross_entropy_loss_wrt_softmax, forward_categorical_cross_entropy_loss, SOFTMAX}, learning_rate::LearningRate, neural::NeuralNetwork}, output_bin_writer::OutputBinWriter, statistics::sample::Sample};
 
 use super::{layers::input::Input, neural::NeuralNetworkNode};
 
 pub struct TrainingHyperParameters {
     pub backup_cycle: usize,
     pub total_epochs: usize,
-    pub training_sample: usize,
+    pub training_sample_size: usize,
+    pub validation_sample_size: usize,
     pub batch_size: usize,
     pub trained_model_location: String,
     pub batch_inform_size: usize,
@@ -17,10 +18,10 @@ pub struct TrainingHyperParameters {
 }
 
 /// Creates an input layer drawn randomly from a sample.
-pub fn from_sample_digit_images(sample: &mut Sample<DigitImage>, requested_batch_size: usize) -> (Input, Tensor) {
+pub fn from_sample_digit_images(sample: &mut Sample<GreyscaleDigitImage>, requested_batch_size: usize) -> (Input, Tensor) {
     let data_from_sample = sample.random_batch(requested_batch_size);
 
-    let mut pixel_vector = Vec::with_capacity(data_from_sample.len() * 785);
+    let mut pixel_vector = Vec::with_capacity(data_from_sample.len() * 784);
     let mut target_vector = Vec::with_capacity(data_from_sample.len() * 10);
     let rows = data_from_sample.len();
     for datum in data_from_sample {
@@ -30,15 +31,21 @@ pub fn from_sample_digit_images(sample: &mut Sample<DigitImage>, requested_batch
 
     (
         Input::from(rows, 784, pixel_vector), 
+        //InputShapes::read_as_1d(rows, 784, pixel_vector),
         Tensor::matrix(rows, 10, target_vector)
     )
 }
 
 /// Try to put all println output in here instead of in the other functions.
 /// Unstable.
-pub fn train_network(nn_nodes: &mut Vec<NeuralNetworkNode>, tp: TrainingHyperParameters, load_from_file: bool, include_batch_output: bool) {
+pub fn train_network(
+    nn_nodes: &mut Vec<NeuralNetworkNode>, 
+    tp: TrainingHyperParameters, 
+    load_from_file: bool, 
+    include_batch_output: bool
+) {
     // Training hyper-parameters
-    let batches = tp.training_sample / tp.batch_size;
+    let batches = tp.training_sample_size / tp.batch_size;
     let v_batch_size = std::cmp::min(batches * tp.batch_size / 5, 9999);        
     let trained_model_location = &tp.trained_model_location;
     let learning_rate = &mut LearningRate::new(0.01);
@@ -58,13 +65,13 @@ pub fn train_network(nn_nodes: &mut Vec<NeuralNetworkNode>, tp: TrainingHyperPar
     // Validtion setup
     let mut testing_reader = NeuralNetwork::open_for_importing("./training/mnist_test.csv");
     let _ = testing_reader.read_and_skip_header_line();
-    let mut testing_sample = NeuralNetwork::create_sample_for_digit_images_from_file(&mut testing_reader, 10000);
+    let mut testing_sample = NeuralNetwork::create_sample_for_digit_images_from_file(&mut testing_reader, tp.validation_sample_size);
     let (vl, v_targets) = from_sample_digit_images(&mut testing_sample, v_batch_size);
 
     // Training setup
     let mut training_reader = NeuralNetwork::open_for_importing("./training/mnist_train.csv");
     let _ = training_reader.read_and_skip_header_line();
-    let mut training_sample = NeuralNetwork::create_sample_for_digit_images_from_file(&mut training_reader, tp.training_sample);
+    let mut training_sample = NeuralNetwork::create_sample_for_digit_images_from_file(&mut training_reader, tp.training_sample_size);
 
     // Create Layers in network
     let mut lowest_loss = f32::INFINITY;

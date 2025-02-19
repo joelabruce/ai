@@ -9,12 +9,12 @@ pub fn one_hot_encode(label: f32, bounds: usize) -> Vec<f32> {
 }
 
 /// Greyscale 28x28 image that can be 0 through 9
-pub struct DigitImage {
+pub struct GreyscaleDigitImage {
     pub pixels: Vec<f32>,
     pub label: f32
 }
 
-impl DigitImage {
+impl GreyscaleDigitImage {
     pub fn one_hot_encoded_label(&self) -> Vec<f32> {
         one_hot_encode(self.label, 10)
     }
@@ -22,11 +22,11 @@ impl DigitImage {
 
 #[cfg(test)]
 mod tests {
-    use super::DigitImage;
+    use super::GreyscaleDigitImage;
 
     #[test]
     fn test_one_hot_encode() {
-        let tc = DigitImage {
+        let tc = GreyscaleDigitImage {
             pixels: vec![],
             label: 3.0
         };

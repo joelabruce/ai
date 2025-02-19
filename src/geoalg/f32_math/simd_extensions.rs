@@ -144,6 +144,15 @@ mod tests {
     use super::*;
 
     #[test]
+    #[should_panic]
+    fn test_invalid_dot_product_simd3() {
+        let lhs = &vec![1., 2., 3., 4., 6., 7.,][..];
+        let rhs = &vec![1., 2., 3., 4.,][..];
+
+        dot_product_simd3(lhs, rhs);
+    }
+
+    #[test]
     fn test_with_partitions_simd() {
         let t1 = Partitioner::with_partitions_simd(4, 1);
         let t2 = Partitioner::with_partitions_simd(16, 1);

@@ -2,7 +2,7 @@
 // Use the following command to run in release mode:
 // cargo run --release --example mnist_digits
 
-use ai::{nn::{activations::activation::RELU, layers::convolution2d::{Convolution2dDeprecated, Dimensions}, neural::NeuralNetworkNode, trainer::{train_network, TrainingHyperParameters}}, timed};
+use ai::{nn::{activations::activation::RELU, layers::convolution2d::{Convolution2d, Dimensions}, neural::NeuralNetworkNode, trainer::{train_network, TrainingHyperParameters}}, timed};
 
 
 pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
@@ -11,7 +11,8 @@ pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
         let tp = TrainingHyperParameters {
             backup_cycle: 1,
             total_epochs: 5,
-            training_sample: 60000,
+            training_sample_size: 60000,
+            validation_sample_size: 10000,
             batch_size: 60,
             trained_model_location: "convo_model".to_string(),
             batch_inform_size: 50,
@@ -21,13 +22,13 @@ pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
         };
 
         // Create layers for network to train on
-        let convo1 = Convolution2dDeprecated::new(
+        let convo1 = Convolution2d::new(
             32, 
             1, 
             Dimensions { width: 3, height: 3 } ,
             Dimensions { width: 28, height: 28 });
 
-        let maxpool1 = convo1.influences_maxpool(
+        let maxpool1 = convo1.feed_into_maxpool(
             Dimensions { width: 2, height: 2 },
             2);
 
@@ -40,14 +41,14 @@ pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
         //     Dimensions { width: 2, height: 2},
         //     2);
 
-        let dense1 = maxpool1.influences_dense(64);
-        let dense2 = dense1.influences_dense(10);
+        let dense1 = maxpool1.feed_into_dense(64);
+        let dense2 = dense1.feed_into_dense(10);
 
         // Add layers to the network for forward and backward propagation.
         let mut nn_nodes: Vec<NeuralNetworkNode> = Vec::new();
         nn_nodes.push(NeuralNetworkNode::Convolution2dLayer(convo1));
         nn_nodes.push(NeuralNetworkNode::Activation(RELU));
-        // nn_nodes.push(NeuralNetworkNode::MaxPoolLayer(maxpool1));
+        nn_nodes.push(NeuralNetworkNode::MaxPoolLayer(maxpool1));
         // nn_nodes.push(NeuralNetworkNode::Convolution2dLayer(convo2));
         // nn_nodes.push(NeuralNetworkNode::ActivationLayer(RELU));
         // nn_nodes.push(NeuralNetworkNode::MaxPoolLayer(maxpool2));
@@ -64,5 +65,5 @@ pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
 // Runs a neural network for handwritten digit recogniton.
 fn main() {
     // Since this example runs slower, we turn include_batch_output to true
-    //handwritten_digits(true, true);
+    handwritten_digits(true, true);
 }

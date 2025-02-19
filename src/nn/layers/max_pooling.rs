@@ -1,5 +1,5 @@
 use crate::{geoalg::f32_math::{shape::Shape, tensor::Tensor}, nn::learning_rate::LearningRate};
-use super::{convolution2d::{Convolution2dDeprecated, Dimensions}, dense::Dense, LayerPropagates};
+use super::{convolution2d::{Convolution2d, Dimensions}, dense::Dense, LayerPropagates};
 
 /// Currently only supports valid pooling layers, with no padding.
 pub struct MaxPooling {
@@ -19,15 +19,15 @@ impl MaxPooling {
         }
     }
 
-    pub fn influences_dense(&self, neuron_count: usize) -> Dense {
+    pub fn feed_into_dense(&self, neuron_count: usize) -> Dense {
         let (rows, columns) = self.output_dimensions().shape();
 
         let features = self.filters * rows * columns;
         Dense::new(features, neuron_count)
     }
 
-    pub fn influences_convolution2d(&self, filters: usize, channels: usize, k_d: Dimensions) -> Convolution2dDeprecated {
-        Convolution2dDeprecated::new(filters, channels, k_d, self.output_dimensions())
+    pub fn feed_into_convolution2d(&self, filters: usize, channels: usize, k_d: Dimensions) -> Convolution2d {
+        Convolution2d::new(filters, channels, k_d, self.output_dimensions())
     }
 
     fn output_dimensions(&self) -> Dimensions {
@@ -103,7 +103,6 @@ mod tests {
 
         // Assume 2 filters
         let forward_output = pooling.forward(&tc);
-
         let expected = Tensor::new(Shape::d4(1, 2, 3, 3), vec![
             4.0, 5.0, 9.,
             8.0, 9.0, 9.,
@@ -118,7 +117,7 @@ mod tests {
         assert_eq!(forward_output, expected);
 
         // Assume these values came from the previous layers back-propagation.
-        let dvalues = Tensor::new(Shape::d3(1, 3, 4), vec![
+        let dvalues = Tensor::new(Shape::d3(1, 3, 3), vec![
             0.2, -0.5, 3.,
             0.3, 0.1, -4.,
             0., 1., 0.,
@@ -147,7 +146,7 @@ mod tests {
         ]);
         assert_eq!(backward_output, expected);
 
-        // After backprop, we should get back to 2 filters of 4x4
+        // After backprop, we should get back to 2 filters of 6x6
         println!("{BRIGHT_MAGENTA}Backprop pooling: {:?}{RESET}", backward_output);
     }
 }

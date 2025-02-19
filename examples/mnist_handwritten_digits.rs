@@ -12,7 +12,8 @@ pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
         let tp = TrainingHyperParameters {
             backup_cycle: 4,
             total_epochs: 10,
-            training_sample: 60000,
+            training_sample_size: 60000,
+            validation_sample_size: 10000,
             batch_size: 2000,
             trained_model_location: "dense_model".to_string(),
             batch_inform_size: 10,
@@ -23,8 +24,8 @@ pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
         
         // Create layers
         let dense1 = Dense::new(784, 128);
-        let dense2 = dense1.influences_dense(64);
-        let dense3 = dense2.influences_dense(10);
+        let dense2 = dense1.feed_into_dense(64);
+        let dense3 = dense2.feed_into_dense(10);
 
         // Add layers to the network for forward and backward propagation.
         let mut nn_nodes: Vec<NeuralNetworkNode> = Vec::new();

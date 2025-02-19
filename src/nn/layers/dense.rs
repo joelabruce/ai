@@ -35,7 +35,7 @@ impl Dense {
     }
 
     /// Instantiates and returns a new Hidden Layer based off self's shape.
-    pub fn influences_dense(&self, neuron_count: usize) -> Dense {
+    pub fn feed_into_dense(&self, neuron_count: usize) -> Dense {
         //assert!(self.weights.shape.len() > 0);
         //assert!(self.biases.len() > 0);
 
@@ -102,13 +102,13 @@ mod test {
     }
 
     #[test]
-    fn test_influences() {
+    fn test_feed_into_dense() {
         let features = 784;
         let neuron_count_1 = 128;
         let mut dense1 = Dense::new(features, neuron_count_1);
 
         let neuron_count_2 = 64;
-        let mut dense2 = dense1.influences_dense(neuron_count_2);
+        let mut dense2 = dense1.feed_into_dense(neuron_count_2);
 
         let batches = 500;
         let uniform = Uniform::new_inclusive(-1., 1.);

@@ -1,9 +1,3 @@
-// use rand_distr::Uniform;
-
-// use crate::nn::learning_rate::LearningRate;
-
-// use super::{max_pooling::MaxPooling, Matrix, Propagates};
-
 use rand_distr::Uniform;
 
 use crate::{geoalg::f32_math::{shape::Shape, tensor::Tensor}, nn::learning_rate::LearningRate};
@@ -22,7 +16,7 @@ impl Dimensions {
 }
 
 ///
-pub struct Convolution2dDeprecated {
+pub struct Convolution2d {
     pub filters: usize,
     pub kernels: Tensor,        // Same as weights
     pub biases: Tensor,
@@ -31,7 +25,7 @@ pub struct Convolution2dDeprecated {
     //pub stride: usize,        // Assumes stride of 1 for now.
 }
 
-impl Convolution2dDeprecated {
+impl Convolution2d {
     /// Set channels to 1 for greyscale, 3 for RGB.
     /// * RGB support not implemented yet, so ensure channels is 1.
     /// * Might consider allowing for more flexibility here, but have to think carefuly about the cleanest way to do this.
@@ -43,7 +37,7 @@ impl Convolution2dDeprecated {
         //let normal = Normal::new(0., normal_term).unwrap();
         let uniform = Uniform::new_inclusive(-term, term);
         
-        Convolution2dDeprecated {
+        Convolution2d {
             filters,
             //kernels: Matrix::new_randomized_normal(filters, channels * k_d.height * k_d.width, normal),
             kernels: Tensor::new_randomized_uniform(Shape::d4(filters, k_d.height, k_d.width, channels), uniform),
@@ -60,7 +54,7 @@ impl Convolution2dDeprecated {
         }
     }
 
-    pub fn influences_maxpool(&self, p_d: Dimensions, stride: usize) -> MaxPooling {
+    pub fn feed_into_maxpool(&self, p_d: Dimensions, stride: usize) -> MaxPooling {
         MaxPooling::new(
             self.filters,
             p_d,
@@ -69,7 +63,7 @@ impl Convolution2dDeprecated {
     }
 }
 
-impl LayerPropagates for Convolution2dDeprecated {
+impl LayerPropagates for Convolution2d {
     fn forward(&mut self, inputs: &Tensor) -> Tensor {
         let r = inputs 
             .batch_valid_cross_correlation_simd(&self.kernels);//, &self.k_d, &self.i_d);
@@ -79,6 +73,7 @@ impl LayerPropagates for Convolution2dDeprecated {
         r
     }
 
+    #[allow(unused_variables)]
     fn backward<'a>(&'a mut self, learning_rate: &mut LearningRate, dvalues: &Tensor, inputs: &Tensor) -> Tensor {
         let dims = self.backward_dims();
         let size = dims.height * dims.width;
@@ -106,7 +101,7 @@ impl LayerPropagates for Convolution2dDeprecated {
             }
         }
 
-        Tensor::vector(vec![1.])
+        todo!()
         //inputs.full_outer_convolution(&self.kernels, &self.k_d, &self.i_d)
     }
 }
@@ -122,7 +117,7 @@ mod tests {
     #[test]
     fn test_forward() {
         // Test two different images
-        let inputs = Tensor::new(Shape::d3(2, 4, 4), vec![
+        let inputs = Tensor::new(Shape::d4(2, 4, 4, 1), vec![
             1., 2., 3., 4., 
             5., 6., 7., 8.,
             9., 10., 11., 12.,
@@ -135,13 +130,13 @@ mod tests {
         ]);
 
         // Have two filters
-        let mut cv2d = Convolution2dDeprecated::new(
+        let mut cv2d = Convolution2d::new(
             3,
             1, 
             Dimensions { width: 3, height: 3 } , 
             Dimensions { width: 4, height: 4 });
 
-        cv2d.kernels = Tensor::new(Shape::d3(3, 3, 3), vec![
+        cv2d.kernels = Tensor::new(Shape::d4(3, 3, 3, 1), vec![
             0., 0.15, 0.,
             0.15, 0.4, 0.15,
             0., 0.15, 0., 
@@ -157,5 +152,36 @@ mod tests {
 
         let output = cv2d.forward(&inputs);
         println!("{BRIGHT_CYAN}{:?}{RESET}", output);
+    }
+
+    #[test]
+    fn test_feed_into_maxpool() {
+        let batch_size = 1;
+        let filters = 2;
+        let channels = 1;
+        let k_d = Dimensions { height: 3, width: 3 };
+        let i_d = Dimensions { height: 28, width: 28 };
+        let mut cvd2 = Convolution2d::new(filters, channels, k_d, i_d);
+
+        let p_d = Dimensions { height: 2, width: 2 };
+        let stride = 2;
+        let mut maxpool= cvd2.feed_into_maxpool(p_d, stride);
+
+        let inputs = &Tensor::new(Shape::d4(batch_size, 28, 28, 1), vec![10.; batch_size * 784]);
+
+        let fcalc1 = cvd2.forward(inputs);
+        println!("{BRIGHT_GREEN}{:?}{RESET}", fcalc1);
+
+        let _fcalc2: Tensor = maxpool.forward(&fcalc1);
+
+        let dvalues2 = &Tensor::new(Shape::d3(2, 13, 13), vec![1.; 338]);
+
+        let learning_rate = &mut LearningRate::new(0.01);
+        let dvalues1 = maxpool.backward(learning_rate, dvalues2, &fcalc1);
+
+        println!("{BRIGHT_BLUE}{:?}{RESET}", dvalues1);
+
+        // This needs to work for test to be valid.
+        //let _ = cvd2.backward(learning_rate, &dvalues1, inputs);
     }
 }
