@@ -96,8 +96,10 @@ mod test {
         //println!("{BRIGHT_YELLOW}{:?}{RESET}", forward.shape());
 
         let learning_rate = &mut LearningRate::new(0.01);
+
         let uniform = Uniform::new_inclusive(-1., 1.);
         let dvalues = &&Tensor::new_randomized_uniform(Shape::d2(batches, neuron_count), uniform);
+
         let _dz = dense.backward(learning_rate, dvalues, inputs);
     }
 

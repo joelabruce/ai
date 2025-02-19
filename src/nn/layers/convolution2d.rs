@@ -4,6 +4,8 @@ use crate::{geoalg::f32_math::{shape::Shape, tensor::Tensor}, nn::learning_rate:
 
 use super::{max_pooling::MaxPooling, LayerPropagates};
 
+use crate::prettify::*;
+
 pub struct Dimensions {
     pub height: usize,
     pub width: usize
@@ -75,6 +77,7 @@ impl LayerPropagates for Convolution2d {
 
     #[allow(unused_variables)]
     fn backward<'a>(&'a mut self, learning_rate: &mut LearningRate, dvalues: &Tensor, inputs: &Tensor) -> Tensor {
+
         let dims = self.backward_dims();
         let size = dims.height * dims.width;
         let k_size = self.k_d.height * self.k_d.width;
@@ -85,10 +88,10 @@ impl LayerPropagates for Convolution2d {
             let mut gradient = Tensor::matrix(1, k_size, vec![0.; k_size]);
             for image in 0..dvalues.shape[0] {
                 let delta_image = dvalues.dim_slice(0, image);
-                let d_i = Tensor::new(Shape::d3(1, self.i_d.height, self.i_d.width), delta_image.to_vec());
+                let d_i = Tensor::new(Shape::d4(1, self.i_d.height, self.i_d.width, 1), delta_image.to_vec());
 
                 let delta_filter = &delta_image[filter_offset..filter_offset + size];
-                let d_f = Tensor::new(Shape::d3(1, dims.height, dims.width), delta_filter.to_vec());
+                let d_f = Tensor::new(Shape::d4(1, dims.height, dims.width, 1), delta_filter.to_vec());
 
                 let grad = d_i.batch_valid_cross_correlation_simd(&d_f);//, &dims, &self.i_d);
 
@@ -101,7 +104,8 @@ impl LayerPropagates for Convolution2d {
             }
         }
 
-        todo!()
+        Tensor::new(Shape::d4(1,1,1,1), vec![0.; 1])
+        //todo!()
         //inputs.full_outer_convolution(&self.kernels, &self.k_d, &self.i_d)
     }
 }
@@ -115,9 +119,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_forward() {
+    fn test_forward_and_back() {
+        let batch_size = 2;
+        let filters = 3;
+        let s3x3 = 9;
+
         // Test two different images
-        let inputs = Tensor::new(Shape::d4(2, 4, 4, 1), vec![
+        let inputs = Tensor::new(Shape::d4(batch_size, 4, 4, 1), vec![
+
             1., 2., 3., 4., 
             5., 6., 7., 8.,
             9., 10., 11., 12.,
@@ -136,7 +145,8 @@ mod tests {
             Dimensions { width: 3, height: 3 } , 
             Dimensions { width: 4, height: 4 });
 
-        cv2d.kernels = Tensor::new(Shape::d4(3, 3, 3, 1), vec![
+        cv2d.kernels = Tensor::new(Shape::d4(filters, 3, 3, 1), vec![
+
             0., 0.15, 0.,
             0.15, 0.4, 0.15,
             0., 0.15, 0., 
@@ -152,36 +162,45 @@ mod tests {
 
         let output = cv2d.forward(&inputs);
         println!("{BRIGHT_CYAN}{:?}{RESET}", output);
+
+        let mut learning_rate = LearningRate::new(0.01);
+
+        let dvalues = &Tensor::new(Shape::d4(batch_size, filters, 3, 3), vec![0.; batch_size * filters * s3x3]);
+        
+        println!("{:?}", dvalues.shape);
+        
+        let _dvalues = cv2d.backward(&mut learning_rate, dvalues, &inputs);
     }
 
     #[test]
-    fn test_feed_into_maxpool() {
-        let batch_size = 1;
-        let filters = 2;
-        let channels = 1;
-        let k_d = Dimensions { height: 3, width: 3 };
-        let i_d = Dimensions { height: 28, width: 28 };
-        let mut cvd2 = Convolution2d::new(filters, channels, k_d, i_d);
+    fn test_influences_maxpool() {
+        let batch_size = 2;
+        let filters = 3;
+        let s3x3 = 9;
+        let s13x13 = 169;
+        let s28x28 = 784;
 
-        let p_d = Dimensions { height: 2, width: 2 };
-        let stride = 2;
-        let mut maxpool= cvd2.feed_into_maxpool(p_d, stride);
+        // Test two different images
+        let inputs = Tensor::new(Shape::d4(batch_size, 28, 28, 1), vec![1.0; batch_size * s28x28]);
 
-        let inputs = &Tensor::new(Shape::d4(batch_size, 28, 28, 1), vec![10.; batch_size * 784]);
+        let mut cv2d = Convolution2d::new(
+            filters,
+            1, 
+            Dimensions { width: 3, height: 3 } , 
+            Dimensions { width: 28, height: 28 });
+        cv2d.kernels = Tensor::new(Shape::d4(filters, 3,3, 1), vec![1.2; filters * s3x3]);
 
-        let fcalc1 = cvd2.forward(inputs);
-        println!("{BRIGHT_GREEN}{:?}{RESET}", fcalc1);
+        let output = &cv2d.forward(&inputs);
+        println!("{BRIGHT_CYAN}{:?}{RESET}", output);
 
-        let _fcalc2: Tensor = maxpool.forward(&fcalc1);
+        let mut maxpool = cv2d.feed_into_maxpool(Dimensions { width: 2, height: 2 }, 2);
+        let _output2 = maxpool.forward(output);
 
-        let dvalues2 = &Tensor::new(Shape::d3(2, 13, 13), vec![1.; 338]);
+        let dvalues = &Tensor::new(Shape::new(vec![batch_size, filters, 13, 13, 1] ), vec![-0.1; batch_size * filters * s13x13]);
 
-        let learning_rate = &mut LearningRate::new(0.01);
-        let dvalues1 = maxpool.backward(learning_rate, dvalues2, &fcalc1);
+        let mut learning_rate = LearningRate::new(0.01);
+        let dvalues = &maxpool.backward(&mut learning_rate, dvalues, output);
 
-        println!("{BRIGHT_BLUE}{:?}{RESET}", dvalues1);
-
-        // This needs to work for test to be valid.
-        //let _ = cvd2.backward(learning_rate, &dvalues1, inputs);
-    }
+        let _dvalues = cv2d.backward(&mut learning_rate, dvalues, &inputs);
+      }
 }
