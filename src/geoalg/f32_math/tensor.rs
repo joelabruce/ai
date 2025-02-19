@@ -5,9 +5,9 @@ use crate::{nn::layers::convolution2d::Dimensions, partition::Partition, partiti
 
 use super::{shape::Shape, simd_extensions::{dot_product_simd3, SIMD_LANES}};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Tensor {
-    shape: Shape,
+    pub shape: Shape,
     values: Vec<f32>
 }
 
@@ -481,10 +481,7 @@ impl Tensor {
 
         let (values, max_indices) = partitioner.parallelized(inner_process).into_iter().unzip();
 
-        //let msg = format!("{:?}", max_indices).bright_purple();
-        //println!("Max indices: {msg}");
-
-        (Tensor::matrix(batches, filters * rows_x_columns, values), max_indices)
+        (Tensor::new(Shape::d4(batches, filters, rows, columns), values), max_indices)
     }
 }
 
@@ -948,7 +945,7 @@ mod tests {
 
     #[test]
     fn test_maxpool2d(){
-        let tc = Tensor::matrix(1, 2 * 4 * 4, vec![
+        let tc = Tensor::new(Shape::d4(1, 2, 4, 4), vec![
             1., 3., 2., 1.,  
             4., 2., 1., 5.,
             3., 1., 4., 2.,
@@ -972,7 +969,7 @@ mod tests {
             &Dimensions { width: 2, height: 2 },
             &o_d);
 
-        let expected = Tensor::matrix(1, 2 * 2 * 2, vec![
+        let expected = Tensor::new(Shape::d4(1, 2, 2, 2), vec![
             4.0, 5.0,
             8.0, 9.0,
             

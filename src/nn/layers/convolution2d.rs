@@ -4,6 +4,8 @@ use crate::nn::learning_rate::LearningRate;
 
 use super::{max_pooling::MaxPooling, Matrix, Propagates};
 
+use crate::prettify::*;
+
 pub struct Dimensions {
     pub height: usize,
     pub width: usize
@@ -74,6 +76,7 @@ impl Propagates for Convolution2dDeprecated {
     }
 
     fn backward<'a>(&'a mut self, learning_rate: &mut LearningRate, dvalues: &Matrix, inputs: &Matrix) -> Matrix {
+        println!("{BRIGHT_GREEN} dvalues shape: {:?} x {:?}{RESET}", dvalues.row_count(), dvalues.column_count());
         let dims = self.backward_dims();
         let size = dims.height * dims.width;
         let k_size = self.k_d.height * self.k_d.width;
@@ -113,9 +116,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_forward() {
+    fn test_forward_and_back() {
+        let batch_size = 2;
+        let filters = 3;
+        let s3x3 = 9;
+        let s4x4 = 16;
+
         // Test two different images
-        let inputs = Matrix::from(2, 4 * 4, vec![
+        let inputs = Matrix::from(batch_size, s4x4, vec![
             1., 2., 3., 4., 
             5., 6., 7., 8.,
             9., 10., 11., 12.,
@@ -127,13 +135,12 @@ mod tests {
             130., 140., 150., 160.
         ]);
 
-        // Have two filters
         let mut cv2d = Convolution2dDeprecated::new(
-            3,
+            filters,
             1, 
             Dimensions { width: 3, height: 3 } , 
             Dimensions { width: 4, height: 4 });
-        cv2d.kernels = Matrix::from(3, 3 * 3, vec![
+        cv2d.kernels = Matrix::from(filters, s3x3, vec![
             0., 0.15, 0.,
             0.15, 0.4, 0.15,
             0., 0.15, 0., 
@@ -149,5 +156,42 @@ mod tests {
 
         let output = cv2d.forward(&inputs);
         println!("{BRIGHT_CYAN}{:?}{RESET}", output);
+
+        let mut learning_rate = LearningRate::new(0.01);
+
+        let dvalues = &Matrix::from(batch_size, filters * s3x3, vec![0.; batch_size * filters * s3x3]);
+        let _dvalues = cv2d.backward(&mut learning_rate, &dvalues, &inputs);
     }
+
+    #[test]
+    fn test_influences_maxpool() {
+        let batch_size = 2;
+        let filters = 3;
+        let s3x3 = 9;
+        let s13x13 = 169;
+        let s28x28 = 784;
+
+        // Test two different images
+        let inputs = Matrix::from(batch_size, s28x28, vec![1.0; batch_size * s28x28]);
+
+        let mut cv2d = Convolution2dDeprecated::new(
+            filters,
+            1, 
+            Dimensions { width: 3, height: 3 } , 
+            Dimensions { width: 28, height: 28 });
+        cv2d.kernels = Matrix::from(filters, s3x3, vec![1.2; filters * s3x3]);
+
+        let output = &cv2d.forward(&inputs);
+        println!("{BRIGHT_CYAN}{:?}{RESET}", output);
+
+        let mut maxpool = cv2d.influences_maxpool(Dimensions { width: 2, height: 2 }, 2);
+        let _output2 = maxpool.forward(output);
+
+        let dvalues = &Matrix::from(batch_size, filters * s13x13, vec![-0.1; batch_size * filters * s13x13]);
+
+        let mut learning_rate = LearningRate::new(0.01);
+        let dvalues = &maxpool.backward(&mut learning_rate, dvalues, output);
+
+        let _dvalues = cv2d.backward(&mut learning_rate, dvalues, &inputs);
+      }
 }

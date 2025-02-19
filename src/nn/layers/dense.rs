@@ -89,7 +89,7 @@ mod test {
 
         let learning_rate = &mut LearningRate::new(0.01);
         let dvalues = &Matrix::new_randomized_z(batches, neuron_count);
-        let dz = dense.backward(learning_rate, dvalues, inputs);
+        let _dz = dense.backward(learning_rate, dvalues, inputs);
     }
 
     #[test]
