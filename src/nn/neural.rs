@@ -78,8 +78,8 @@ impl NeuralNetwork {
 
     /// Applies backpropagation.
     /// Pops the items off of fcalcs, but keeps nodes in the Vec so we can do the next forward pass.
-    pub fn backward(from_nodes: &mut Vec<NeuralNetworkNode>, learning_rate: &mut LearningRate, dz: &Tensor, fcalcs: &mut Vec<Tensor>) {
-        let mut dvalues = dz.clone();
+    pub fn backward(from_nodes: &mut Vec<NeuralNetworkNode>, learning_rate: &mut LearningRate, dz: Tensor, fcalcs: &mut Vec<Tensor>) {
+        let mut dvalues = dz;
         
         for i in (0..from_nodes.len()).rev() {
             let node_opt = from_nodes.get_mut(i);
@@ -88,7 +88,7 @@ impl NeuralNetwork {
                 let fcalc = fcalcs.pop().unwrap();
                 match node {
                     NeuralNetworkNode::Activation(n) => {
-                        dvalues = n.backward(&dvalues, &fcalc);
+                        dvalues = n.backward(dvalues, &fcalc);
                     },
                     NeuralNetworkNode::DenseLayer(n) => {
                         dvalues = n.backward(learning_rate, &dvalues, &fcalc);

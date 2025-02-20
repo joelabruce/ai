@@ -95,7 +95,7 @@ pub fn train_network(
             
             // Backward pass on training data batch
             let dvalues6 = backward_categorical_cross_entropy_loss_wrt_softmax(&predictions, &targets).scale_simd(1. / tp.batch_size as f32);
-            NeuralNetwork::backward( nn_nodes, learning_rate, &dvalues6, &mut forward_stack);
+            NeuralNetwork::backward( nn_nodes, learning_rate, dvalues6, &mut forward_stack);
 
             // Only uncomment if network training is slow to see if accuracy and data loss is actually improving
             if include_batch_output && _batch > 0 && _batch % tp.batch_inform_size == 0 {

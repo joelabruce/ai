@@ -95,8 +95,8 @@ pub const SOFTMAX: FoldActivation = FoldActivation {
 
         Tensor::matrix(m.shape[0], m.shape[1], values)
     },
-    d: |v| {
-        v.clone()
+    d: |_v| {
+        todo!();
     }
 };
 

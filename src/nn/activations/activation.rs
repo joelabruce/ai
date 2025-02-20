@@ -2,12 +2,12 @@ use crate::geoalg::f32_math::tensor::Tensor;
 
 pub struct Activation {
     f: fn(&Tensor) -> Tensor,
-    b: fn(&Tensor, &Tensor) -> Tensor
+    b: fn(Tensor, &Tensor) -> Tensor
 }
 
 pub trait ActivationPropagates {
     fn forward(&self, inputs: &Tensor) -> Tensor;
-    fn backward(&self, dvalues: &Tensor, inputs: &Tensor) -> Tensor;
+    fn backward(&self, dvalues: Tensor, inputs: &Tensor) -> Tensor;
 }
 
 impl ActivationPropagates for Activation {
@@ -16,7 +16,7 @@ impl ActivationPropagates for Activation {
     }
 
     #[allow(unused_variables)]
-    fn backward(&self, dvalues: &Tensor, inputs: &Tensor) -> Tensor {
+    fn backward(&self, dvalues: Tensor, inputs: &Tensor) -> Tensor {
         (self.b)(dvalues, inputs)
     }
 }
@@ -26,7 +26,7 @@ pub const RELU: Activation = Activation {
         inputs.relu_simd()
     },
     b: |dvalues, inputs| -> Tensor {
-        inputs.d_relu_simd().mul_element_wise_simd(dvalues)
+        inputs.d_relu_simd().mul_element_wise_simd(&dvalues)
     }
 };
 
@@ -53,7 +53,7 @@ mod tests {
 
         assert_eq!(forward, expected);
 
-        let dvalues = &Tensor::matrix(3, 3, vec![
+        let dvalues = Tensor::matrix(3, 3, vec![
             100., 100., 100.,
             100., 100., 100.,
             100., 100., 100.
