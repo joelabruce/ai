@@ -1,17 +1,26 @@
-use crate::geoalg::f32_math::tensor::Tensor;
+use crate::geoalg::f32_math::{shape::Shape, tensor::Tensor};
+
+pub enum InputTypes {
+    Flattened { features: usize },
+    Image{ height: usize, width: usize, channels: usize}
+}
+
 
 /// Allows for creation of succeeding layers based on initial data passed in.
 #[derive(Clone)]
 pub struct Input {
-    pub input_matrix: Tensor
+    pub input_tensor: Tensor
 }
 
 impl Input {
-    // Creates input layer based on inputs supplied.
-    // Allows for automatic shaping of succeeding layer generation.
-    pub fn from(batch_size: usize, features: usize, raw_values: Vec<f32>) -> Self {
-        Self {
-            input_matrix: Tensor::matrix(batch_size, features, raw_values)
+    pub fn load(input_type: &InputTypes, batch_size: usize, values: Vec<f32>) -> Self {
+        match input_type {
+            InputTypes::Flattened { features } => {
+                Self { input_tensor: Tensor::matrix(batch_size, *features, values) }
+            },
+            InputTypes::Image { height, width, channels } => {
+                Self { input_tensor: Tensor::new(Shape::d4(batch_size, *height,*width, *channels), values) }
+            }
         }
     }
 }

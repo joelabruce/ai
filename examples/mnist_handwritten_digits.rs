@@ -2,7 +2,7 @@
 // Use the following command to run in release mode:
 // cargo run --release --example mnist_digits
 
-use ai::{nn::{layers::dense::Dense, neural::NeuralNetworkNode, trainer::{train_network, TrainingHyperParameters}}, timed};
+use ai::{nn::{layers::{dense::Dense, input::InputTypes}, neural::NeuralNetworkNode, trainer::{train_network, TrainingHyperParameters}}, timed};
 
 use ai::nn::activations::activation::RELU;
 
@@ -35,7 +35,8 @@ pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
         nn_nodes.push(NeuralNetworkNode::Activation(RELU));
         nn_nodes.push(NeuralNetworkNode::DenseLayer(dense3));
 
-        train_network(&mut nn_nodes, tp, load_from_file, include_batch_output);
+        let input_type = &InputTypes::Flattened { features: 784 };
+        train_network(&mut nn_nodes, tp, load_from_file, include_batch_output, input_type);
     });
 
     println!("Total time to run: {time_to_run}");

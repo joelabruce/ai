@@ -149,4 +149,27 @@ mod tests {
         // After backprop, we should get back to 2 filters of 6x6
         println!("{BRIGHT_MAGENTA}Backprop pooling: {:?}{RESET}", backward_output);
     }
+
+    #[test]
+    fn test_feed_into_dense() {
+        let batches = 10;
+        let filters = 7;
+        let p_d = Dimensions { width: 2, height: 2 };
+        let i_d = Dimensions { width: 26, height: 26 };
+
+        let size = batches * filters * i_d.height * i_d.width; 
+
+        let inputs = &Tensor::new(Shape::d4(batches, filters, i_d.height, i_d.width), vec![0.; size]);
+
+        let stride = 2;
+        let mut mp = MaxPooling::new(filters, p_d, i_d, stride);
+
+        let _fcalc = mp.forward(inputs);
+
+        let neuron_count = 64;
+        let mut _dense = mp.feed_into_dense(neuron_count);
+        //let _fcalc2 = dense.forward(&fcalc);
+
+        //let dvalues = Tensor::new
+    }
 }

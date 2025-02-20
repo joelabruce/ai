@@ -4,7 +4,7 @@ use crate::{geoalg::f32_math::{shape::Shape, tensor::Tensor}, nn::learning_rate:
 
 use super::{max_pooling::MaxPooling, LayerPropagates};
 
-use crate::prettify::*;
+//use crate::prettify::*;
 
 pub struct Dimensions {
     pub height: usize,

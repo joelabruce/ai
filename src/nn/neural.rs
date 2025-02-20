@@ -57,7 +57,7 @@ impl NeuralNetwork {
     pub fn forward(with_input: Input, to_nodes: &mut Vec<NeuralNetworkNode>) -> Vec<Tensor> {
         let mut forward_stack = Vec::with_capacity(to_nodes.len() + 1);
 
-        forward_stack.push(with_input.input_matrix);
+        forward_stack.push(with_input.input_tensor);
         for node in to_nodes.iter_mut() {
             match node {
                 NeuralNetworkNode::Activation(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
