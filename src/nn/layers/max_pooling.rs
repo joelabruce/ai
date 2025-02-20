@@ -136,4 +136,31 @@ mod tests {
         // After backprop, we should get back to 2 filters of 4x4
         println!("{BRIGHT_MAGENTA}Backprop pooling: {:?}{RESET}", backward_output);
     }
+
+    #[test]
+    fn test_influenses_dense() {
+        let batches = 10;
+        let filters = 7;
+        let p_d = Dimensions { width: 2, height: 2 };
+        let i_d = Dimensions { width: 26, height: 26 };
+
+        let size = batches * filters * i_d.height * i_d.width; 
+
+        let inputs = &Matrix::from(batches, filters * i_d.height * i_d.width, vec![0.; size]);
+
+        let stride = 2;
+        let mut mp = MaxPooling::new(filters, p_d, i_d, stride);
+
+        let fcalc = mp.forward(inputs);
+
+        let neuron_count = 64;
+        let mut dense = mp.influences_dense(neuron_count);
+        let _fcalc2 = dense.forward(&fcalc);
+
+        let dvalues = &Matrix::from(batches, neuron_count, vec![0.; batches * neuron_count]);
+        println!("{:?} x {:?}", dvalues.row_count(), dvalues.column_count());
+
+        let learning_rate = &mut LearningRate::new(0.01);
+        let _dvalues2 = dense.backward(learning_rate, dvalues, &fcalc);
+    }
 }
