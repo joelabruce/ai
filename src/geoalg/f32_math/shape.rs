@@ -1,5 +1,7 @@
 use std::ops::Index;
 
+/// Immutable shape for a tensor.
+/// Allowing for mutability would require recalculating all the dependent fields.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Shape {
     dimensions: Vec<usize>,

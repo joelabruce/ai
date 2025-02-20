@@ -1,5 +1,5 @@
 use crate::{geoalg::f32_math::{shape::Shape, tensor::Tensor}, nn::learning_rate::LearningRate};
-use super::{convolution2d::{Convolution2d, Dimensions}, dense::Dense, LayerPropagates};
+use super::{convolution2d::{Convolution2d, Dimensions}, reshaper::Reshaper, LayerPropagates};
 
 /// Currently only supports valid pooling layers, with no padding.
 pub struct MaxPooling {
@@ -19,11 +19,16 @@ impl MaxPooling {
         }
     }
 
-    pub fn feed_into_dense(&self, neuron_count: usize) -> Dense {
-        let (rows, columns) = self.output_dimensions().shape();
-
+    pub fn feed_into_reshaper(&self) -> Reshaper {
+        let rows = (self.i_d.height - self.p_d.height) / self.stride + 1;
+        let columns = (self.i_d.width - self.p_d.width) / self.stride + 1;
         let features = self.filters * rows * columns;
-        Dense::new(features, neuron_count)
+
+        let reshaper = Reshaper::new(
+            &Shape::d4(1, self.filters, rows, columns),
+            &Shape::d2(1, features)
+        );
+        reshaper
     }
 
     pub fn feed_into_convolution2d(&self, filters: usize, channels: usize, k_d: Dimensions) -> Convolution2d {
@@ -151,6 +156,7 @@ mod tests {
     }
 
     #[test]
+
     fn test_feed_into_dense() {
         let batches = 10;
         let filters = 7;
@@ -158,18 +164,23 @@ mod tests {
         let i_d = Dimensions { width: 26, height: 26 };
 
         let size = batches * filters * i_d.height * i_d.width; 
-
         let inputs = &Tensor::new(Shape::d4(batches, filters, i_d.height, i_d.width), vec![0.; size]);
 
         let stride = 2;
         let mut mp = MaxPooling::new(filters, p_d, i_d, stride);
 
-        let _fcalc = mp.forward(inputs);
+        let fcalc0 = mp.forward(inputs);
+
+        let mut reshaper = mp.feed_into_reshaper();
+        let fcalc1 = reshaper.forward(&fcalc0);
 
         let neuron_count = 64;
-        let mut _dense = mp.feed_into_dense(neuron_count);
-        //let _fcalc2 = dense.forward(&fcalc);
+        let mut dense = reshaper.feed_into_dense(neuron_count);
+        let _fcalc2 = dense.forward(&fcalc1);
 
-        //let dvalues = Tensor::new
+        let dvalues = &Tensor::new(Shape::d2(batches, neuron_count), vec![0.; batches * neuron_count]);
+
+        let learning_rate = &mut LearningRate::new(0.01); 
+        let _dvalues2 = dense.backward(learning_rate, dvalues, &fcalc1);
     }
 }

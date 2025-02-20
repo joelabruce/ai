@@ -10,12 +10,12 @@ pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
         // Create hyper-parameters fine-tuned for this example.
         let tp = TrainingHyperParameters {
             backup_cycle: 1,
-            total_epochs: 5,
+            total_epochs: 2,
             training_sample_size: 60000,
             validation_sample_size: 10000,
-            batch_size: 60,
+            batch_size: 200,
             trained_model_location: "convo_model".to_string(),
-            batch_inform_size: 50,
+            batch_inform_size: 10,
             output_accuracy: true,
             output_loss: true,
             save: true
@@ -23,7 +23,7 @@ pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
 
         // Create layers for network to train on
         let convo1 = Convolution2d::new(
-            32, 
+            16, 
             1, 
             Dimensions { width: 3, height: 3 } ,
             Dimensions { width: 28, height: 28 });
@@ -32,16 +32,9 @@ pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
             Dimensions { width: 2, height: 2 },
             2);
 
-        // let convo2 = maxpool1.influences_convolution2d(
-        //     64, 
-        //     1, 
-        //     Dimensions { width: 3, height: 3 });
+        let reshaper = maxpool1.feed_into_reshaper();
 
-        // let maxpool2 = convo2.influences_maxpool(
-        //     Dimensions { width: 2, height: 2},
-        //     2);
-
-        let dense1 = maxpool1.feed_into_dense(64);
+        let dense1 = reshaper.feed_into_dense(64);
         let dense2 = dense1.feed_into_dense(10);
 
         // Add layers to the network for forward and backward propagation.
@@ -49,11 +42,9 @@ pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
         nn_nodes.push(NeuralNetworkNode::Convolution2dLayer(convo1));
         nn_nodes.push(NeuralNetworkNode::Activation(RELU));
         nn_nodes.push(NeuralNetworkNode::MaxPoolLayer(maxpool1));
-        // nn_nodes.push(NeuralNetworkNode::Convolution2dLayer(convo2));
-        // nn_nodes.push(NeuralNetworkNode::ActivationLayer(RELU));
-        // nn_nodes.push(NeuralNetworkNode::MaxPoolLayer(maxpool2));
+        nn_nodes.push(NeuralNetworkNode::Reshaper(reshaper));
         nn_nodes.push(NeuralNetworkNode::DenseLayer(dense1));
-        //nn_nodes.push(NeuralNetworkNode::ActivationLayer(RELU));
+        nn_nodes.push(NeuralNetworkNode::Activation(RELU));
         nn_nodes.push(NeuralNetworkNode::DenseLayer(dense2));
 
         let input_type = &InputTypes::Image { height: 28, width: 28, channels: 1 };

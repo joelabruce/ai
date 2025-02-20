@@ -421,10 +421,70 @@ impl Tensor {
         )
     }
 
-    pub fn full_outer_convolution(&self, filters: &Tensor) -> Self {
-        filters.shape.len();
-        todo!()
-    }
+//     pub fn full_outer_convolution(&self, filters: &Tensor) -> Self {
+// //        pub fn full_outer_convolution(&self, filters: &Matrix, k_d: &Dimensions, i_d: &Dimensions) -> Self {
+//             let batches = self.row_count();
+    
+//             let partitioner = &Partitioner::with_partitions(
+//                 batches, 
+//                 1);//thread::available_parallelism().unwrap().get());
+    
+//             // Adjust for full outer convolution (don't padd, just do bounds checking)
+//             let i_rows = (i_d.height - k_d.height + 1) as isize;
+//             let i_columns = (i_d.width - k_d.width + 1) as isize;
+    
+//             let o_rows = i_d.height;
+//             let o_columns =i_d.width;
+//             let filters_size = filters.row_count() * o_rows * o_columns;
+    
+//             let inner_process = move |partition: &Partition| {
+//                 let mut partition_values = vec![0.; partition.size() * filters_size];
+//                 for batch_index in partition.range() {
+//                     //let input = self.row(batch_index);
+    
+//                     let batch_offset = batch_index * o_rows * o_columns;
+//                     for filter_index in 0..filters.row_count() {
+//                         //let filter = kernels.row(filter_index);
+//                         let filter_offset = filter_index * k_d.height * k_d.width; 
+    
+//                         for row in 0..o_rows {
+//                             for column in 0..o_columns {
+//                                 let mut c_accum = 0.;
+//                                 for kernel_row in 0..k_d.height {
+//                                     for kernel_column in 0..k_d.width {
+//                                         let input_row = row as isize - (k_d.height - kernel_row - 1) as isize;
+//                                         let input_column = column as isize - (k_d.width - kernel_column - 1) as isize;
+    
+//                                         if input_row >= 0 && input_row < i_rows &&
+//                                            input_column > 0 && input_column < i_columns {
+//                                             let input_offset = (batch_index as isize) * i_rows * i_columns;
+    
+//                                             c_accum += self.values[(input_offset + input_row * i_columns + input_column) as usize] 
+//                                                 * filters.values[filter_offset + kernel_row * k_d.width + kernel_column];
+//                                         }
+    
+//                                         //c_accum += dot_product_simd3(x, y)
+//                                     }
+//                                 }
+    
+//                                 //print!("{c_accum}, ");
+//                                 partition_values[batch_offset + row * o_columns + column] = c_accum;
+//                                 //partition_values.push(c_accum);
+//                             }
+//                         }
+//                     }
+//                 }
+    
+//                 partition_values
+//             };
+    
+//             let values = partitioner.parallelized(inner_process);
+//             //Matrix::from(batches, filters_size, values)
+//     //    }
+
+//   //      filters.shape.len();
+//         todo!()
+//     }
 
     /// Maxpool of tensor.
     /// **In Progress, not finished**

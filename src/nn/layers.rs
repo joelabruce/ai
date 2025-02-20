@@ -2,6 +2,7 @@ pub mod dense;
 pub mod input;
 pub mod convolution2d;
 pub mod max_pooling;
+pub mod reshaper;
 
 extern crate rand;
 use crate::geoalg::f32_math::tensor::Tensor;
