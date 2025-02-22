@@ -4,7 +4,8 @@ use crate::nn::learning_rate::LearningRate;
 
 use super::{max_pooling::MaxPooling, Matrix, Propagates};
 
-use crate::prettify::*;
+// Useful for debugging
+//use crate::prettify::*;
 
 pub struct Dimensions {
     pub height: usize,
@@ -76,7 +77,7 @@ impl Propagates for Convolution2dDeprecated {
     }
 
     fn backward<'a>(&'a mut self, learning_rate: &mut LearningRate, dvalues: &Matrix, inputs: &Matrix) -> Matrix {
-        println!("{BRIGHT_GREEN} dvalues shape: {:?} x {:?}{RESET}", dvalues.row_count(), dvalues.column_count());
+        //println!("{BRIGHT_GREEN} dvalues shape: {:?} x {:?}{RESET}", dvalues.row_count(), dvalues.column_count());
         let dims = self.backward_dims();
         let size = dims.height * dims.width;
         let k_size = self.k_d.height * self.k_d.width;

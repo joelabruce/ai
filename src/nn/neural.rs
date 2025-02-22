@@ -6,12 +6,12 @@ use input::Input;
 
 use crate::digit_image::DigitImage;
 use crate::nn::layers::*;
-use crate::nn::activation_functions::*;
 use crate::geoalg::f32_math::matrix::*;
 use crate::input_csv_reader::*;
 use crate::output_bin_writer::OutputBinWriter;
 use crate::statistics::sample::Sample;
 
+use super::activations::activation::Activation;
 use super::layers::convolution2d::Convolution2dDeprecated;
 use super::layers::max_pooling::MaxPooling;
 use super::learning_rate::LearningRate;
@@ -19,7 +19,7 @@ use super::learning_rate::LearningRate;
 pub enum NeuralNetworkNode {
     DenseLayer(Dense),
     Convolution2dLayer(Convolution2dDeprecated),
-    ActivationLayer(Activation),
+    ActivationFunction(Activation),
     MaxPoolLayer(MaxPooling)
 }
 
@@ -60,7 +60,7 @@ impl NeuralNetwork {
         forward_stack.push(with_input.input_matrix);
         for node in to_nodes.iter_mut() {
             match node {
-                NeuralNetworkNode::ActivationLayer(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
+                NeuralNetworkNode::ActivationFunction(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
                 NeuralNetworkNode::DenseLayer(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
                 NeuralNetworkNode::Convolution2dLayer(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
                 NeuralNetworkNode::MaxPoolLayer(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
@@ -81,9 +81,9 @@ impl NeuralNetwork {
 
             if let Some(node) = node_opt {
                 match node {
-                    NeuralNetworkNode::ActivationLayer(n) => {
+                    NeuralNetworkNode::ActivationFunction(n) => {
                         let fcalc = fcalcs.pop().unwrap();
-                        dvalues = n.backward(learning_rate, &dvalues, &fcalc);
+                        dvalues = n.backward(&dvalues, &fcalc);
                     },
                     NeuralNetworkNode::DenseLayer(n) => {
                         let fcalc = fcalcs.pop().unwrap();

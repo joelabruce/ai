@@ -3,7 +3,7 @@ use rand_distr::{Distribution, Normal, Uniform};
 
 use crate::{nn::layers::convolution2d::Dimensions, partition::Partition, partitioner::Partitioner};
 
-use super::{shape::Shape, simd_extensions::{dot_product_simd3, SIMD_LANES}};
+use super::{shape::Shape, simd_extensions::{dot_product_simd3, ALL_SIMD_LANES}};
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct Tensor {
@@ -88,7 +88,7 @@ impl Tensor {
             self.shape.size(), 
             thread::available_parallelism().unwrap().get());
 
-        let y_simd = Simd::<f32, SIMD_LANES>::splat(0.);
+        let y_simd = Simd::<f32, ALL_SIMD_LANES>::splat(0.);
         let inner_process = |partition: &Partition| {
             let mut partition_values: Vec<f32> = Vec::with_capacity(partition.size());
             partition.unary_simd(
@@ -111,8 +111,8 @@ impl Tensor {
             self.shape.size(), 
             thread::available_parallelism().unwrap().get());
 
-        let y_simd = Simd::<f32, SIMD_LANES>::splat(0.);
-        let true_mask = Simd::<f32, SIMD_LANES>::splat(1.);
+        let y_simd = Simd::<f32, ALL_SIMD_LANES>::splat(0.);
+        let true_mask = Simd::<f32, ALL_SIMD_LANES>::splat(1.);
         let inner_process = |partition: &Partition| {
             let mut partition_values: Vec<f32> = Vec::with_capacity(partition.size());
             partition.unary_simd(
@@ -292,7 +292,7 @@ impl Tensor {
             self.shape.size(), 
             thread::available_parallelism().unwrap().get());
 
-        let y_simd = Simd::<f32, SIMD_LANES>::splat(scalar);
+        let y_simd = Simd::<f32, ALL_SIMD_LANES>::splat(scalar);
         let inner_process = |partition: &Partition| {
             let mut partition_values: Vec<f32> = Vec::with_capacity(partition.size());        
             partition.unary_simd(
@@ -740,13 +740,13 @@ mod tests {
 
     #[test]
     fn test_scale_simd() {
-        // Test for single thread, and not enough data to fill SIMD_LANES
+        // Test for single thread, and not enough data to fill ALL_SIMD_LANES
         let tc = Tensor::vector(vec![10., 100., 0., 20.]);
         let actual = tc.scale_simd(10.);
         let expected = Tensor::vector(vec![100., 1000., 0., 200.]);
         assert_eq!(actual, expected);
 
-        // Test for checking overflow works on 16 SIMD_LANES
+        // Test for checking overflow works on 16 ALL_SIMD_LANES
         let tc = Tensor::matrix(2, 17, vec![
             2., 6., 10., 5., 7., 1., 3., 1., 7., 4., 3., 9., 7., 4., 6., 1., 10.,
             4., 9., 5., 4., 2., 4., 4., 5., 5., 2., 4., 4., 4., 2., 2., 2., 4.
@@ -759,7 +759,7 @@ mod tests {
 
         assert_eq!(actual, expected);
 
-        // Great test for testing against 16 parallel threads on 16 SIMD_LANES
+        // Great test for testing against 16 parallel threads on 16 ALL_SIMD_LANES
         let tc = Tensor::matrix(16, 16, vec![
             2., 6., 10., 5., 7., 1., 3., 1., 7., 4., 3., 9., 7., 4., 6., 1.,
             10., 7., 4., 10., 3., 2., 10., 7., 4., 8., 10., 6., 10., 8., 1., 4.,

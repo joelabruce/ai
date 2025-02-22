@@ -44,7 +44,7 @@ impl Matrix {
     /// Reads value at specified index.
     /// Tensor.index
     pub fn read_at(&self, index: usize) -> f32 {
-        assert!(index < self.len());
+        //assert!(index < self.len());
         self.values[index]
     }
 
