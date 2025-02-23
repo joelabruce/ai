@@ -30,7 +30,7 @@ pub fn from_sample_digit_images(sample: &mut Sample<DigitImage>, requested_batch
 
     (
         Input::from(rows, 784, pixel_vector), 
-        Matrix::from(rows, 10, target_vector)
+        Matrix::new(rows, 10, target_vector)
     )
 }
 

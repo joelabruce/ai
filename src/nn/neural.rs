@@ -154,23 +154,23 @@ impl NeuralNetwork {
                             // Load weights first
                             let (mut rows, mut columns) = n.weights.shape();
                             let weight_floats = NeuralNetwork::read_section(&mut file, columns * rows, CHUNK_SIZE);
-                            n.weights = Matrix::from(rows, columns, weight_floats);
+                            n.weights = Matrix::new(rows, columns, weight_floats);
 
                             // Load biases next
                             (rows, columns) = n.biases.shape();                            
                             let biases_floats = NeuralNetwork::read_section(&mut file, columns * rows, CHUNK_SIZE);
-                            n.biases = Matrix::from(rows, columns, biases_floats);
+                            n.biases = Matrix::new(rows, columns, biases_floats);
                             //println!("Loaded weights and biases for dense layer.")
                         },
                         NeuralNetworkNode::Convolution2dLayer(n) => {
                             // Load weights first
                             let (mut rows, mut columns) = n.kernels.shape();
                             let kernel_floats = NeuralNetwork::read_section(&mut file, columns * rows, CHUNK_SIZE);
-                            n.kernels = Matrix::from(rows, columns, kernel_floats);
+                            n.kernels = Matrix::new(rows, columns, kernel_floats);
 
                             (rows, columns) = n.biases.shape();                            
                             let biases_floats = NeuralNetwork::read_section(&mut file, columns * rows, CHUNK_SIZE);
-                            n.biases = Matrix::from(rows, columns, biases_floats);
+                            n.biases = Matrix::new(rows, columns, biases_floats);
                             //println!("Loaded kernels and biases for convolution2d layer.")
                         }
                         _ => { }

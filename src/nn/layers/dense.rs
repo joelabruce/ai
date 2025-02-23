@@ -20,7 +20,7 @@ impl Dense {
         let term = (6. / (prev_layer_input_count as f32)).sqrt();
         let uniform = Uniform::new_inclusive(-term, term);
         let weights = Matrix::new_randomized_uniform(prev_layer_input_count, neuron_count, uniform);
-        let biases = Matrix::from(1, neuron_count, vec![0.0; neuron_count]);
+        let biases = Matrix::new(1, neuron_count, vec![0.0; neuron_count]);
 
         (weights, biases)
     }

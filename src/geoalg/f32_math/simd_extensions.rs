@@ -72,7 +72,7 @@ impl Matrix {
         };
 
         let values = partitioner.parallelized(inner_process);
-        Self::from(self.row_count(), self.column_count(), values)
+        Self::new(self.row_count(), self.column_count(), values)
     }
 
     /// Now in Tensor.
@@ -112,7 +112,7 @@ impl Matrix {
         };
 
         let values = partitioner.parallelized(inner_process);
-        Self::from(self.row_count(), self.column_count(), values)
+        Self::new(self.row_count(), self.column_count(), values)
     }
 }
 
@@ -237,14 +237,14 @@ mod tests {
 
     #[test]
     fn test_element_wise_mul_simd() {
-        let lhs = Matrix::from(4, 4, vec![
+        let lhs = Matrix::new(4, 4, vec![
             0., 1., 2., 3.,
             4., 5., 6., 7.,
             8., 9., 10., 11.,
             12., 13., 14., 15.
         ]);
 
-        let rhs = Matrix::from(4, 4, vec![
+        let rhs = Matrix::new(4, 4, vec![
             0., 1., 1., 1.,
             2., 3., 2., 2.,
             3., 3., 1., 4.,
@@ -252,7 +252,7 @@ mod tests {
         ]);
 
         let actual = lhs.mul_element_wise_simd(&rhs);
-        let expected = Matrix::from(4, 4, vec![
+        let expected = Matrix::new(4, 4, vec![
             0., 1., 2., 3.,
             8., 15., 12., 14.,
             24., 27., 10., 44.,

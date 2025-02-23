@@ -44,7 +44,7 @@ impl Convolution2dDeprecated {
             filters,
             //kernels: Matrix::new_randomized_normal(filters, channels * k_d.height * k_d.width, normal),
             kernels: Matrix::new_randomized_uniform(filters, channels * k_d.height * k_d.width, uniform),
-            biases: Matrix::from(1, filters, biases),
+            biases: Matrix::new(1, filters, biases),
             k_d,
             i_d
         }
@@ -85,13 +85,13 @@ impl Propagates for Convolution2dDeprecated {
         for filter in 0..self.filters {
             let filter_offset = filter * size;
 
-            let mut gradient = Matrix::from(1, k_size, vec![0.; k_size]);
+            let mut gradient = Matrix::new(1, k_size, vec![0.; k_size]);
             for image in 0..dvalues.row_count() {
                 let delta_image = dvalues.row(image);
-                let d_i = Matrix::from(1, self.i_d.height * self.i_d.width, delta_image.to_vec());
+                let d_i = Matrix::new(1, self.i_d.height * self.i_d.width, delta_image.to_vec());
 
                 let delta_filter = &delta_image[filter_offset..filter_offset + size];
-                let d_f = Matrix::from(1, size, delta_filter.to_vec());
+                let d_f = Matrix::new(1, size, delta_filter.to_vec());
 
                 let grad = d_i.valid_cross_correlation(&d_f, &dims, &self.i_d);
 
@@ -124,7 +124,7 @@ mod tests {
         let s4x4 = 16;
 
         // Test two different images
-        let inputs = Matrix::from(batch_size, s4x4, vec![
+        let inputs = Matrix::new(batch_size, s4x4, vec![
             1., 2., 3., 4., 
             5., 6., 7., 8.,
             9., 10., 11., 12.,
@@ -141,7 +141,7 @@ mod tests {
             1, 
             Dimensions { width: 3, height: 3 } , 
             Dimensions { width: 4, height: 4 });
-        cv2d.kernels = Matrix::from(filters, s3x3, vec![
+        cv2d.kernels = Matrix::new(filters, s3x3, vec![
             0., 0.15, 0.,
             0.15, 0.4, 0.15,
             0., 0.15, 0., 
@@ -160,7 +160,7 @@ mod tests {
 
         let mut learning_rate = LearningRate::new(0.01);
 
-        let dvalues = &Matrix::from(batch_size, filters * s3x3, vec![0.; batch_size * filters * s3x3]);
+        let dvalues = &Matrix::new(batch_size, filters * s3x3, vec![0.; batch_size * filters * s3x3]);
         let _dvalues = cv2d.backward(&mut learning_rate, &dvalues, &inputs);
     }
 
@@ -173,14 +173,14 @@ mod tests {
         let s28x28 = 784;
 
         // Test two different images
-        let inputs = Matrix::from(batch_size, s28x28, vec![1.0; batch_size * s28x28]);
+        let inputs = Matrix::new(batch_size, s28x28, vec![1.0; batch_size * s28x28]);
 
         let mut cv2d = Convolution2dDeprecated::new(
             filters,
             1, 
             Dimensions { width: 3, height: 3 } , 
             Dimensions { width: 28, height: 28 });
-        cv2d.kernels = Matrix::from(filters, s3x3, vec![1.2; filters * s3x3]);
+        cv2d.kernels = Matrix::new(filters, s3x3, vec![1.2; filters * s3x3]);
 
         let output = &cv2d.forward(&inputs);
         println!("{BRIGHT_CYAN}{:?}{RESET}", output);
@@ -188,7 +188,7 @@ mod tests {
         let mut maxpool = cv2d.influences_maxpool(Dimensions { width: 2, height: 2 }, 2);
         let _output2 = maxpool.forward(output);
 
-        let dvalues = &Matrix::from(batch_size, filters * s13x13, vec![-0.1; batch_size * filters * s13x13]);
+        let dvalues = &Matrix::new(batch_size, filters * s13x13, vec![-0.1; batch_size * filters * s13x13]);
 
         let mut learning_rate = LearningRate::new(0.01);
         let dvalues = &maxpool.backward(&mut learning_rate, dvalues, output);

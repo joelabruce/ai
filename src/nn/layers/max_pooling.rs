@@ -61,7 +61,7 @@ impl Propagates for MaxPooling {
             values[self.max_indices[i]] += dvalues.read_at(i);
         }
 
-        Matrix::from(batches, columns, values)
+        Matrix::new(batches, columns, values)
     }
 }
 
@@ -77,7 +77,7 @@ mod tests {
     fn test_forward2x2() {
         // Will need to update code if we ever change to use tensors instead of matrices everywhere.
         // Create a matrix that represents 2 filters that are 4 x 4 for a single image.
-        let tc = Matrix::from(1, 2 * 4 * 4, vec![
+        let tc = Matrix::new(1, 2 * 4 * 4, vec![
             1., 3., 2., 1.,  
             4., 2., 1., 5.,
             3., 1., 4., 2.,
@@ -97,7 +97,7 @@ mod tests {
 
         // Assume 2 filters
         let forward_output = pooling.forward(&tc);
-        let expected = Matrix::from(1, 2 * 2 * 2, vec![
+        let expected = Matrix::new(1, 2 * 2 * 2, vec![
             4.0, 5.0,
             8.0, 9.0,
             
@@ -110,7 +110,7 @@ mod tests {
         println!("{BRIGHT_MAGENTA}Forward pooling: {:?} <{:?}>{RESET}", forward_output, pooling.max_indices);
 
         // Assume these values came from the previous layers back-propagation.
-        let dvalues = Matrix::from(1, 2 * 4, vec![
+        let dvalues = Matrix::new(1, 2 * 4, vec![
             0.2, -0.5,
             0.3, 0.1,
 
@@ -120,7 +120,7 @@ mod tests {
 
         let learning_rate = &mut LearningRate::new(0.01);
         let backward_output = pooling.backward(learning_rate, &dvalues, &forward_output);
-        let expected = Matrix::from(1, 2 * 4 * 4, vec![
+        let expected = Matrix::new(1, 2 * 4 * 4, vec![
             0.0, 0.0, 0.0, 0.0,
             0.2, 0.0, 0.0, -0.5,
             0.0, 0.0, 0.0, 0.0,
@@ -146,7 +146,7 @@ mod tests {
 
         let size = batches * filters * i_d.height * i_d.width; 
 
-        let inputs = &Matrix::from(batches, filters * i_d.height * i_d.width, vec![0.; size]);
+        let inputs = &Matrix::new(batches, filters * i_d.height * i_d.width, vec![0.; size]);
 
         let stride = 2;
         let mut mp = MaxPooling::new(filters, p_d, i_d, stride);
@@ -157,7 +157,7 @@ mod tests {
         let mut dense = mp.influences_dense(neuron_count);
         let _fcalc2 = dense.forward(&fcalc);
 
-        let dvalues = &Matrix::from(batches, neuron_count, vec![0.; batches * neuron_count]);
+        let dvalues = &Matrix::new(batches, neuron_count, vec![0.; batches * neuron_count]);
         println!("{:?} x {:?}", dvalues.row_count(), dvalues.column_count());
 
         let learning_rate = &mut LearningRate::new(0.01);

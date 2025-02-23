@@ -49,7 +49,7 @@ impl Matrix {
     }
 
     /// Returns a new Matrix.
-    pub fn from(rows: usize, columns: usize, values: Vec<f32>) -> Self {
+    pub fn new(rows: usize, columns: usize, values: Vec<f32>) -> Self {
         Self {
             rows, columns, values,
             all_partitioner: None,
@@ -79,7 +79,7 @@ impl Matrix {
         let element_count = columns * rows;
         let values = step.sample_iter(&mut rng).take(element_count).collect();
 
-        Self::from(rows, columns, values)
+        Self::new(rows, columns, values)
     }
 
     /// Returns an rows x column matrix filled with random values specified by uniform distribution.
@@ -92,7 +92,7 @@ impl Matrix {
         let element_count = columns * rows;
         let values = uniform.sample_iter(&mut rng).take(element_count).collect();
         
-        Self::from(rows, columns, values)
+        Self::new(rows, columns, values)
     }
 
     /// In Tensor
@@ -101,7 +101,7 @@ impl Matrix {
         let element_count = columns * rows;        
         let values = normal.sample_iter(&mut rng).take(element_count).collect();
 
-        Self::from(rows, columns, values)
+        Self::new(rows, columns, values)
     }
 
     /// Returns transpose of matrix.
@@ -109,7 +109,7 @@ impl Matrix {
     /// Now in Tensor
     pub fn transpose(&self) -> Self {
         if self.rows == 1 || self.columns == 1 {
-            return Self::from(self.columns, self.rows, self.values.clone());
+            return Self::new(self.columns, self.rows, self.values.clone());
         }
 
         let partition_strategy = match self.all_partitioner.as_ref() {
@@ -130,7 +130,7 @@ impl Matrix {
         };
 
         let values = partition_strategy.parallelized(inner_process);
-        Self::from(self.columns, self.rows, values)
+        Self::new(self.columns, self.rows, values)
     }
 
     /// Makes use of supplied partitions to parallelize the operation.
@@ -158,7 +158,7 @@ impl Matrix {
 
         let values = partition_strategy.parallelized(inner_process);
 
-        Self::from(self.row_count(), self.column_count(), values)
+        Self::new(self.row_count(), self.column_count(), values)
     }
 
     /// Computes matrix multiplication and divying up work amongst partitions.
@@ -191,7 +191,7 @@ impl Matrix {
         };
 
         let values = partition_strategy.parallelized(inner_process);
-        Self::from(self.rows, rhs.rows, values)
+        Self::new(self.rows, rhs.rows, values)
     }
 
     /// Useful for applying an activation function to the entire matrix.
@@ -216,7 +216,7 @@ impl Matrix {
         };
 
         let values = partition_strategy.parallelized(inner_process);
-        Self::from(self.row_count(), self.column_count(), values)
+        Self::new(self.row_count(), self.column_count(), values)
     }
 
     /// Subtracts rhs Matrix from lhs Matrix.
@@ -242,7 +242,7 @@ impl Matrix {
         };
 
         let values = partition_strategy.parallelized(inner_process);
-        Self::from(self.row_count(), self.column_count(), values)
+        Self::new(self.row_count(), self.column_count(), values)
     }
 
     /// In tensor.
@@ -266,7 +266,7 @@ impl Matrix {
         };
 
         let values = partition_strategy.parallelized(inner_process);
-        Self::from(self.row_count(), self.column_count(), values)
+        Self::new(self.row_count(), self.column_count(), values)
     }
 
     /// Adds a row to each row in matrix.
@@ -298,7 +298,7 @@ impl Matrix {
         };
 
         let values = partition_strategy.parallelized(inner_process);
-        Self::from(self.row_count(), self.column_count(), values)
+        Self::new(self.row_count(), self.column_count(), values)
     }
 
     /// Returns a 1 row matrix where each column is the sum of all values for that column.
@@ -327,7 +327,7 @@ impl Matrix {
         };
 
         let values = partition_strategy.parallelized(inner_process);
-        Self::from(1, self.columns, values)
+        Self::new(1, self.columns, values)
     }
 
     /// Scales matrix by a scalar.
@@ -352,7 +352,7 @@ impl Matrix {
         };
 
         let values = partition_strategy.parallelized(inner_process);
-        Self::from(self.row_count(), self.column_count(), values)
+        Self::new(self.row_count(), self.column_count(), values)
     }
 
     /// Used for convolutional layers.
@@ -408,8 +408,13 @@ impl Matrix {
         };
 
         let values = partitioner.parallelized(inner_process);
-        Matrix::from(batches, filters_size, values)
+        Matrix::new(batches, filters_size, values)
     }
+
+    // pub fn cross_correlate_toeplitz(&self, kernels: &Matrix, k_d: &Dimensions, i_d: &Dimensions) -> Self {
+    //     let batch_count = self.row_count();
+    //     self
+    // }
 
     /// Todo: Put in Tensor.
     pub fn full_outer_convolution(&self, filters: &Matrix, k_d: &Dimensions, i_d: &Dimensions) -> Self {
@@ -469,7 +474,7 @@ impl Matrix {
         };
 
         let values = partitioner.parallelized(inner_process);
-        Matrix::from(batches, filters_size, values)
+        Matrix::new(batches, filters_size, values)
     }
 
     /// Pads a matrix with rows and columns specified by p_d
@@ -486,7 +491,7 @@ impl Matrix {
             }
         }
 
-        Self::from(padded_rows, padded_columns, values)
+        Self::new(padded_rows, padded_columns, values)
     }
 
     /// Might consider putting outside of matrix.
@@ -542,7 +547,7 @@ impl Matrix {
         //let msg = format!("{:?}", max_indices).bright_purple();
         //println!("Max indices: {msg}");
 
-        (Matrix::from(batches, filters * rows_x_columns, values), max_indices)
+        (Matrix::new(batches, filters * rows_x_columns, values), max_indices)
     }
 }
 
@@ -565,7 +570,7 @@ mod tests {
             row_partitioner: None,
             column_partitioner: None};
 
-        let expected = Matrix::from(
+        let expected = Matrix::new(
             2,
             3,
             vec![
@@ -579,14 +584,14 @@ mod tests {
     #[test]
     #[should_panic]
     fn test_invalid_row_slice() {
-        let tc = Matrix::from(1, 3, vec![]);
+        let tc = Matrix::new(1, 3, vec![]);
 
         tc.row(1);
     }
 
     #[test]
     fn transpose_test() {
-        let m = Matrix::from(5, 4, vec![
+        let m = Matrix::new(5, 4, vec![
                 0f32, 1f32, 2f32, 3f32,
                 4f32, 5f32, 6f32, 7f32,
                 8f32, 9f32, 10f32, 11f32,
@@ -594,7 +599,7 @@ mod tests {
                 16f32, 17f32, 18f32, 19f32
             ]);
 
-        let expected = Matrix::from(4, 5, vec![
+        let expected = Matrix::new(4, 5, vec![
                 0f32, 4f32, 8f32, 12f32, 16f32,
                 1f32, 5f32, 9f32, 13f32, 17f32,
                 2f32, 6f32, 10f32, 14f32, 18f32,
@@ -614,13 +619,13 @@ mod tests {
 
     #[test]
     fn test_scale() {
-        let tc = Matrix::from(2, 3, vec![
+        let tc = Matrix::new(2, 3, vec![
                 1., 2., 3.,
                 4., 5., 6.
             ]);
 
         let actual = tc.scale(3.);
-        let expected = Matrix::from(2, 3, vec![
+        let expected = Matrix::new(2, 3, vec![
                 3., 6., 9.,
                 12., 15., 18.
             ]);
@@ -630,13 +635,13 @@ mod tests {
 
     #[test]
     fn test_shrink_rows_by_add() {
-        let tc = Matrix::from(3, 4, vec![
+        let tc = Matrix::new(3, 4, vec![
                 1., 1., 2., 10.,
                 2., 3., 3., 10.,
                 4., 4., 5., 10.
             ]);
 
-        let expected = Matrix::from(1, 4, vec![
+        let expected = Matrix::new(1, 4, vec![
                 7., 8., 10., 30.
             ]);
 
@@ -646,7 +651,7 @@ mod tests {
 
     #[test]
     fn test_get_row_vector_slice() {
-        let tc = Matrix::from(4, 3, vec![
+        let tc = Matrix::new(4, 3, vec![
                 1., 2., 3.,
                 10., 20., 30.,
                 100., 200., 300.,
@@ -661,15 +666,15 @@ mod tests {
 
     #[test]
     fn test_add_row_vector() {
-        let tc = Matrix::from(3, 4, vec![
+        let tc = Matrix::new(3, 4, vec![
                 0., 0., 0., 0.,
                 1., 1., 1., 1.,
                 2., 2., 2., 2.
             ]);
 
-        let row_to_add = Matrix::from(1, 4, vec![10., 20., 30., 40.]);
+        let row_to_add = Matrix::new(1, 4, vec![10., 20., 30., 40.]);
 
-        let expected = Matrix::from(3, 4, vec![
+        let expected = Matrix::new(3, 4, vec![
                 10., 20., 30., 40.,
                 11., 21., 31., 41.,
                 12., 22., 32., 42.
@@ -681,7 +686,7 @@ mod tests {
 
     #[test]
     fn test_mul_with_transpose() {
-        let lhs = Matrix::from(4, 3,  vec![
+        let lhs = Matrix::new(4, 3,  vec![
             1., 2., 3.,
             4., 5., 6.,
             7., 8., 9.,
@@ -689,7 +694,7 @@ mod tests {
         ]);
 
         // Assume already transposed.
-        let rhs = &Matrix::from(5, 3, vec![
+        let rhs = &Matrix::new(5, 3, vec![
             1., 6., 11.,
             2., 7., 12.,
             3., 8., 13.,
@@ -697,7 +702,7 @@ mod tests {
             5., 10., 15.
         ]);
 
-        let expected = Matrix::from(4, 5, vec! [
+        let expected = Matrix::new(4, 5, vec! [
             46., 52., 58., 64., 70.,
             100., 115., 130., 145., 160.,
             154., 178., 202., 226., 250.,
@@ -710,13 +715,13 @@ mod tests {
 
     #[test]
     fn test_pad() {
-        let tc = Matrix::from(2, 2, vec![
+        let tc = Matrix::new(2, 2, vec![
             1., 2.,
             3., 4.
         ]);
 
         let actual = tc.pad(Dimensions { width: 2, height: 2});
-        let expected = Matrix::from(6, 6, vec![
+        let expected = Matrix::new(6, 6, vec![
             0., 0., 0., 0., 0., 0.,
             0., 0., 0., 0., 0., 0.,
             0., 0., 1., 2., 0., 0.,
@@ -732,13 +737,13 @@ mod tests {
 
     #[test]
     fn test_full_outer_convolution() {
-        let input = Matrix::from(1, 3 * 3, vec![
+        let input = Matrix::new(1, 3 * 3, vec![
             1., 2., 3.,
             4., 5., 6.,
             7., 8., 9.
         ]);
         
-        let kernels = Matrix::from(1, 3 * 3, vec![
+        let kernels = Matrix::new(1, 3 * 3, vec![
             0., 1., 0.,
             1., -4., 1.,
             0., 1., 0.

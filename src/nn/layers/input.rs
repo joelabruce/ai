@@ -11,7 +11,7 @@ impl Input {
     // Allows for automatic shaping of succeeding layer generation.
     pub fn from(batch_size: usize, features: usize, raw_values: Vec<f32>) -> Self {
         Self {
-            input_matrix: Matrix::from(batch_size, features, raw_values)
+            input_matrix: Matrix::new(batch_size, features, raw_values)
         }
     }
 }

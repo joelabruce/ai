@@ -52,7 +52,7 @@ pub fn relu_simd(inputs: &Matrix) -> Matrix {
     };
 
     let values = partitioner.parallelized(inner_process);
-    Matrix::from(inputs.row_count(), inputs.column_count(), values)
+    Matrix::new(inputs.row_count(), inputs.column_count(), values)
 }
 
 /// Derivative of relu on each element in Tensor.
@@ -86,5 +86,5 @@ pub fn d_relu_simd(inputs: &Matrix) -> Matrix {
     };
 
     let values = partitioner.parallelized(inner_process);
-    Matrix::from(inputs.row_count(), inputs.column_count(), values)
+    Matrix::new(inputs.row_count(), inputs.column_count(), values)
 }
