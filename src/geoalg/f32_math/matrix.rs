@@ -1,4 +1,4 @@
-use std::thread;
+use std::{ops::{Index, IndexMut}, thread};
 use rand_distr::{Distribution, Normal, Uniform};
 use crate::{geoalg::f32_math::simd_extensions::dot_product_simd3, nn::layers::convolution2d::Dimensions, partition::Partition, partitioner::Partitioner};
 
@@ -15,6 +15,20 @@ pub struct Matrix {
     row_partitioner: Option<Partitioner>,
     column_partitioner: Option<Partitioner>,
     //pub dot_product: fn(&[f32], &[f32]) -> f32
+}
+
+impl Index<usize> for Matrix {
+    type Output = f32;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.values[index]
+    }
+}
+
+impl IndexMut<usize> for Matrix {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        self.values.index_mut(index)
+    }
 }
 
 impl Matrix {
@@ -35,18 +49,6 @@ impl Matrix {
     /// Returns a slice of the values this matrix has.
     /// Tensor.stream
     pub fn read_values(&self) -> &[f32] { &self.values }
-
-    /// Deprecated, use mutable indexer now
-    pub fn add_at(&mut self, i: usize, value: f32) {
-        self.values[i] += value;
-    }
-
-    /// Reads value at specified index.
-    /// Tensor.index
-    pub fn read_at(&self, index: usize) -> f32 {
-        //assert!(index < self.len());
-        self.values[index]
-    }
 
     /// Returns a new Matrix.
     pub fn new(rows: usize, columns: usize, values: Vec<f32>) -> Self {

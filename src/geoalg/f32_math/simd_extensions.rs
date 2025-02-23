@@ -2,27 +2,45 @@ use crate::{partition::Partition, partitioner::Partitioner};
 use std::simd::{num::SimdFloat, *};
 use super::matrix::*;
 
-pub const ALL_SIMD_LANES: usize = 8;
-pub const HALF_SIMD_LANES: usize = 4;
+pub const ALL_SIMD_LANES: usize = 16;
+//pub const HALF_SIMD_LANES: usize = 4;
 
 /// Taken from github exmples.
 pub fn dot_product_simd3(lhs: &[f32], rhs: &[f32]) -> f32 {
-    assert_eq!(lhs.len(), rhs.len());
-
-    let (a_extra, a_chunks) = lhs.as_rchunks();
-    let (b_extra, b_chunks) = rhs.as_rchunks();
+    //assert_eq!(lhs.len(), rhs.len());
+    let (l_extra, l_chunks) = lhs.as_rchunks();
+    let (r_extra, r_chunks) = rhs.as_rchunks();
 
     let mut sums = [0.0; ALL_SIMD_LANES];
-    for ((x, y), d) in std::iter::zip(a_extra, b_extra).zip(&mut sums) {
+    for ((x, y), d) in std::iter::zip(l_extra, r_extra).zip(&mut sums) {
         *d = x * y;
     }
 
     let mut sums = Simd::<f32, ALL_SIMD_LANES>::from_array(sums);
-    std::iter::zip(a_chunks, b_chunks).for_each(|(x, y)| {
+    std::iter::zip(l_chunks, r_chunks).for_each(|(x, y)| {
         sums += Simd::<f32, ALL_SIMD_LANES>::from_array(*x) * Simd::<f32, ALL_SIMD_LANES>::from_array(*y);
     });
 
     sums.reduce_sum()
+}
+
+/// Will overwrite contents of out.
+pub fn mul_simd<'a>(lhs: &[f32], rhs: &[f32]) -> Vec<f32> {
+    let (l_extra, l_chunks) = lhs.as_rchunks();
+    let (r_extra, r_chunks) = rhs.as_rchunks();
+
+    let mut out = Vec::with_capacity(lhs.len());
+    for i in 0..l_extra.len() {
+        out.push(l_extra[i] * r_extra[i]);
+    }
+
+    std::iter::zip(l_chunks, r_chunks).for_each(|(x, y)| {
+        out.extend(
+            (Simd::<f32, ALL_SIMD_LANES>::from_array(*x) * Simd::<f32, ALL_SIMD_LANES>::from_array(*y)).as_array()
+        );
+    });
+
+    out
 }
 
 // Taken from github examples.
@@ -65,7 +83,7 @@ impl Matrix {
             // Does normal multiplication for remaining elements that cannot fit into simd.
             // If using Partitioner::with_partitions_simd, this should only execute at most 1 time for the last thread.
             for i in cursor..=partition.get_end() {
-                partition_values.push(self.read_at(i) * scalar);
+                partition_values.push(self[i] * scalar);
             }
 
             partition_values
@@ -105,7 +123,7 @@ impl Matrix {
             // Does normal multiplication for remaining elements that cannot fit into simd.
             // If using Partitioner::with_partitions_simd, this should only execute at most 1 time for the last thread.
             for i in cursor..=partition.get_end() {
-                partition_values.push(self.read_at(i) * rhs.read_at(i));
+                partition_values.push(self[i] * rhs[i]);
             }
 
             partition_values
@@ -155,9 +173,7 @@ impl Partitioner {
             cursor = start + adjusted_partition_size;
             end = cursor - 1;
 
-            partitions.push(
-                Partition::new(start, end)
-            );
+            partitions.push(Partition::new(start, end));
         }
 
         partitions.push(Partition::new(cursor, count - 1));
@@ -228,7 +244,8 @@ impl Partition {
 
 #[cfg(test)]
 mod tests {
-    use crate::prettify::*;
+    use crate::partitioner::PARALLELISM;
+    use crate::{prettify::*, timed};
     use crate::{geoalg::f32_math::{matrix::Matrix, optimized_functions::dot_product_of_vector_slices}, partitioner::Partitioner};
 
     use super::dot_product_simd3;
@@ -237,52 +254,61 @@ mod tests {
 
     #[test]
     fn test_element_wise_mul_simd() {
-        let lhs = Matrix::new(4, 4, vec![
-            0., 1., 2., 3.,
-            4., 5., 6., 7.,
-            8., 9., 10., 11.,
-            12., 13., 14., 15.
-        ]);
+        let lhs = Matrix::new_randomized_z(1000, 10000);
+        let rhs = Matrix::new_randomized_z(1000, 10000);
+        
+        let mut expected = Matrix::new(1, 1, vec![0.; 1]);
 
-        let rhs = Matrix::new(4, 4, vec![
-            0., 1., 1., 1.,
-            2., 3., 2., 2.,
-            3., 3., 1., 4.,
-            5., 4., 3., 2.
-        ]);
+        let elapsed = timed::timed(|| {
+            expected = lhs
+                .mul_element_wise(&rhs)
+                .mul_element_wise(&rhs)
+                .mul_element_wise(&lhs);
+        });
+        println!("Elapsed no simd: {elapsed}");
 
-        let actual = lhs.mul_element_wise_simd(&rhs);
-        let expected = Matrix::new(4, 4, vec![
-            0., 1., 2., 3.,
-            8., 15., 12., 14.,
-            24., 27., 10., 44.,
-            60., 52., 42., 30.
-        ]);
+        let time_scale = 1.;
+        let elapsed = time_scale * timed::timed(|| {
+            let _actual = lhs
+                .mul_element_wise_simd(&rhs)
+                .mul_element_wise_simd(&rhs)
+                .mul_element_wise_simd(&lhs);
+        });
+        println!("Elapsed old school simd: {elapsed:0.9}");
 
-        assert_eq!(actual, expected);
+        let elapsed = time_scale * timed::timed(|| {
+            let actual = mul_simd(lhs.read_values(), rhs.read_values());
+            let actual = mul_simd(&actual[..], rhs.read_values());
+            let _actual = mul_simd(&actual[..], lhs.read_values());
+        });
+        println!("Elapsed new school simd: {elapsed:0.9} *Seems to be fastest without multi-threading wowza");
 
-        let actual = lhs.mul_element_wise(&rhs);
-        assert_eq!(actual, expected);
+        let partitioner = Partitioner::with_partitions_simd(
+            lhs.len(),
+            PARALLELISM);
+        let elapsed = time_scale *timed::timed(|| {
+            let _actual = partitioner.parallelized(|&partition| {
+                let x = mul_simd(&lhs.read_values()[partition.range()], &rhs.read_values()[partition.range()]);
+                let x = mul_simd(&x[..], &rhs.read_values()[partition.range()]);
+                mul_simd(&x[..], &lhs.read_values()[partition.range()])
+            });
+        });
+        println!("Elapsed thd school simd: {elapsed:0.9}");
 
+        let elapsed = time_scale * timed::timed(||{
+            let _actual = partitioner.parallelized(|&partition| {
+                let mut partition_values = Vec::with_capacity(lhs.len());
+                partition.binary_simd(
+                    &mut partition_values, 
+                    &lhs.read_values(), 
+                    &rhs.read_values(), 
+                    |x_simd, y_simd| { x_simd * y_simd }, 
+                    |x, y| x * y);
 
-        let lhs = Matrix::new_randomized_z(1000, 1000);
-        let rhs = Matrix::new_randomized_z(1000, 1000);
-        let actual = lhs.mul_element_wise_simd(&rhs);
-        let expected = lhs.mul_element_wise(&rhs);
-
-        let error = actual
-            .read_values()
-            .iter()
-            .zip(expected
-                .read_values()
-                .iter()
-            ).map(|(&a, &b)| a - b).sum::<f32>();
-
-        println!("Errors: {error}");
-        println!("{:?} vs {:?}", actual.read_values()[0..10].to_vec(), expected.read_values()[0..10].to_vec());
-        //let error = (actual.read_values().into_iter().sum::<f32>() - expected.read_values().into_iter().sum::<f32>()).abs().log10();        
-        //let msg = format!("elementwise aggregate error: {error}").bright_green();
-        //println!("{msg}");    
+                partition_values
+            });
+        });
+        println!("Elapsed bin school simd: {elapsed:0.9} *Quickly becoming slowest");
     }
 
     #[test]

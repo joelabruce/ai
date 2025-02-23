@@ -58,7 +58,7 @@ impl Propagates for MaxPooling {
 
         let mut values = vec![0.; batches * columns];
         for i in 0..self.max_indices.len() {
-            values[self.max_indices[i]] += dvalues.read_at(i);
+            values[self.max_indices[i]] += dvalues[i];
         }
 
         Matrix::new(batches, columns, values)

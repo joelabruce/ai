@@ -8,7 +8,7 @@ pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
     let time_to_run = timed::timed(|| {
         // Create hyper-parameters fine-tuned for this example.
         let tp = TrainingHyperParameters {
-            backup_cycle: 4,
+            backup_cycle: 1,
             total_epochs: 10,
             training_sample: 60000,
             batch_size: 2000,
@@ -16,7 +16,7 @@ pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
             batch_inform_size: 10,
             output_accuracy: true,
             output_loss: false,
-            save: true
+            save_per_epoch: false
         };
         
         // Create layers

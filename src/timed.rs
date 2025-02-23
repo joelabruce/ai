@@ -19,7 +19,7 @@ impl TimedContext {
     }
 }
 
-pub fn timed(f: impl Fn() -> ()) -> f32 {
+pub fn timed(mut f: impl FnMut() -> ()) -> f32 {
     let start = Instant::now();
     f();
     let duration = start.elapsed();

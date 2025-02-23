@@ -2,6 +2,13 @@ use std::{ops::Index, thread};
 
 use crate::partition::Partition;
 
+pub const CORE16: usize = 16;
+pub const CORE8: usize = 8;
+pub const CORE4: usize = 4;
+pub const CORE2: usize = 2;
+
+pub const PARALLELISM: usize = CORE16;
+
 /// Partions data to be operated on, and provides for multi-threading.
 #[derive(Hash, Debug, Clone, PartialEq, Default)]
 pub struct Partitioner {

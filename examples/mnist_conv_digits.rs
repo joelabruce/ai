@@ -16,7 +16,7 @@ pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
             batch_inform_size: 50,
             output_accuracy: true,
             output_loss: true,
-            save: true
+            save_per_epoch: true
         };
 
         // Create layers for network to train on

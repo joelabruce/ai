@@ -100,7 +100,7 @@ impl Propagates for Convolution2dDeprecated {
 
             gradient = gradient.scale(1. / dvalues.row_count() as f32);
             for i in 0..k_size {
-                self.kernels.add_at(filter * k_size + i, -learning_rate.rate() * gradient.read_at(i));
+                self.kernels[filter * k_size + i] -= learning_rate.rate() * gradient[i];
             }
         }
 
