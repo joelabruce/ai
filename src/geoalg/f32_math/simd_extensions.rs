@@ -24,8 +24,7 @@ pub fn dot_product_simd3(lhs: &[f32], rhs: &[f32]) -> f32 {
     sums.reduce_sum()
 }
 
-/// Will overwrite contents of out.
-pub fn mul_simd<'a>(lhs: &[f32], rhs: &[f32]) -> Vec<f32> {
+pub fn mul_simd(lhs: &[f32], rhs: &[f32]) -> Vec<f32> {
     let (l_extra, l_chunks) = lhs.as_rchunks();
     let (r_extra, r_chunks) = rhs.as_rchunks();
 
@@ -37,6 +36,25 @@ pub fn mul_simd<'a>(lhs: &[f32], rhs: &[f32]) -> Vec<f32> {
     std::iter::zip(l_chunks, r_chunks).for_each(|(x, y)| {
         out.extend(
             (Simd::<f32, ALL_SIMD_LANES>::from_array(*x) * Simd::<f32, ALL_SIMD_LANES>::from_array(*y)).as_array()
+        );
+    });
+
+    out
+}
+
+///
+pub fn scale_simd(lhs: &[f32], scalar: f32) -> Vec<f32> {
+    let (l_extra, l_chunks) = lhs.as_rchunks();
+    
+    let mut out = Vec::with_capacity(lhs.len());
+    for i in 0..l_extra.len() {
+        out.push(l_extra[i] * scalar);
+    }
+
+    let y = Simd::<f32, ALL_SIMD_LANES>::splat(scalar);
+    l_chunks.iter().for_each(|x| {
+        out.extend(
+            (Simd::<f32, ALL_SIMD_LANES>::from_array(*x) * y).as_array()
         );
     });
 
@@ -182,6 +200,109 @@ impl Partitioner {
     }
 }
 
+/// Creates a specialized row that makes calculating convolution super duper fast.
+pub fn toeplitz_bruce_matrix(kernel: &[f32],
+    kernel_height: usize, kernel_width: usize, 
+    image_width: usize) -> Vec<f32>
+{
+    //let o_height = image_height - kernel_height;
+    let o_width = image_width - kernel_width;
+    let size = image_width * (kernel_height + 1);
+
+    let mut row = Vec::with_capacity(size);
+
+    let offset = image_width - 1;
+    row.resize(offset, 0.);
+    for i in 0..kernel_height {
+        let start = i * kernel_width;
+        let end = start + kernel_width;
+        row.extend_from_slice(&kernel[start..end]);
+        row.resize(row.len() + o_width, 0.);
+    }
+
+    //let remaining_zeros = size - offset;
+    row.resize(size, 0.);
+
+    row
+}
+
+pub trait SliceExt {
+    fn mul_simd(&self, rhs: &Self) -> Vec<f32>;
+    fn scale_simd(&self, scalar: f32) -> Vec<f32>;
+    fn mm_transpose(&self, rhs: &Self, l_rows: usize, columns: usize, r_rows: usize) -> Vec<f32>;
+    fn cross_correlate(&self, 
+        kernel: &Self, 
+        kernel_height: usize, kernel_width: usize, 
+        image_height: usize, image_width: usize) -> Vec<f32>;
+}
+
+impl SliceExt for [f32] {
+    fn mul_simd(&self, rhs: &Self) -> Vec<f32> { mul_simd(self, rhs) }
+    
+    fn scale_simd(&self, scalar: f32) -> Vec<f32> { scale_simd(self, scalar) }
+
+    fn mm_transpose(&self, rhs: &Self, l_rows: usize, columns: usize, r_rows: usize) -> Vec<f32> {
+        let size = l_rows * r_rows;
+        let mut values = Vec::with_capacity(size);
+
+        let mut start = 0;
+        let mut end = columns;
+        for _ in 0..l_rows {
+            let mut r_start = 0;
+            let mut r_end = columns;
+            for _ in 0..r_rows {
+                values.push(dot_product_simd3(&self[start..end], &rhs[r_start..r_end]));
+
+                r_start = r_end;
+                r_end += columns;
+            } 
+
+            start = end;
+            end += columns;
+        }
+
+        values
+    }
+
+    fn cross_correlate(&self, 
+        kernel: &Self, 
+        kernel_height: usize, kernel_width: usize, 
+        image_height: usize, image_width: usize) -> Vec<f32>
+    {
+        let o_rows = image_height - kernel_height + 1;
+        let o_columns = image_width - kernel_width + 1;
+        let o_size = o_rows * o_columns;
+        let mut values = Vec::with_capacity(o_size);
+
+        let toeplitz = toeplitz_bruce_matrix(
+            kernel, 
+            kernel_height, kernel_width, 
+            image_width);
+
+        let toeplitz_width = kernel_height * image_width;
+
+        for image_row in 0..o_rows {
+            let start = image_row * image_width;
+            let end = start + image_width * kernel_width;
+            
+            let mut toeplitz_start = image_width - 1;
+            let mut toeplitz_end = toeplitz_start + toeplitz_width;
+            for _image_column in 0..o_columns {
+                let dp = dot_product_simd3(
+                    &self[start..end],
+                    &toeplitz[toeplitz_start..toeplitz_end]);
+
+                values.push(dp);
+
+                toeplitz_start -= 1;
+                toeplitz_end -= 1;
+            }
+        }
+
+        values
+    }
+}
+
 impl Partition {
     pub fn unary_simd(&self,
         partition_values: &mut Vec<f32>, 
@@ -244,8 +365,10 @@ impl Partition {
 
 #[cfg(test)]
 mod tests {
+    use crate::nn::layers::convolution2d::Dimensions;
     use crate::partitioner::PARALLELISM;
-    use crate::{prettify::*, timed};
+    use crate::timed::timed_with_context;
+    use crate::prettify::*;
     use crate::{geoalg::f32_math::{matrix::Matrix, optimized_functions::dot_product_of_vector_slices}, partitioner::Partitioner};
 
     use super::dot_product_simd3;
@@ -254,61 +377,60 @@ mod tests {
 
     #[test]
     fn test_element_wise_mul_simd() {
-        let lhs = Matrix::new_randomized_z(1000, 10000);
-        let rhs = Matrix::new_randomized_z(1000, 10000);
-        
-        let mut expected = Matrix::new(1, 1, vec![0.; 1]);
+        //let time_scale = 1.;
 
-        let elapsed = timed::timed(|| {
-            expected = lhs
+        timed_with_context(|timed_context| {
+            let lhs = Matrix::new_randomized_z(1000, 10000);
+            let rhs = Matrix::new_randomized_z(1000, 10000);
+            
+            let expected = lhs
                 .mul_element_wise(&rhs)
                 .mul_element_wise(&rhs)
                 .mul_element_wise(&lhs);
-        });
-        println!("Elapsed no simd: {elapsed}");
+            let elapsed = timed_context.checkpoint();
+            println!("Mul Elapsed: {elapsed} multi-threading non-simd");
 
-        let time_scale = 1.;
-        let elapsed = time_scale * timed::timed(|| {
-            let _actual = lhs
+            let actual1 = lhs
                 .mul_element_wise_simd(&rhs)
                 .mul_element_wise_simd(&rhs)
                 .mul_element_wise_simd(&lhs);
-        });
-        println!("Elapsed old school simd: {elapsed:0.9}");
+            let elapsed = timed_context.checkpoint();
+            println!("Mul Elapsed: {elapsed:0.9} mul_element_wise_simd each call multi-threaded");
 
-        let elapsed = time_scale * timed::timed(|| {
-            let actual = mul_simd(lhs.read_values(), rhs.read_values());
-            let actual = mul_simd(&actual[..], rhs.read_values());
-            let _actual = mul_simd(&actual[..], lhs.read_values());
-        });
-        println!("Elapsed new school simd: {elapsed:0.9} *Seems to be fastest without multi-threading wowza");
+            let actual2 = mul_simd(lhs.read_values(), rhs.read_values());
+            let actual2 = mul_simd(&actual2[..], rhs.read_values());
+            let actual2 = mul_simd(&actual2[..], lhs.read_values());
+            let elapsed = timed_context.checkpoint();
+            println!("Mul Elapsed: {elapsed:0.9} mul_simd single-threaded *Seems to be fastest without multi-threading wowza");
 
-        let partitioner = Partitioner::with_partitions_simd(
-            lhs.len(),
-            PARALLELISM);
-        let elapsed = time_scale *timed::timed(|| {
-            let _actual = partitioner.parallelized(|&partition| {
+            let partitioner = Partitioner::with_partitions_simd(
+                lhs.len(),
+                PARALLELISM);
+            let actual3 = partitioner.parallelized(|&partition| {
                 let x = mul_simd(&lhs.read_values()[partition.range()], &rhs.read_values()[partition.range()]);
                 let x = mul_simd(&x[..], &rhs.read_values()[partition.range()]);
                 mul_simd(&x[..], &lhs.read_values()[partition.range()])
             });
-        });
-        println!("Elapsed thd school simd: {elapsed:0.9}");
+            let elapsed = timed_context.checkpoint();
+            println!("Mul Elapsed: {elapsed:0.9} mul_simd inside multi-threaded partitioner");
 
-        let elapsed = time_scale * timed::timed(||{
-            let _actual = partitioner.parallelized(|&partition| {
-                let mut partition_values = Vec::with_capacity(lhs.len());
-                partition.binary_simd(
-                    &mut partition_values, 
-                    &lhs.read_values(), 
-                    &rhs.read_values(), 
-                    |x_simd, y_simd| { x_simd * y_simd }, 
-                    |x, y| x * y);
+            assert_eq!(actual1.read_values(), actual2);
+            assert_eq!(actual2, actual3);
 
-                partition_values
-            });
+            // let _actual = partitioner.parallelized(|&partition| {
+            //     let mut partition_values = Vec::with_capacity(lhs.len());
+            //     partition.binary_simd(
+            //         &mut partition_values, 
+            //         &lhs.read_values(), 
+            //         &rhs.read_values(), 
+            //         |x_simd, y_simd| { x_simd * y_simd }, 
+            //         |x, y| x * y);
+
+            //     partition_values
+            // });
+            // let elapsed = timed_context.checkpoint();
+            // println!("Mul Elapsed: {elapsed:0.9} binary_simd *Quickly becoming slowest");
         });
-        println!("Elapsed bin school simd: {elapsed:0.9} *Quickly becoming slowest");
     }
 
     #[test]
@@ -409,11 +531,139 @@ mod tests {
 
     #[test]
     fn test_scale_simd() {
-        let tc = Matrix::new_randomized_z(1000, 1000);
+        let elapsed = timed_with_context(|context| {
+            let scalar1 = 12.4563;
+            let scalar2 = 1.234;
+            let tc = Matrix::new_randomized_z(5000, 10000);
+            context.checkpoint();
 
-        let expected = tc.scale(1.2);
-        let actual = tc.scale_simd(1.2);
+            let expected = tc.scale(scalar1).scale(scalar2);
+            let elapsed = context.checkpoint();
+            println!("Scale Elapsed: {elapsed:0.9} multi-threaded non-simd");
 
-        assert_eq!(actual, expected);
+            let actual2 = tc.scale_simd(scalar1).scale_simd(scalar2);
+            let elapsed = context.checkpoint();
+            println!("Scale Elapsed: {elapsed:0.9} multi-threaded simd");
+
+            let actual3 = scale_simd(tc.read_values(), scalar1);
+            let actual3 = scale_simd(&actual3, scalar2);
+            let elapsed = context.checkpoint();
+            println!("Scale Elapsed: {elapsed:0.9} single-threaded simd");
+
+            assert_eq!(actual2, expected);
+            assert_eq!(actual3, expected.read_values());
+        });
+    }
+
+    #[test]
+    fn test_matrix_multiply() {
+        let elapsed = timed_with_context(|context| {
+            let columns = 1920 * 1080;
+            let r_rows = 10;
+            let l_rows = 64;
+            let lhs = Matrix::new_randomized_z(l_rows, columns);
+            let rhs = Matrix::new_randomized_z(r_rows, columns);
+            context.checkpoint();
+
+            let expected = lhs.mul_with_transpose(&rhs);
+            let elapsed = context.checkpoint();
+            println!("MMT Elapsed: {elapsed:0.9} multi-threaded simd");
+
+            let actual1 = lhs.read_values().mm_transpose(rhs.read_values(), 64, columns, r_rows);
+            let elapsed = context.checkpoint();
+            println!("MMT Elapsed: {elapsed:0.9} single-threaded simd");
+            assert_eq!(actual1, expected.read_values());
+
+            // Needs work to be correct
+            // let partitioner = Partitioner::with_partitions(
+            //     lhs.row_count(),
+            //      16);
+            // let actual2 = partitioner.parallelized(|partition| {
+            //     let mut partitions: Vec<f32> = Vec::with_capacity(partition.size() * columns);
+
+            //     let start = partition.get_start() * columns;
+            //     let end = partition.get_end() * columns;
+            //     let l_rows = partition.size() - 1;
+
+            //     let lhs_slice = &lhs.read_values()[start..end];
+            //     lhs_slice.mm_transpose(rhs.read_values(), l_rows, columns, r_rows);
+
+            //     partitions
+            // });
+            // let elapsed = context.checkpoint();
+            // println!("MMT Scale Elapsed: {elapsed:0.9} multi-threaded simd new");
+            // assert_eq!(actual1, actual2);
+        });
+    }
+
+    #[test]
+    fn test_toeplitz() {
+        let kernel = [
+            1., 2., 3., 
+            4., 5., 6.,
+            7., 8., 9.
+        ];
+
+        let tr = toeplitz_bruce_matrix(&kernel, 
+            3, 3,
+            28);
+        let len = tr.len();
+        println!("Toeplitz: {len} ,, {:?}", &tr[..28 * 4]);
+    }
+
+    #[test]
+    fn test_hybrid_convo() {
+        let elapsed = timed_with_context(|context| {
+            let m1 = Matrix::new(1, 5 * 5, vec![
+                1., 2., 3., 4., 5.,
+                6., 7., 8., 9., 10.,
+                11., 12., 13., 14., 15.,
+                16., 17., 18., 19., 20.,
+                21., 22., 23., 25., 25.
+            ]);
+            let kernel = Matrix::new(1, 3 * 3, vec![
+                -1., -2., -3.,
+                -4., -5., -6.,
+                -7., -8., -9.
+            ]);
+            let expected = m1.valid_cross_correlation(
+                &kernel,
+                &Dimensions { height: 3, width: 3},
+                &Dimensions { height: 5, width: 5}
+            );
+            let actual = m1.read_values().cross_correlate(
+                kernel.read_values(), 
+                3, 3,
+                5, 5
+            );
+            assert_eq!(actual, expected.read_values());
+
+            let image_height = 1080;
+            let image_width = 1920;
+            let size = image_height * image_width;
+
+            context.checkpoint();
+            let m1 = Matrix::new_randomized_z(1, size);
+            let kernel = Matrix::new_randomized_z(1, 3 * 3);
+
+            let expected = m1.valid_cross_correlation(&kernel,
+                &Dimensions { height: 3, width: 3 },
+                &Dimensions { height: 28, width: 28 });
+            let elapsed = context.checkpoint();
+            println!("{BRIGHT_MAGENTA}Convo Elapsed: {elapsed} Old{RESET}");
+
+            let actual = m1.read_values().cross_correlate(
+                &kernel.read_values(),
+                3, 3, 
+                28, 28);
+            let elapsed = context.checkpoint();
+            println!("{BRIGHT_MAGENTA}Convo Elapsed: {elapsed} New{RESET}");
+
+            let errors = actual.iter().zip(expected.read_values()).map(|(&x, &y)| {
+                x - y
+            }).sum::<f32>();
+            println!("{BRIGHT_MAGENTA}Convo Errors: {errors}{RESET}");
+            //assert_eq!(actual, expected.read_values());
+        });
     }
 }

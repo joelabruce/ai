@@ -11,11 +11,12 @@
             "cargo": {
                 "args": [
                     "test",
-                    "--",
-                    "--nocapture",
+                    "--release",
                     "--no-run",
                     "--lib",
                     "--package=ai",
+                    "--",
+                    "--nocapture",
                 ],
                 "filter": {
                     "name": "ai",

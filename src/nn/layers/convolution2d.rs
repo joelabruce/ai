@@ -156,7 +156,7 @@ mod tests {
         ]);
 
         let output = cv2d.forward(&inputs);
-        println!("{BRIGHT_CYAN}{:?}{RESET}", output);
+        //println!("{BRIGHT_CYAN}{:?}{RESET}", output);
 
         let mut learning_rate = LearningRate::new(0.01);
 
@@ -183,7 +183,7 @@ mod tests {
         cv2d.kernels = Matrix::new(filters, s3x3, vec![1.2; filters * s3x3]);
 
         let output = &cv2d.forward(&inputs);
-        println!("{BRIGHT_CYAN}{:?}{RESET}", output);
+        //println!("{BRIGHT_CYAN}{:?}{RESET}", output);
 
         let mut maxpool = cv2d.influences_maxpool(Dimensions { width: 2, height: 2 }, 2);
         let _output2 = maxpool.forward(output);
