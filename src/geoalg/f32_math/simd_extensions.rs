@@ -391,7 +391,7 @@ mod tests {
             let lhs = Matrix::new_randomized_z(1000, 10000);
             let rhs = Matrix::new_randomized_z(1000, 10000);
             
-            let expected = lhs
+            let _expected = lhs
                 .mul_element_wise(&rhs)
                 .mul_element_wise(&rhs)
                 .mul_element_wise(&lhs);
@@ -539,7 +539,7 @@ mod tests {
 
     #[test]
     fn test_scale_simd() {
-        let elapsed = timed_with_context(|context| {
+        timed_with_context(|context| {
             let scalar1 = 12.4563;
             let scalar2 = 1.234;
             let tc = Matrix::new_randomized_z(5000, 10000);
@@ -565,7 +565,7 @@ mod tests {
 
     #[test]
     fn test_matrix_multiply() {
-        let elapsed = timed_with_context(|context| {
+        timed_with_context(|context| {
             let columns = 1920 * 1080;
             let r_rows = 10;
             let l_rows = 64;
@@ -590,21 +590,19 @@ mod tests {
 
             let inner = |partition: &Partition| {
                 let chunk = partition.size() * columns;
-                let mut partition_values: Vec<f32> = Vec::with_capacity(chunk);
-
                 let l_start = partition.get_start() * columns;
                 let l_end = l_start + chunk;
                 let lhs_slice = &lhs.read_values()[l_start..l_end];
-                let l_rows = partition.size() - 1;
+                let l_rows = partition.size();
 
-                lhs_slice.mm_transpose(rhs.read_values(), l_rows, columns, r_rows);
-
-                partition_values
+                lhs_slice.mm_transpose(rhs.read_values(), l_rows, columns, r_rows)
             };
             let actual = partitioner.parallelized(inner);
             let elapsed = context.checkpoint();
             println!("MMT Elapsed: {elapsed:0.9} NEW multi-threaded simd");
-            assert_eq!(actual1, expected.read_values());
+            
+            println!("MMT NEW {:?} v {:?}", actual.len(), expected.len());
+            assert_eq!(actual, expected.read_values());
         });
     }
 
@@ -625,7 +623,7 @@ mod tests {
 
     #[test]
     fn test_hybrid_convo() {
-        let elapsed = timed_with_context(|context| {
+        timed_with_context(|context| {
             let m1 = Matrix::new(1, 5 * 5, vec![
                 1., 2., 3., 4., 5.,
                 6., 7., 8., 9., 10.,

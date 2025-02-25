@@ -16,7 +16,7 @@
                     "--lib",
                     "--package=ai",
                     "--",
-                    "--nocapture",
+                    "--show-output",
                 ],
                 "filter": {
                     "name": "ai",

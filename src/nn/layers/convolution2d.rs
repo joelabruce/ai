@@ -111,7 +111,7 @@ impl Propagates for Convolution2dDeprecated {
 #[cfg(test)]
 
 mod tests {
-    use crate::prettify::*;
+    //use crate::prettify::*;
     use crate::{geoalg::f32_math::matrix::Matrix, nn::layers::Propagates};
 
     use super::*;
@@ -155,7 +155,7 @@ mod tests {
             0., 0., 0.
         ]);
 
-        let output = cv2d.forward(&inputs);
+        let _output = cv2d.forward(&inputs);
         //println!("{BRIGHT_CYAN}{:?}{RESET}", output);
 
         let mut learning_rate = LearningRate::new(0.01);
