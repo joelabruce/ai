@@ -19,9 +19,13 @@ rustup default nightly
 
 Ensure you unzip the archive zip files into the training folder to be able to run the examples.
 
-### Run unit test and see output for test not fully implemented
+### Run unit test and see output for each test in debug mode
 ```
-cargo test -- --nocapture
+cargo test -- --show-output
+```
+### To see performance benchmarks that are more realistic, highly recommend running tests in release mode
+```
+cargo test --release -- --show-output
 ```
 ### Generate code coverage report
 ```

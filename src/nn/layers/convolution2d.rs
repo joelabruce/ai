@@ -70,10 +70,21 @@ impl Propagates for Convolution2dDeprecated {
     fn forward(&mut self, inputs: &Matrix) -> Matrix {
         let r = inputs 
             .valid_cross_correlation(&self.kernels, &self.k_d, &self.i_d);
-
-            // let msg = format!("F -> {:?} x {:?}", r.row_count(), r.column_count()).bright_red();
-            // println!("{msg}");
         r
+
+        // let o_h = self.i_d.height - self.k_d.height + 1;
+        // let o_w = self.i_d.width - self.k_d.width + 1;
+        // let feature_size = self.kernels.row_count() *  o_h * o_w;
+
+        // let r = inputs.read_values().cross_correlate(
+        //     &self.kernels.read_values(),
+        //     self.kernels.row_count(),
+        //     self.k_d.height, 
+        //     self.k_d.width,
+        //     inputs.row_count(),
+        //     self.i_d.height,
+        //     self.i_d.width);
+        // Matrix::new(inputs.row_count(), feature_size, r)
     }
 
     fn backward<'a>(&'a mut self, learning_rate: &mut LearningRate, dvalues: &Matrix, inputs: &Matrix) -> Matrix {

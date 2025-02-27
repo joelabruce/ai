@@ -35,12 +35,6 @@ pub fn relu_simd(inputs: &Matrix) -> Matrix {
     let y_simd = Simd::<f32, ALL_SIMD_LANES>::splat(0.);
     let inner_process = |partition: &Partition| {
         let mut partition_values: Vec<f32> = Vec::with_capacity(partition.size());
-        // Without SIMD
-        // for i in partition.range() {
-        //     partition_values.push(inputs.read_at(i).max(0.));
-        // }
-
-        // With SIMD
         partition.unary_simd(
             &mut partition_values, 
             &inputs.read_values(),
@@ -65,12 +59,6 @@ pub fn d_relu_simd(inputs: &Matrix) -> Matrix {
     let true_mask = Simd::<f32, ALL_SIMD_LANES>::splat(1.);
     let inner_process = |partition: &Partition| {
         let mut partition_values: Vec<f32> = Vec::with_capacity(partition.size());
-        // Without SIMD
-        // for i in partition.range() {
-        //     partition_values.push(if inputs.read_at(i) > 0. { 1. } else { 0. })
-        // }
-
-        // With SIMD
         partition.unary_simd(
             &mut partition_values, 
             &inputs.read_values(),

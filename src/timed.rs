@@ -57,7 +57,7 @@ mod tests {
 
             thread::sleep(time::Duration::from_millis(100));
             let time_elapsed = context.checkpoint();
-            print!("Second checkpoint at {time_elapsed}!")
+            println!("Second checkpoint at {time_elapsed}!")
         });
 
         assert!(total_time >= 0.3);
