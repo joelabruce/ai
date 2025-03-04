@@ -102,6 +102,40 @@ pub fn d_relu_simd(lhs: &[f32]) -> Vec<f32> {
     out
 }
 
+pub fn im2col_transposed(
+    images: &[f32],
+    image_count: usize,
+    image_height: usize,
+    image_width: usize,
+    kernel_height: usize,
+    kernel_width: usize
+) -> Vec<f32> {
+    let image_size = image_height * image_width;
+    let kernel_size = kernel_width * kernel_height;
+    let feature_height = image_height - kernel_height + 1;
+    let feature_width = image_width - kernel_width + 1;
+    let feature_size = feature_height * feature_width;
+
+    //let offsets = Vec::with_capacity(kernel_width);
+
+    let mut im2col_transposed = Vec::with_capacity(feature_size * kernel_size);
+    let mut image_offset = 0;
+    for _n in 0..image_count {
+        for feature_row in 0..feature_height {
+            for feature_column in 0..feature_width {
+                for kernel_row in 0..kernel_height {
+                    let offset = image_offset + (feature_row + kernel_row) * image_width + feature_column;
+                    im2col_transposed.extend_from_slice(&images[offset..offset + kernel_width]);
+                }
+            }
+        }
+
+        image_offset += image_size;
+    }
+
+    im2col_transposed
+}
+
 // Taken from github examples.
 // This version is slower than not doing simd, why?
 // Too much reliance on abstractions??
@@ -150,6 +184,11 @@ impl Matrix {
 
         let values = partitioner.parallelized(inner_process);
         Self::new(self.row_count(), self.column_count(), values)
+    }
+
+    pub fn scale_simd_new(&self, scalar: f32) -> Matrix {
+        let values = self.read_values().scale_simd(scalar);
+        Matrix::new(self.row_count(), self.column_count(), values)
     }
 
     /// Now in Tensor.
@@ -460,6 +499,8 @@ impl Partition {
 mod tests {
     use std::f32;
 
+    use rand_distr::Uniform;
+
     use crate::nn::layers::convolution2d::Dimensions;
     use crate::partitioner::PARALLELISM;
     use crate::timed::timed_with_context;
@@ -651,9 +692,9 @@ mod tests {
     #[test]
     fn test_matrix_multiply() {
         timed_with_context(|context| {
-            let columns = 1080 * 1920;
-            let l_rows = 64;
-            let r_rows = 128;
+            let columns = 27;
+            let l_rows = 32;
+            let r_rows = 21632;
             let lhs = Matrix::new_randomized_z(l_rows, columns);
             let rhs = Matrix::new_randomized_z(r_rows, columns);
             let elapsed = context.checkpoint();
@@ -812,59 +853,55 @@ mod tests {
     #[test]
     fn test_im2col() {
         let _elapsed = timed_with_context(|context| {
-            let image_count = 2;
-            let image_height = 4;
-            let image_width = 4;
+            let image_count = 10;
+            let image_height = 28;
+            let image_width = 28;
             let image_depth = 1;
             let image_size = image_height * image_width * image_depth;
-            let images = Matrix::new(image_count, image_size, vec![
-                1., 2., 3., 4.,
-                5., 6., 7., 8., 
-                9., 10., 11., 12.,
-                13., 14., 15., 16.,
+            let images = Matrix::new_randomized_z(image_count, image_size);
+            // let images = Matrix::new(image_count, image_size, vec![
+            //     1., 2., 3., 4.,
+            //     5., 6., 7., 8., 
+            //     9., 10., 11., 12.,
+            //     13., 14., 15., 16.,
 
-                10., 20., 30., 40.,
-                50., 60., 70., 80., 
-                90., 100., 110., 120.,
-                130., 140., 150., 160.
-            ]);
+            //     10., 20., 30., 40.,
+            //     50., 60., 70., 80., 
+            //     90., 100., 110., 120.,
+            //     130., 140., 150., 160.
+            // ]);
 
-            let kernel_count = 3;
+            let kernel_count = 4;
             let kernel_height = 3;
             let kernel_width = 3;
             let kernel_depth = image_depth;
             let kernel_size = kernel_height * kernel_width * kernel_depth;
-            let _kernels = Matrix::new_randomized_z(kernel_count, kernel_size);
+            let kernels = Matrix::new_randomized_z(kernel_count, kernel_size);
             context.checkpoint();
+
+            let im2col_transposed = im2col_transposed(
+                images.read_values(), 
+                image_count, 
+                image_height, image_width, 
+                kernel_height, kernel_width);
 
             let feature_height = image_height - kernel_height + 1;
             let feature_width = image_width - kernel_width + 1;
             let feature_size = feature_height * feature_width;
 
-            //let offsets = Vec::with_capacity(kernel_width);
+            let expected = images.valid_cross_correlation(&kernels, &Dimensions { height: kernel_height, width: kernel_width} , &Dimensions { height: image_height, width: image_width } );
+            let actual = kernels.read_values().mm_transpose(&im2col_transposed, kernel_count, kernel_size, image_count * feature_size);
 
-            let mut im2col_transposed = Vec::with_capacity(feature_size * kernel_size);
-            let mut image_offset = 0;
-            for _n in 0..image_count {
-                for f_r in 0..feature_height {
-                    for f_c in 0..feature_width {
-                        for k_r in 0..kernel_height {
-                            let offset = image_offset + (f_r + k_r) * image_width + f_c;
-                            im2col_transposed.extend_from_slice(&images.read_values()[offset..offset + kernel_width]);
-                        }
-                    }
-                }
+            println!("{:?} v {:?}", actual.len(), expected.len());
 
-                image_offset += image_size;
-            }
+            // println!("{:?}", &expected.read_values()[0..50]);
+            // println!("{:?}", &actual[0..50]);
 
-            println!("{:?}", im2col_transposed);
-
-            for i in 0..feature_size {
-                let start = i * kernel_size;
-                let end = start + kernel_size;
-                println!("{:?}", &im2col_transposed[start..end]);
-            }
+            // for i in 0..feature_size {
+            //     let start = i * kernel_size;
+            //     let end = start + kernel_size;
+            //     println!("{:?}", &im2col_transposed[start..end]);
+            // }
 
             // let mut start = 0;
             // let mut end = kernel_size;
@@ -874,6 +911,17 @@ mod tests {
             //     end += kernel_size;
                 
             // }
+        });
+    }
+
+    #[test]
+    fn test_relu() {
+        let _elapsed = timed_with_context(|context| {
+            let uniform = Uniform::new_inclusive(-3., 2.);
+            let m = Matrix::new_randomized_uniform(10000, 10000, uniform);
+
+            context.checkpoint();
+            let _x = relu_simd(m.read_values());
         });
     }
 }

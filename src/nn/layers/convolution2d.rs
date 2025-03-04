@@ -68,23 +68,27 @@ impl Convolution2dDeprecated {
 
 impl Propagates for Convolution2dDeprecated {
     fn forward(&mut self, inputs: &Matrix) -> Matrix {
-        let r = inputs 
-            .valid_cross_correlation(&self.kernels, &self.k_d, &self.i_d);
+        let r = inputs.valid_cross_correlation(&self.kernels, &self.k_d, &self.i_d);
         r
+        // let im2col_transposed = im2col_transposed(
+        //     inputs.read_values(),
+        //     inputs.row_count(), self.i_d.height, self.i_d.width,
+        //     self.k_d.height, self.k_d.width);
+        
+        // let columns = self.k_d.height * self.k_d.width;
+        
+        // let feature_rows = self.i_d.height - self.k_d.height + 1;
+        // let feature_columns = self.i_d.width - self.k_d.width + 1;
+        // let r_rows = inputs.row_count() * feature_rows * feature_columns;
 
-        // let o_h = self.i_d.height - self.k_d.height + 1;
-        // let o_w = self.i_d.width - self.k_d.width + 1;
-        // let feature_size = self.kernels.row_count() *  o_h * o_w;
-
-        // let r = inputs.read_values().cross_correlate(
-        //     &self.kernels.read_values(),
-        //     self.kernels.row_count(),
-        //     self.k_d.height, 
-        //     self.k_d.width,
-        //     inputs.row_count(),
-        //     self.i_d.height,
-        //     self.i_d.width);
-        // Matrix::new(inputs.row_count(), feature_size, r)
+        // let values = self.kernels
+        //     .read_values()
+        //     .par_mm_transpose(
+        //         &im2col_transposed, 
+        //         self.kernels.row_count(),
+        //         columns,
+        //         r_rows);
+        // Matrix::new(inputs.row_count(), self.filters * feature_rows * feature_columns, values)
     }
 
     fn backward<'a>(&'a mut self, learning_rate: &mut LearningRate, dvalues: &Matrix, inputs: &Matrix) -> Matrix {

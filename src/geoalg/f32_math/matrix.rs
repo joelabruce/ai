@@ -2,6 +2,8 @@ use std::{ops::{Index, IndexMut}, thread};
 use rand_distr::{Distribution, Normal, Uniform};
 use crate::{geoalg::f32_math::simd_extensions::dot_product_simd3, nn::layers::convolution2d::Dimensions, partition::Partition, partitioner::Partitioner};
 
+use super::simd_extensions::SliceExt;
+
 /// Matrix is implemented as a single dimensional vector of f32s.
 /// This implementation of Matrix is row-major. 
 /// Row-major is specified so certain optimizations and parallelization can be performed.
@@ -194,6 +196,16 @@ impl Matrix {
 
         let values = partition_strategy.parallelized(inner_process);
         Self::new(self.rows, rhs.rows, values)
+    }
+
+    pub fn mul_transpose_simd(&self, rhs: &Matrix) -> Matrix {
+        let values = self.values.par_mm_transpose(
+            &rhs.values, 
+            self.row_count(),
+            self.column_count(),
+            rhs.row_count());
+
+        Matrix::new(self.row_count(), rhs.row_count(), values)
     }
 
     /// Useful for applying an activation function to the entire matrix.

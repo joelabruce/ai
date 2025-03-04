@@ -44,7 +44,7 @@ impl Propagates for Dense {
     /// Forward propagates by performing weights dot inputs + biases.
     fn forward<'a>(&mut self, inputs: &'a Matrix) -> Matrix {
         let r = inputs
-            .mul_with_transpose(&self.weights.transpose())
+            .mul_transpose_simd(&self.weights.transpose())
             .add_row_partitioned(&self.biases);
         r
     }
@@ -54,15 +54,15 @@ impl Propagates for Dense {
     fn backward<'a>(& mut self, learning_rate: &mut LearningRate, dvalues: &Matrix, inputs: &Matrix) -> Matrix {
         // Mutate the weights based on derivative weights
         let inputs_t = inputs.transpose();
-        let dweights = inputs_t.mul_with_transpose(&dvalues.transpose());
+        let dweights = inputs_t.mul_transpose_simd(&dvalues.transpose());
 
-        self.weights = self.weights.sub(&dweights.scale_simd(learning_rate.rate()));
+        self.weights = self.weights.sub(&dweights.scale_simd_new(learning_rate.rate()));
 
         // Mutate the biases based on derivative biases
         let dbiases = dvalues.reduce_rows_by_add();
-        self.biases = self.biases.sub(&dbiases.scale_simd(learning_rate.rate()));
+        self.biases = self.biases.sub(&dbiases.scale_simd_new(learning_rate.rate()));
 
-        let result = dvalues.mul_with_transpose(&self.weights);
+        let result = dvalues.mul_transpose_simd(&self.weights);
         result
     }
 }
