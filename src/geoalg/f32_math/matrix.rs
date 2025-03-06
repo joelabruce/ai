@@ -2,21 +2,17 @@ use std::{ops::{Index, IndexMut}, thread};
 use rand_distr::{Distribution, Normal, Uniform};
 use crate::{geoalg::f32_math::simd_extensions::dot_product_simd3, nn::layers::convolution2d::Dimensions, partition::Partition, partitioner::Partitioner};
 
-use super::simd_extensions::SliceExt;
+use super::simd_extensions::{im2col_transposed, SliceExt};
 
 /// Matrix is implemented as a single dimensional vector of f32s.
 /// This implementation of Matrix is row-major. 
 /// Row-major is specified so certain optimizations and parallelization can be performed.
-/// Column-major is not yet implemented.
+/// Column-major is not implemented. Unless it helps with optimizations, may never be implemented.
 #[derive(PartialEq, Debug, Clone, Default)]
 pub struct Matrix {
     rows: usize,
     columns: usize,
-    values: Vec<f32>,
-    all_partitioner: Option<Partitioner>,
-    row_partitioner: Option<Partitioner>,
-    column_partitioner: Option<Partitioner>,
-    //pub dot_product: fn(&[f32], &[f32]) -> f32
+    values: Vec<f32>
 }
 
 impl Index<usize> for Matrix {
@@ -55,10 +51,7 @@ impl Matrix {
     /// Returns a new Matrix.
     pub fn new(rows: usize, columns: usize, values: Vec<f32>) -> Self {
         Self {
-            rows, columns, values,
-            all_partitioner: None,
-            row_partitioner: None,
-            column_partitioner: None
+            rows, columns, values
         }
     }
 
@@ -116,13 +109,10 @@ impl Matrix {
             return Self::new(self.columns, self.rows, self.values.clone());
         }
 
-        let partition_strategy = match self.all_partitioner.as_ref() {
-            Some(p) => p,
-            None => {
-                &Partitioner::with_partitions(self.len(), thread::available_parallelism().unwrap().get())
-            }
-        };
-
+        let partition_strategy = &Partitioner::with_partitions(
+            self.len(),
+            thread::available_parallelism().unwrap().get());
+        
         let inner_process = move |partition: &Partition| {
             let mut partition_values = Vec::with_capacity(partition.size());
             for i in partition.range() {
@@ -144,12 +134,9 @@ impl Matrix {
     pub fn mul_element_wise(&self, rhs: &Matrix) -> Self {
         assert!(self.rows == rhs.rows && self.columns == rhs.columns, "When element-wise multiplying two matrices, they must have same order.");
         
-        let partition_strategy = match self.all_partitioner.as_ref() {
-            Some(p) => p,
-            None => {
-                &Partitioner::with_partitions(self.len(), thread::available_parallelism().unwrap().get())
-            }
-        };
+        let partition_strategy = &Partitioner::with_partitions(
+            self.len(),
+            thread::available_parallelism().unwrap().get());
 
         let inner_process = |partition: &Partition| {
             let mut partition_values: Vec<f32> = Vec::with_capacity(partition.size());
@@ -173,12 +160,7 @@ impl Matrix {
     pub fn mul_with_transpose(&self, rhs: &Matrix) -> Matrix {
         assert_eq!(self.columns, rhs.columns, "When multiplying with transposed, columns must be equal for lhs and rhs.");
 
-        let partition_strategy = match self.row_partitioner.as_ref() {
-            Some(p) => p,
-            None => {
-                &Partitioner::with_partitions(self.rows, thread::available_parallelism().unwrap().get())
-            }
-        };
+        let partition_strategy = Partitioner::with_partitions(self.rows, thread::available_parallelism().unwrap().get());
 
         let inner_process = move |partition: &Partition| {
             let mut partition_values: Vec<f32> = Vec::with_capacity(partition.size() * rhs.rows);
@@ -213,12 +195,7 @@ impl Matrix {
     /// Rethink this, as it doesn't optimize well.
     /// Deprecated.
     pub fn map(&self, func: fn(&f32) -> f32) -> Self {
-        let partition_strategy = match self.all_partitioner.as_ref() {
-            Some(p) => p,
-            None => {
-                &Partitioner::with_partitions(self.len(), thread::available_parallelism().unwrap().get())
-            }
-        };
+        let partition_strategy = &Partitioner::with_partitions(self.len(), thread::available_parallelism().unwrap().get());
 
         let inner_process = move |partition: &Partition| {
             let mut partition_values = Vec::with_capacity(partition.size());
@@ -239,12 +216,7 @@ impl Matrix {
     pub fn sub(&self, rhs: &Matrix) -> Self {
         assert!(self.rows == rhs.rows && self.columns == rhs.columns, "When subtracting two matrices, they must have same order.");
  
-        let partition_strategy = match self.all_partitioner.as_ref() {
-            Some(p) => p,
-            None => {
-                &Partitioner::with_partitions(self.len(), thread::available_parallelism().unwrap().get())
-            }
-        };
+        let partition_strategy = &Partitioner::with_partitions(self.len(), thread::available_parallelism().unwrap().get());
 
         let inner_process = move |partition: &Partition| {
             let mut partition_values = Vec::with_capacity(partition.size());
@@ -263,12 +235,7 @@ impl Matrix {
     pub fn add(&self, rhs: &Matrix) -> Self {
         assert!(self.rows == rhs.rows && self.columns == rhs.columns, "When subtracting two matrices, they must have same order.");
     
-        let partition_strategy = match self.all_partitioner.as_ref() {
-            Some(p) => p,
-            None => {
-                &Partitioner::with_partitions(self.len(), thread::available_parallelism().unwrap().get())
-            }
-        };
+        let partition_strategy = &Partitioner::with_partitions(self.len(), thread::available_parallelism().unwrap().get());
 
         let inner_process = move |partition: &Partition| {
             let mut partition_values = Vec::with_capacity(partition.size());
@@ -290,12 +257,7 @@ impl Matrix {
         assert_eq!(rhs.rows, 1, "Rhs matrix must have 1 row.");
         assert_eq!(self.columns, rhs.columns, "Lhs and rhs must have equal number of columns.");
 
-        let partition_strategy = match self.row_partitioner.as_ref() {
-            Some(p) => p,
-            None => {
-                &Partitioner::with_partitions(self.rows, thread::available_parallelism().unwrap().get())
-            }
-        };
+        let partition_strategy = &Partitioner::with_partitions(self.rows, thread::available_parallelism().unwrap().get());
 
         let inner_process = move |partition: &Partition| {
             let mut partition_values= Vec::with_capacity(partition.size() * self.columns);
@@ -319,12 +281,7 @@ impl Matrix {
     /// Partitioner implementation complete.
     /// In Tensor
     pub fn reduce_rows_by_add(&self) -> Self {
-        let partition_strategy = match self.column_partitioner.as_ref() {
-            Some(p) => p,
-            None => {
-                &Partitioner::with_partitions(self.columns, thread::available_parallelism().unwrap().get())
-            }
-        };
+        let partition_strategy = &Partitioner::with_partitions(self.columns, thread::available_parallelism().unwrap().get());
 
         let inner_process =move |partition: &Partition| {
             let mut partition_values = Vec::with_capacity(partition.size());
@@ -349,12 +306,7 @@ impl Matrix {
     /// Partitioner implementation complete.
     /// Now in Tensor
     pub fn scale(&self, scalar: f32) -> Self {
-        let partition_strategy = match self.all_partitioner.as_ref() {
-            Some(p) => p,
-            None => {
-                &Partitioner::with_partitions(self.len(), thread::available_parallelism().unwrap().get())
-            }
-        };
+        let partition_strategy = &Partitioner::with_partitions(self.len(), thread::available_parallelism().unwrap().get());
 
         let inner_process = move |partition: &Partition| {
             let mut partition_values = Vec::with_capacity(partition.size());
@@ -369,6 +321,46 @@ impl Matrix {
         Self::new(self.row_count(), self.column_count(), values)
     }
 
+    /// Parallelized cross correlation with im2col (non-batched version)
+    pub fn par_cc_im2col(&self, kernels: &Matrix, k_d: &Dimensions, i_d: &Dimensions) -> Self {
+        let batches = self.row_count();
+
+        let partitioner = &Partitioner::with_partitions(
+            batches, 
+            thread::available_parallelism().unwrap().get());
+
+        // Adjust for valid convolution (no padding)
+        let feature_rows = i_d.height - k_d.height + 1;
+        let feature_columns = i_d.width - k_d.width + 1;
+        let filters_size = kernels.row_count() * feature_rows * feature_columns;
+        let kernel_size = k_d.height * k_d.width;
+
+        let inner_process = move |partition: &Partition| {
+            let mut partition_values = Vec::with_capacity(partition.size() * filters_size);
+            for batch_index in partition.range() {
+                let input = self.row(batch_index);
+
+                let image = &*im2col_transposed(
+                    input, 
+                    i_d.height,i_d.width,
+                    k_d.height, k_d.width);
+
+                let x = &*kernels.read_values().mm_transpose(
+                    image, 
+                    kernels.row_count(), 
+                    kernel_size, feature_rows * feature_columns);
+
+                partition_values.extend_from_slice(x);
+
+            }
+
+            partition_values
+        };
+
+        let values = partitioner.parallelized(inner_process);
+        Matrix::new(batches, filters_size, values)
+    }
+
     /// Used for convolutional layers.
     /// Might consider creating outside of matrix.
     /// Now in Tensor
@@ -380,26 +372,30 @@ impl Matrix {
             thread::available_parallelism().unwrap().get());
 
         // Adjust for valid convolution (no padding)
-        let n_rows = i_d.height - k_d.height + 1;
-        let n_columns = i_d.width - k_d.width + 1;
-        let filters_size = kernels.row_count() * n_rows * n_columns;
+        let feature_rows = i_d.height - k_d.height + 1;
+        let feature_columns = i_d.width - k_d.width + 1;
+        let filters_size = kernels.row_count() * feature_rows * feature_columns;
 
         let inner_process = move |partition: &Partition| {
             let mut partition_values = Vec::with_capacity(partition.size() * filters_size);
             for batch_index in partition.range() {
                 let input = self.row(batch_index);
+
+                // Convolve with each kernel in order
                 for filter_index in 0..kernels.row_count() {
                     let filter = kernels.row(filter_index);
 
-                    for row in 0..n_rows {
-                        for column in 0..n_columns {
+                    // Slides the kernel from top to bottom
+                    for feature_row in 0..feature_rows {
+                        // Slides the kernel from left to right
+                        for feature_column in 0..feature_columns {
                             let mut c_accum = 0.;
 
-                            // Slide kernel window horizontally and then vertically
-                            // Since we are doing optimized dot_products, only need to move down the rows
+                            // Calculates the contribution of kernel_rows dot product with image row.
+                            // Uses slices instead of having to iterate over every column manually.
                             for kernel_row in 0..k_d.height {
                                 // Get the row of the input, offset by kernel row, and start the row at the column.
-                                let input_row_start_index = (row + kernel_row) * i_d.width + column;
+                                let input_row_start_index = (feature_row + kernel_row) * i_d.width + feature_column;
                                 // Only get as many columns as are in the kernel for the convolution.
                                 let input_row_end_index = input_row_start_index + k_d.width;
 
@@ -425,18 +421,13 @@ impl Matrix {
         Matrix::new(batches, filters_size, values)
     }
 
-    // pub fn cross_correlate_toeplitz(&self, kernels: &Matrix, k_d: &Dimensions, i_d: &Dimensions) -> Self {
-    //     let batch_count = self.row_count();
-    //     self
-    // }
-
-    /// Todo: Put in Tensor.
+    /// Todo: Needs to be optimized next.
     pub fn full_outer_convolution(&self, filters: &Matrix, k_d: &Dimensions, i_d: &Dimensions) -> Self {
         let batches = self.row_count();
 
         let partitioner = &Partitioner::with_partitions(
             batches, 
-            1);//thread::available_parallelism().unwrap().get());
+            thread::available_parallelism().unwrap().get());
 
         // Adjust for full outer convolution (don't padd, just do bounds checking)
         let i_rows = (i_d.height - k_d.height + 1) as isize;
@@ -579,10 +570,7 @@ mod tests {
                 4., 5., 6.
                 ], 
             rows: 2,
-            columns: 3,
-            all_partitioner: None,
-            row_partitioner: None,
-            column_partitioner: None};
+            columns: 3};
 
         let expected = Matrix::new(
             2,

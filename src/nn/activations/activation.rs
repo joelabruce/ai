@@ -16,7 +16,6 @@ impl Activation {
     }
 }
 
-//#[allow(unused)]
 pub const RELU: Activation = Activation {
     f: |inputs| -> Matrix {
         let values = relu_simd(inputs.read_values());
