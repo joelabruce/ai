@@ -83,28 +83,29 @@ impl Propagates for Convolution2dDeprecated {
     fn backward<'a>(&'a mut self, learning_rate: &mut LearningRate, dvalues: &Matrix, inputs: &Matrix) -> Matrix {
         //println!("{BRIGHT_GREEN} dvalues shape: {:?} x {:?}{RESET}", dvalues.row_count(), dvalues.column_count());
         let dims = self.backward_dims();
-        let size = dims.height * dims.width;
+        let f_size = dims.height * dims.width;
         let k_size = self.k_d.height * self.k_d.width;
+        let i_size = self.i_d.height * self.i_d.width;
 
         for filter in 0..self.filters {
-            let filter_offset = filter * size;
+            let filter_offset = filter * f_size;
 
             let mut gradient = Matrix::new(1, k_size, vec![0.; k_size]);
             for image in 0..dvalues.row_count() {
                 let delta_image = dvalues.row(image);
-                let d_i = Matrix::new(1, self.i_d.height * self.i_d.width, delta_image.to_vec());
+                let d_i = Matrix::new(1, i_size, delta_image.to_vec());
 
-                let delta_filter = &delta_image[filter_offset..filter_offset + size];
-                let d_f = Matrix::new(1, size, delta_filter.to_vec());
+                let delta_filter = &delta_image[filter_offset..filter_offset + f_size];
+                let d_f = Matrix::new(1, f_size, delta_filter.to_vec());
 
-                let grad = d_i.valid_cross_correlation(&d_f, &dims, &self.i_d);
+                let grad = d_i.par_cc_im2col(&d_f, &dims, &self.i_d);
 
                 gradient = gradient.add(&grad);
             }
 
-            gradient = gradient.scale(1. / dvalues.row_count() as f32);
+            gradient = gradient.scale(learning_rate.rate() / dvalues.row_count() as f32);
             for i in 0..k_size {
-                self.kernels[filter * k_size + i] -= learning_rate.rate() * gradient[i];
+                self.kernels[filter * k_size + i] -= gradient[i];
             }
         }
 
