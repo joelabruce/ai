@@ -98,7 +98,7 @@ impl Propagates for Convolution2dDeprecated {
                 let delta_filter = &delta_image[filter_offset..filter_offset + f_size];
                 let d_f = Matrix::new(1, f_size, delta_filter.to_vec());
 
-                let grad = d_i.par_cc_im2col(&d_f, &dims, &self.i_d);
+                let grad = d_i.cc_im2col(&d_f, &dims, &self.i_d);
 
                 gradient = gradient.add(&grad);
             }

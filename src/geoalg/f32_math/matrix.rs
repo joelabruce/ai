@@ -361,6 +361,37 @@ impl Matrix {
         Matrix::new(batches, filters_size, values)
     }
 
+    /// Single-threaded convolution
+    pub fn cc_im2col(&self, kernels: &Matrix, k_d: &Dimensions, i_d: &Dimensions) -> Self {
+        let batches = self.row_count();
+
+        // Adjust for valid convolution (no padding)
+        let feature_rows = i_d.height - k_d.height + 1;
+        let feature_columns = i_d.width - k_d.width + 1;
+        let filters_size = kernels.row_count() * feature_rows * feature_columns;
+        let kernel_size = k_d.height * k_d.width;
+
+        let mut partition_values = Vec::with_capacity(batches * filters_size);
+        for batch_index in 0..batches {
+            let input = self.row(batch_index);
+
+            let image = &*im2col_transposed(
+                input, 
+                i_d.height,i_d.width,
+                k_d.height, k_d.width);
+
+            let x = &*kernels.read_values().mm_transpose(
+                image, 
+                kernels.row_count(), 
+                kernel_size, feature_rows * feature_columns);
+
+            partition_values.extend_from_slice(x);
+
+        }
+
+        Matrix::new(batches, filters_size, partition_values)
+    }
+
     /// Used for convolutional layers.
     /// Might consider creating outside of matrix.
     /// Now in Tensor
