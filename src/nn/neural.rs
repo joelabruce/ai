@@ -4,12 +4,9 @@ use std::io::Read;
 use dense::Dense;
 use input::Input;
 
-use crate::digit_image::DigitImage;
 use crate::nn::layers::*;
 use crate::geoalg::f32_math::matrix::*;
-use crate::input_csv_reader::*;
 use crate::output_bin_writer::OutputBinWriter;
-use crate::statistics::sample::Sample;
 
 use super::activations::activation::Activation;
 use super::layers::convolution2d::Convolution2dDeprecated;
@@ -24,41 +21,26 @@ pub enum NeuralNetworkNode {
 }
 
 /// Contains structure and hyper-parameters needed for a neural network
-pub struct NeuralNetwork { 
-    pub epoch: usize,
-    pub nodes: Vec<NeuralNetworkNode>
+pub struct NeuralNetwork {
+    nodes: Vec<NeuralNetworkNode>
 }
 
 impl NeuralNetwork {
-    pub fn add_node(mut self, node: NeuralNetworkNode) -> Self {
+    pub fn new() -> Self {
+        Self { nodes: Vec::new() }
+    }
+
+    pub fn add_node(&mut self, node: NeuralNetworkNode) {
         self.nodes.push(node);
-        self
-    }
-
-    pub fn open_for_importing(file_path: &str) -> InputCsvReader {
-        let reader = InputCsvReader::new(file_path);
-
-        reader
-    }
-
-    /// Creates DigitImage Sample from CVS file
-    pub fn create_sample_for_digit_images_from_file(reader: &mut InputCsvReader, total_size: usize) -> Sample<DigitImage> {
-        let mut data = vec![];   // Normalized data
-        for _sample in 0..total_size {
-            let digit_image = reader.read_and_parse_data_line(784);
-            data.push(digit_image);
-        }
-
-        Sample::create_sample(data)
     }
 
     /// Forward propagates the inputs through the layers.
     /// Calculates a Vec of matrices to be used for backpropagation.
-    pub fn forward(with_input: Input, to_nodes: &mut Vec<NeuralNetworkNode>) -> Vec<Matrix> {
-        let mut forward_stack = Vec::with_capacity(to_nodes.len() + 1);
+    pub fn forward(&mut self, with_input: Input) -> Vec<Matrix> {
+        let mut forward_stack = Vec::with_capacity(self.nodes.len() + 1);
 
         forward_stack.push(with_input.input_matrix);
-        for node in to_nodes.iter_mut() {
+        for node in self.nodes.iter_mut() {
             match node {
                 NeuralNetworkNode::ActivationFunction(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
                 NeuralNetworkNode::DenseLayer(n) => forward_stack.push(n.forward(forward_stack.last().unwrap())),
@@ -73,11 +55,11 @@ impl NeuralNetwork {
 
     /// Applies backpropagation.
     /// Pops the items off of fcalcs, but keeps nodes in the Vec so we can do the next forward pass.
-    pub fn backward(from_nodes: &mut Vec<NeuralNetworkNode>, learning_rate: &mut LearningRate, dz: &Matrix, fcalcs: &mut Vec<Matrix>) {
+    pub fn backward(&mut self, learning_rate: &mut LearningRate, dz: &Matrix, fcalcs: &mut Vec<Matrix>) {
         let mut dvalues = dz.clone();
         
-        for i in (0..from_nodes.len()).rev() {
-            let node_opt = from_nodes.get_mut(i);
+        for i in (0..self.nodes.len()).rev() {
+            let node_opt = self.nodes.get_mut(i);
 
             if let Some(node) = node_opt {
                 match node {
@@ -102,9 +84,9 @@ impl NeuralNetwork {
        }
     }
 
-    pub fn save_network(epochs: usize, from_nodes: &Vec<NeuralNetworkNode>, to_writer: &mut OutputBinWriter) {
+    pub fn save_network(&mut self, epochs: usize, to_writer: &mut OutputBinWriter) {
         to_writer.write_usize(epochs);
-        for node in from_nodes {
+        for node in self.nodes.iter_mut() {
             match node {
                 NeuralNetworkNode::DenseLayer(n) => {
                     to_writer.write_slice_f32(&n.weights.read_values());
@@ -137,7 +119,7 @@ impl NeuralNetwork {
         floats
     }
 
-    pub fn attempt_load_network(from_file_path: &str, cycle: usize, to_nodes: &mut Vec<NeuralNetworkNode>) -> Result<usize, String> {
+    pub fn attempt_load_network(&mut self, from_file_path: &str, cycle: usize) -> Result<usize, String> {
         let file_open_try = File::open(format!("{from_file_path}{cycle}.nn"));
  
         // 4 for 32-bit, 8 for 64-bit
@@ -148,7 +130,7 @@ impl NeuralNetwork {
         match file_open_try {
             Ok(mut file) => {   // File could be opened for read
                 epoch = NeuralNetwork::read_usize(&mut file);
-                for node in to_nodes {
+                for node in self.nodes.iter_mut() {
                     match node {
                         NeuralNetworkNode::DenseLayer(n) => {
                             // Load weights first
@@ -192,5 +174,10 @@ mod tests {
 
     #[test]
     fn nn_test() {
+    }
+
+    #[test]
+    fn test_add_node() {
+        //let nn = NeuralNetwork
     }
 }

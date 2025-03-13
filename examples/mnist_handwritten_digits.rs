@@ -2,7 +2,7 @@
 // Use the following command to run in release mode:
 // cargo run --release --example mnist_digits
 
-use ai::{nn::{activations::activation::RELU, layers::dense::Dense, neural::NeuralNetworkNode, trainer::{train_network, TrainingHyperParameters}}, timed};
+use ai::{nn::{activations::activation::RELU, layers::dense::Dense, neural::{NeuralNetwork, NeuralNetworkNode}, trainer::{train_network, TrainingHyperParameters}}, timed};
 
 pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
     let time_to_run = timed::timed(|| {
@@ -18,6 +18,8 @@ pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
             output_loss: false,
             save_per_epoch: false
         };
+
+        let mut nn = NeuralNetwork::new();
         
         // Create layers
         let dense1 = Dense::new(784, 128);
@@ -25,14 +27,14 @@ pub fn handwritten_digits(load_from_file: bool, include_batch_output: bool) {
         let dense3 = dense2.influences_dense(10);
 
         // Add layers to the network for forward and backward propagation.
-        let mut nn_nodes: Vec<NeuralNetworkNode> = Vec::new();
-        nn_nodes.push(NeuralNetworkNode::DenseLayer(dense1));
-        nn_nodes.push(NeuralNetworkNode::ActivationFunction(RELU));
-        nn_nodes.push(NeuralNetworkNode::DenseLayer(dense2));
-        nn_nodes.push(NeuralNetworkNode::ActivationFunction(RELU));
-        nn_nodes.push(NeuralNetworkNode::DenseLayer(dense3));
+        //let mut nn_nodes: Vec<NeuralNetworkNode> = Vec::new();
+        nn.add_node(NeuralNetworkNode::DenseLayer(dense1));
+        nn.add_node(NeuralNetworkNode::ActivationFunction(RELU));
+        nn.add_node(NeuralNetworkNode::DenseLayer(dense2));
+        nn.add_node(NeuralNetworkNode::ActivationFunction(RELU));
+        nn.add_node(NeuralNetworkNode::DenseLayer(dense3));
 
-        train_network(&mut nn_nodes, tp, load_from_file, include_batch_output);
+        train_network(&mut nn, tp, load_from_file, include_batch_output);
     });
 
     println!("Total time to run: {time_to_run}");

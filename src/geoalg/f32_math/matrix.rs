@@ -1,5 +1,5 @@
 use std::{ops::{Index, IndexMut}, thread};
-use rand_distr::{Distribution, Normal, Uniform};
+use rand_distr::{Distribution, Uniform};
 use crate::{geoalg::f32_math::simd_extensions::dot_product_simd3, nn::layers::convolution2d::Dimensions, partition::Partition, partitioner::Partitioner};
 
 use super::simd_extensions::{im2col_transposed, SliceExt};
@@ -31,32 +31,25 @@ impl IndexMut<usize> for Matrix {
 
 impl Matrix {
     /// Returns size of underlying vector.
-    /// Tensor.shape.size
     pub fn len(&self) -> usize { self.values.len() }
 
     /// Returns number of rows this matrix has.
-    /// Tensor.shape.axis_len
     pub fn row_count(&self) -> usize { self.rows }
 
     /// Returns number of columns this matrix has.
-    /// Tensor.shape.axis_len
     pub fn column_count(&self) -> usize { self.columns }
 
     pub fn shape(&self) -> (usize, usize) { (self.rows, self.columns) }
 
     /// Returns a slice of the values this matrix has.
-    /// Tensor.stream
     pub fn read_values(&self) -> &[f32] { &self.values }
 
     /// Returns a new Matrix.
     pub fn new(rows: usize, columns: usize, values: Vec<f32>) -> Self {
-        Self {
-            rows, columns, values
-        }
+        Self { rows, columns, values }
     }
 
     /// Returns a contiguous slice of data representing columns in the matrix.
-    /// Tensor.Slice
     pub fn row(&self, row_index: usize) -> &[f32] {
         assert!(row_index < self.rows, "Tried to get a row that was out of bounds.");
 
@@ -92,14 +85,14 @@ impl Matrix {
         Self::new(rows, columns, values)
     }
 
-    /// In Tensor
-    pub fn new_randomized_normal(rows: usize, columns: usize, normal: Normal<f32>) -> Self {
-        let mut rng = rand::thread_rng();
-        let element_count = columns * rows;        
-        let values = normal.sample_iter(&mut rng).take(element_count).collect();
+    // Not currently used or tested.
+    // pub fn new_randomized_normal(rows: usize, columns: usize, normal: Normal<f32>) -> Self {
+    //     let mut rng = rand::thread_rng();
+    //     let element_count = columns * rows;        
+    //     let values = normal.sample_iter(&mut rng).take(element_count).collect();
 
-        Self::new(rows, columns, values)
-    }
+    //     Self::new(rows, columns, values)
+    // }
 
     /// Returns transpose of matrix.
     /// Partitioner implementation complete.
@@ -188,26 +181,6 @@ impl Matrix {
             rhs.row_count());
 
         Matrix::new(self.row_count(), rhs.row_count(), values)
-    }
-
-    /// Useful for applying an activation function to the entire matrix.
-    /// Partitioner implementation complete.
-    /// Rethink this, as it doesn't optimize well.
-    /// Deprecated.
-    pub fn map(&self, func: fn(&f32) -> f32) -> Self {
-        let partition_strategy = &Partitioner::with_partitions(self.len(), thread::available_parallelism().unwrap().get());
-
-        let inner_process = move |partition: &Partition| {
-            let mut partition_values = Vec::with_capacity(partition.size());
-            for i in partition.range() {
-                partition_values.push(func(&self.values[i]));
-            }
-
-            partition_values
-        };
-
-        let values = partition_strategy.parallelized(inner_process);
-        Self::new(self.row_count(), self.column_count(), values)
     }
 
     /// Subtracts rhs Matrix from lhs Matrix.
@@ -641,6 +614,14 @@ mod tests {
         
         let actual = m.transpose();
         assert_eq!(actual, expected);
+
+        let m = Matrix::new(1, 5, vec![1.; 5]);
+        let m_t = m.transpose();
+        assert_eq!(m_t.column_count(), m.row_count());
+        assert_eq!(m_t.row_count(), m.column_count());
+
+        let m_t = m_t.transpose();
+        assert_eq!(m_t, m);
     }
 
     #[test]

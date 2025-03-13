@@ -439,66 +439,6 @@ impl SliceExt for [f32] {
     }
 }
 
-impl Partition {
-    pub fn unary_simd(&self,
-        partition_values: &mut Vec<f32>, 
-        lhs_slice: &[f32], 
-        simd_op: impl Fn(Simd<f32, ALL_SIMD_LANES>) -> Simd<f32, ALL_SIMD_LANES>,
-        remainder_op: impl Fn(f32) -> f32
-    ) {
-        let return_slice: &mut Vec<f32> = &mut vec![0.; ALL_SIMD_LANES];
-
-        let mut cursor_start = self.get_start();
-        let mut cursor_end = cursor_start + ALL_SIMD_LANES;
-        while cursor_end <= self.get_end() + 1 {
-            let x_simd = Simd::<f32, ALL_SIMD_LANES>::from_slice(&lhs_slice[cursor_start..cursor_end]);
-
-            let r_simd = simd_op(x_simd);
-            r_simd.copy_to_slice(return_slice);
-            partition_values.extend_from_slice(&return_slice);
-
-            cursor_start = cursor_end;
-            cursor_end += ALL_SIMD_LANES;
-        }
-
-        if cursor_end > self.get_end() { cursor_end -= ALL_SIMD_LANES; }
-
-        for i in cursor_end..=self.get_end() {
-            partition_values.push(remainder_op(lhs_slice[i]));
-        }
-    }
-
-    pub fn binary_simd(&self,
-        partition_values: &mut Vec<f32>,
-        lhs_slice: &[f32],
-        rhs_slice: &[f32],
-        simd_op: impl Fn(Simd<f32, ALL_SIMD_LANES>, Simd<f32, ALL_SIMD_LANES>) -> Simd<f32, ALL_SIMD_LANES>,
-        remainder_op: impl Fn(f32, f32) -> f32
-    ) {
-        let return_slice: &mut Vec<f32> = &mut vec![0.; ALL_SIMD_LANES];
-
-        let mut cursor_start = self.get_start();
-        let mut cursor_end = cursor_start + ALL_SIMD_LANES;
-        while cursor_end <= self.get_end() + 1 {
-            let x_simd = Simd::<f32, ALL_SIMD_LANES>::from_slice(&lhs_slice[cursor_start..cursor_end]);
-            let y_simd = Simd::<f32, ALL_SIMD_LANES>::from_slice(&rhs_slice[cursor_start..cursor_end]);
-
-            let r_simd = simd_op(x_simd, y_simd);
-            r_simd.copy_to_slice(return_slice);
-            partition_values.extend_from_slice(&return_slice);
-
-            cursor_start = cursor_end;
-            cursor_end += ALL_SIMD_LANES;
-        }
-
-        if cursor_end > self.get_end() { cursor_end -= ALL_SIMD_LANES; }
-
-        for i in cursor_end..=self.get_end() {
-            partition_values.push(remainder_op(lhs_slice[i], rhs_slice[i]));
-        }
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::f32;
@@ -630,41 +570,6 @@ mod tests {
 
         // let msg = format!("Partitions: {:?}", x).bright_red();
         // println!("{msg}");
-    }
-
-    #[test]
-    pub fn test_partition_unary_simd_with_remainder() {
-        let tc = Partition::new(0, 16);
-
-        let lhs_slice = vec![1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16., 17.];
-
-        let y = 3.;
-        let y_simd = Simd::<f32, ALL_SIMD_LANES>::splat(y);
-        let mut partition_values = Vec::with_capacity(17);
-        tc.unary_simd(&mut partition_values, &lhs_slice, 
-            |x_simd| x_simd * y_simd, 
-            |x| x + y);
-
-        let expected = vec![3., 6., 9., 12., 15., 18., 21., 24., 27., 30., 33., 36., 39., 42., 45., 48., 20.];
-        assert_eq!(partition_values, expected);
-    }
-
-    #[test]
-    pub fn test_partition_binary_simd_with_remainder() {
-        let tc = Partition::new(0, 16);
-        let lhs_slice = vec![3., 6., 9., 12., 15., 18., 21., 24., 27., 30., 33., 36., 39., 42., 45., 48., 20.];
-        let rhs_slice = vec![1., 2., 3., 4., 5., 6., 7., 8., 9., 10., 11., 12., 13., 14., 15., 16., 17.];
-        let expected = vec![2., 4., 6., 8., 10., 12., 14., 16., 18., 20., 22., 24., 26., 28., 30., 32., 340.0];
-
-        let mut partition_values = Vec::with_capacity(17);
-        tc.binary_simd(
-            &mut partition_values, 
-            &lhs_slice, 
-            &rhs_slice, 
-            |x_simd, y_simd| x_simd - y_simd,
-            |x, y| x * y);
-
-        assert_eq!(partition_values, expected);
     }
 
     #[test]

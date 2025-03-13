@@ -19,32 +19,9 @@ pub fn kronecker_delta_f32<I:PartialEq>(i: I, j: I) -> f32 {
     if i == j { 1.0 } else { 0.0 } 
 }
 
-/// Argmax. Returns index and value at the index.
-pub fn vector_row_max(values: &[f32]) -> (usize, f32) {
-    let mut max = values[0];
-    let mut index = 0;
-    for i in 1..values.len() {
-        if values[i] > max { 
-            max = values[i];
-            index = i;
-        }
-    }
-
-    (index, max)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn test_vector_row_max() {
-        let tc = vec![2., 5., 7., 3.2, 1.7];
-        let (i, m) = vector_row_max(&tc);
-
-        assert_eq!(i, 2);
-        assert_eq!(m, 7.);
-    }
 
     #[test]
     fn test_kronecker() {

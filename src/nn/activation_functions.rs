@@ -1,6 +1,20 @@
 use std::f32::consts::E;
 use crate::geoalg::f32_math::matrix::Matrix;
-use crate::geoalg::f32_math::optimized_functions::vector_row_max;
+
+
+/// Argmax. Returns index and value at the index.
+pub fn vector_row_max(values: &[f32]) -> (usize, f32) {
+    let mut max = values[0];
+    let mut index = 0;
+    for i in 1..values.len() {
+        if values[i] > max { 
+            max = values[i];
+            index = i;
+        }
+    }
+
+    (index, max)
+}
 
 /// Calculates the cross-entropy (used with softmax) for each input sample.
 pub fn forward_categorical_cross_entropy_loss(predictions: &Matrix, expected: &Matrix) -> Matrix {
@@ -63,6 +77,15 @@ pub fn accuracy(predicted: &Matrix, expected: &Matrix) -> f32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    
+    #[test]
+    fn test_vector_row_max() {
+        let tc = vec![2., 5., 7., 3.2, 1.7];
+        let (i, m) = vector_row_max(&tc);
+
+        assert_eq!(i, 2);
+        assert_eq!(m, 7.);
+    }
 
     #[test]
     fn softmax_tes() {
