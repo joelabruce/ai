@@ -107,14 +107,14 @@ pub fn d_relu_simd(lhs: &[f32]) -> Vec<f32> {
 /// Batch implementation seems buggy unless completely rewrite the backpropagation, which doesn't seem correct.
 /// Still exploring.
 pub fn im2col_transposed(
-    image: &[f32],
-    //image_count: usize,
+    images: &[f32],
+    image_count: usize,
     image_height: usize,
     image_width: usize,
     kernel_height: usize,
     kernel_width: usize
 ) -> Vec<f32> {
-    //let image_size = image_height * image_width;
+    let image_size = image_height * image_width;
     let kernel_size = kernel_width * kernel_height;
     let feature_height = image_height - kernel_height + 1;
     let feature_width = image_width - kernel_width + 1;
@@ -123,8 +123,10 @@ pub fn im2col_transposed(
     //let offsets = Vec::with_capacity(kernel_width);
 
     let mut im2col_transposed = Vec::with_capacity(feature_size * kernel_size);
-    //let mut image_offset = 0;
-    //for _n in 0..image_count {
+    let mut image_offset = 0;
+    for _n in 0..image_count {
+        let image = &images[image_offset..image_offset + image_size];
+
         for feature_row in 0..feature_height {
             for feature_column in 0..feature_width {
                 for kernel_row in 0..kernel_height {
@@ -134,8 +136,8 @@ pub fn im2col_transposed(
             }
         }
 
-        //image_offset += image_size;
-    //}
+        image_offset += image_size;
+    }
 
     im2col_transposed
 }
@@ -791,7 +793,7 @@ mod tests {
 
             let im2col_transposed = im2col_transposed(
                 images.read_values(), 
-                //image_count, 
+                image_count, 
                 image_height, image_width, 
                 kernel_height, kernel_width);
 

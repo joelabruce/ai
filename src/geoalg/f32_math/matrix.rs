@@ -314,7 +314,8 @@ impl Matrix {
                 let input = self.row(batch_index);
 
                 let image = &*im2col_transposed(
-                    input, 
+                    input,
+                    1,
                     i_d.height,i_d.width,
                     k_d.height, k_d.width);
 
@@ -350,6 +351,7 @@ impl Matrix {
 
             let image = &*im2col_transposed(
                 input, 
+                1,
                 i_d.height,i_d.width,
                 k_d.height, k_d.width);
 
