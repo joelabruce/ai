@@ -120,31 +120,6 @@ impl Matrix {
         Self::new(self.columns, self.rows, values)
     }
 
-    /// Makes use of supplied partitions to parallelize the operation.
-    /// If partitions is cached, can be reused (to hopefully save even more time).
-    /// Partitioner implementation complete.
-    /// In Tensor.
-    pub fn mul_element_wise(&self, rhs: &Matrix) -> Self {
-        assert!(self.rows == rhs.rows && self.columns == rhs.columns, "When element-wise multiplying two matrices, they must have same order.");
-        
-        let partition_strategy = &Partitioner::with_partitions(
-            self.len(),
-            thread::available_parallelism().unwrap().get());
-
-        let inner_process = |partition: &Partition| {
-            let mut partition_values: Vec<f32> = Vec::with_capacity(partition.size());
-            for i in partition.range() {
-                partition_values.push(self.values[i] * rhs.values[i]);
-            }
-
-            partition_values
-        };
-
-        let values = partition_strategy.parallelized(inner_process);
-
-        Self::new(self.row_count(), self.column_count(), values)
-    }
-
     /// Computes matrix multiplication and divying up work amongst partitions.
     /// Faster multiplcation when you need to multiply the transposed matrix of rhs.
     /// Avoids calculating the transpose twice.

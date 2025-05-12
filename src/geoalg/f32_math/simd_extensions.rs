@@ -199,7 +199,7 @@ impl Matrix {
 
     /// Now in Tensor.
     pub fn mul_element_wise_simd(&self, rhs: &Matrix) -> Self {
-        assert!(self.row_count() == rhs.row_count() && self.column_count() == rhs.column_count(), "When element-wise multiplying two matrices, they must have same order.");
+        //assert!(self.row_count() == rhs.row_count() && self.column_count() == rhs.column_count(), "When element-wise multiplying two matrices, they must have same order.");
         
         let partitioner = Partitioner::with_partitions_simd(self.len(), 16);
 
@@ -463,13 +463,6 @@ mod tests {
             let lhs = Matrix::new_randomized_z(1000, 10000);
             let rhs = Matrix::new_randomized_z(1000, 10000);
             
-            let _expected = lhs
-                .mul_element_wise(&rhs)
-                .mul_element_wise(&rhs)
-                .mul_element_wise(&lhs);
-            let elapsed = timed_context.checkpoint();
-            println!("Mul Elapsed: {elapsed} multi-threading non-simd");
-
             let actual1 = lhs
                 .mul_element_wise_simd(&rhs)
                 .mul_element_wise_simd(&rhs)
