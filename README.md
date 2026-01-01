@@ -34,12 +34,20 @@ cargo llvm-cov --html
 
 ### Run examples
 Make sure to run in release mode to see how fast the library can perform on your machine.
+
+Fully connected Neural Network
 ```
 cargo run --release --example mnist_digits
 ```
 
+Convolutional NeuralNetwork
+```
+cargo run --release --example mnist_conv_digits
+```
+
 ## Useful features
 ### Partitioner and Partition
+**Still Under construction since discovery of chunks_mut** \
 Partitioner can create partitions that split-up work to be done when multi-threading. When using SIMD extensions, the partitioner can create partitions that favor SIMD based on the SIMD_LANES you specify. By using the SIMD Partitioner function, it will guarantee whenever possible that all threads except for the last one will be evenly split to do accommodate SIMD. The last thread's partition is guaranteed to be the smallest since it will process anything that cannot be split into SIMD_LANES in the other threads to attempt to achieve an even workload across all threads.
 
 ### Matrix
@@ -49,12 +57,17 @@ The major player in the library that has optimized implementations to work fast 
 Allows for creating a batch that randomly draws from a sample. The sample can be reset for reuse at any-time, guaranteeing that no duplicates are ever present in the batch.
 
 ### Timed function
-Allows for wrapping functions to determine runtime. Useful for seeing how performant a trining session is.
+Allows for wrapping functions to determine runtime. Useful for seeing how performant a training session is.
 
 ## Examples
 * MNIST Hand-written Digits Neural Networks
   * A simple fully connected neural network that uses Softmax and Cross Entropy Loss.
   * An implementation using convolutional neural network.
+
+## Coming Soon
+* Transformers
+  * Potional-encoding modules
+  * Embedding
 
 ## Goals of project
   * To develop a set of tools to allow simple creation of complex neural networks.

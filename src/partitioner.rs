@@ -1,4 +1,6 @@
-use std::{ops::Index, thread};
+use std::{fmt::Debug, ops::Index, result, thread};
+
+use rand_distr::num_traits::ToPrimitive;
 
 use crate::partition::Partition;
 
@@ -26,7 +28,8 @@ impl Index<usize> for Partitioner {
 impl Partitioner {
     pub fn new(partitions: Vec<Partition>) -> Self { Partitioner { partitions } }
 
-    /// Creates a partitioner with partitions that are mostly equal in size, with no more than a difference of 1.    
+    /// Creates a partitioner with partitions that are mostly equal in size, with no more than a difference of 1. 
+    #[deprecated]   
     pub fn with_partitions(count: usize, partition_count: usize) -> Self {
         let partition_size = count / partition_count;
 
@@ -58,6 +61,7 @@ impl Partitioner {
 
     /// Parallelizes work among partitions as evenly as possible.
     /// Ensures result is aggregated in correct order. 
+    #[deprecated]
     pub fn parallelized<T, F>(&self, function: F) -> Vec<T> 
     where
         F: FnOnce(&Partition) -> Vec<T> + Send + Copy,
@@ -90,11 +94,49 @@ impl Partitioner {
 
         values
     }
+
+    pub fn chunked_parallelized<T, F>(chunk_size: usize, buffer: &mut [T], function: F) 
+    where
+        F: FnOnce(usize) -> T + Send + Copy,
+        T: Send
+    {
+        //let mut values = &Vec::new();
+        //let chunk_size = self.partitions.len();
+
+        thread::scope(|s| {
+            for (chunk_index, chunk) in buffer.chunks_mut(chunk_size).enumerate() {
+                s.spawn(move || {
+                    for (slice_index, elem) in chunk.iter_mut().enumerate() {
+                        let buffer_index = chunk_index * chunk_size + slice_index;
+                        let x = function(buffer_index);
+                        *elem = x;
+                        //println!("slice_index: {slice_index}, chunk_index: {chunk_index}, buffer_index: {buffer_index}");
+                    }
+                });
+            }
+        });
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_chunked_parallelizable() {
+        let tc_value_count = 10000;
+        let mut buffer = vec![0.0f32; tc_value_count];
+        let chunk_size = thread::available_parallelism().unwrap().get();
+        println!("chunk_size: {chunk_size}");
+        //let tc = Partitioner::with_partitions(tc_value_count, chunk_size);
+
+        Partitioner::chunked_parallelized(chunk_size, &mut buffer, |index| {
+            index.to_f32().unwrap() * 2.0f32
+        });
+
+        let expected: Vec<_> = (0..tc_value_count).map(|x| x.to_f32().unwrap() * 2.0f32).collect();
+        assert_eq!(buffer, expected);
+    }
 
     #[test]
     fn test_parallelizable_simple() {
