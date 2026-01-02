@@ -3,7 +3,40 @@ use rand_distr::Uniform;
 use crate::geoalg::f32_math::matrix::Matrix;
 use super::*;
 
-/// A fully connected layer.
+/// A fully connected (dense) neural network layer.
+///
+/// Each neuron in this layer is connected to every input from the previous layer.
+/// The layer performs the operation: `output = inputs × weights^T + biases`
+///
+/// # Initialization
+///
+/// Weights are initialized using He uniform initialization:
+/// - Range: `[-√(6/n), √(6/n)]` where n is the input size
+/// - Biases are initialized to zero
+///
+/// This initialization helps prevent vanishing/exploding gradients during training.
+///
+/// # Examples
+///
+/// ```
+/// use ai::nn::layers::dense::Dense;
+/// use ai::nn::layers::Propagates;
+/// use ai::geoalg::f32_math::matrix::Matrix;
+///
+/// // Create a dense layer: 784 inputs → 128 outputs
+/// let mut layer = Dense::new(784, 128);
+///
+/// // Forward propagate a batch of 32 samples
+/// let inputs = Matrix::new_randomized_z(32, 784);
+/// let outputs = layer.forward(&inputs);
+/// assert_eq!(outputs.shape(), (32, 128));
+/// ```
+///
+/// # Performance
+///
+/// - **Forward pass**: Matrix multiplication with SIMD and multi-threading
+/// - **Backward pass**: Gradient computation parallelized for large batches
+/// - **Memory**: Stores weights (input_size × neuron_count) and biases (1 × neuron_count)
 pub struct Dense {
     pub biases: Matrix,
     pub weights: Matrix,
@@ -25,6 +58,21 @@ impl Dense {
         (weights, biases)
     }
 
+    /// Creates a new dense layer with He uniform initialization.
+    ///
+    /// # Arguments
+    ///
+    /// * `input_size` - Number of input features from the previous layer
+    /// * `neuron_count` - Number of neurons (output features) in this layer
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ai::nn::layers::dense::Dense;
+    ///
+    /// // Create layer that takes 784 inputs and produces 128 outputs
+    /// let layer = Dense::new(784, 128);
+    /// ```
     pub fn new(input_size: usize, neuron_count: usize) -> Dense {
         let (weights, biases) = Dense::random_weight_biases(input_size, neuron_count);
 
@@ -44,7 +92,7 @@ impl Propagates for Dense {
     /// Forward propagates by performing weights dot inputs + biases.
     fn forward<'a>(&mut self, inputs: &'a Matrix) -> Matrix {
         let r = inputs
-            .mul_transpose_simd(&self.weights.transpose())
+            .mul_transposed_b(&self.weights.transpose())
             .add_row_partitioned(&self.biases);
         r
     }
@@ -54,15 +102,15 @@ impl Propagates for Dense {
     fn backward<'a>(& mut self, learning_rate: &mut LearningRate, dvalues: &Matrix, inputs: &Matrix) -> Matrix {
         // Mutate the weights based on derivative weights
         let inputs_t = inputs.transpose();
-        let dweights = inputs_t.mul_transpose_simd(&dvalues.transpose());
+        let dweights = inputs_t.mul_transposed_b(&dvalues.transpose());
 
-        self.weights = self.weights.sub(&dweights.scale_simd_new(learning_rate.rate()));
+        self.weights = self.weights.sub(&dweights.scale(learning_rate.rate()));
 
         // Mutate the biases based on derivative biases
         let dbiases = dvalues.reduce_rows_by_add();
-        self.biases = self.biases.sub(&dbiases.scale_simd_new(learning_rate.rate()));
+        self.biases = self.biases.sub(&dbiases.scale(learning_rate.rate()));
 
-        let result = dvalues.mul_transpose_simd(&self.weights);
+        let result = dvalues.mul_transposed_b(&self.weights);
         result
     }
 }

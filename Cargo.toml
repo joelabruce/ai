@@ -2,6 +2,12 @@
 name = "ai"
 version = "0.1.0"
 edition = "2021"
+license = "MIT OR Apache-2.0"
+authors = ["AI Neural Network Library Contributors"]
+description = "High-performance neural network library with SIMD optimizations"
+repository = "https://github.com/joelabruce/ai"
+keywords = ["neural-network", "machine-learning", "simd", "deep-learning"]
+categories = ["science"]
 
 [dependencies]
 rand = "0.8.5"

@@ -1,6 +1,6 @@
 const ROWS_DIFFEREMT_LENGTHS: &str = "Cannot take dot product of two &[f32] of unequal length.";
 
-/// Dot product of two Vec<f32> slices. Will always assume they are same length (not production ready).
+/// Dot product of two `Vec<f32>` slices. Will always assume they are same length (not production ready).
 /// How can this be effectively benchmarked and optimized?
 pub fn dot_product_of_vector_slices(lhs: &[f32], rhs: &[f32]) -> f32 {
     assert_eq!(lhs.len(), rhs.len(), "{}", ROWS_DIFFEREMT_LENGTHS);

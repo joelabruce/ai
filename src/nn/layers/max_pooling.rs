@@ -1,13 +1,55 @@
 use crate::{geoalg::f32_math::matrix::Matrix, nn::learning_rate::LearningRate};
-use super::{convolution2d::{Convolution2dDeprecated, Dimensions}, dense::Dense, Propagates};
+use super::{convolution2d::{Convolution2d, Dimensions}, dense::Dense, Propagates};
 
-/// Currently only supports valid pooling layers, with no padding.
+/// Max pooling layer for downsampling spatial data.
+///
+/// Reduces the spatial dimensions of feature maps by taking the maximum value
+/// within each pooling window. This provides translation invariance and reduces
+/// computational cost in deeper layers.
+///
+/// # Implementation Details
+///
+/// - **Pooling Mode**: Valid (no padding) - output size is reduced
+/// - **Gradient Tracking**: Stores indices of max values for backpropagation
+/// - **Configurable Stride**: Controls overlap between pooling windows
+///
+/// # Output Size Calculation
+///
+/// ```text
+/// output_height = (input_height - pool_height) / stride + 1
+/// output_width = (input_width - pool_width) / stride + 1
+/// ```
+///
+/// # Examples
+///
+/// ```
+/// use ai::nn::layers::max_pooling::MaxPooling;
+/// use ai::nn::layers::convolution2d::Dimensions;
+/// use ai::nn::layers::Propagates;
+/// use ai::geoalg::f32_math::matrix::Matrix;
+///
+/// // Create 2x2 max pooling with stride 2 (non-overlapping)
+/// let p_d = Dimensions { height: 2, width: 2 };
+/// let i_d = Dimensions { height: 26, width: 26 };
+/// let mut pooling = MaxPooling::new(32, p_d, i_d, 2);
+///
+/// // Forward pass on 32 feature maps of size 26x26
+/// let inputs = Matrix::new_randomized_z(16, 32 * 26 * 26);
+/// let outputs = pooling.forward(&inputs);
+/// // Output shape: (16, 32 * 13 * 13) - downsampled to 13x13 per filter
+/// ```
+///
+/// # Performance
+///
+/// - **Forward pass**: O(n × filters × output_size × pool_size)
+/// - **Backward pass**: O(n × filters × output_size) - gradient routing via stored indices
+/// - **Memory**: Stores max indices for backpropagation (one per output element)
 pub struct MaxPooling {
     filters: usize,
     /// Input dimensions
     i_d: Dimensions,
     /// Pooling dimensions
-    p_d: Dimensions,    
+    p_d: Dimensions,
     stride: usize,
     max_indices: Vec<usize>
 }
@@ -26,8 +68,8 @@ impl MaxPooling {
         Dense::new(features, neuron_count)
     }
 
-    pub fn influences_convolution2d(&self, filters: usize, channels: usize, k_d: Dimensions) -> Convolution2dDeprecated {
-        Convolution2dDeprecated::new(filters, channels, k_d, self.output_dimensions())
+    pub fn influences_convolution2d(&self, filters: usize, channels: usize, k_d: Dimensions) -> Convolution2d {
+        Convolution2d::new(filters, channels, k_d, self.output_dimensions())
     }
 
     fn output_dimensions(&self) -> Dimensions {

@@ -103,9 +103,7 @@ pub fn d_relu_simd(lhs: &[f32]) -> Vec<f32> {
 }
 
 /// Call once per image when convolving images with filters.
-/// We shall see if faster or not.
-/// Batch implementation seems buggy unless completely rewrite the backpropagation, which doesn't seem correct.
-/// Still exploring.
+/// Transforms image patches into columns for efficient matrix multiplication (im2col).
 pub fn im2col_transposed(
     images: &[f32],
     image_count: usize,
@@ -154,7 +152,8 @@ pub fn im2col_transposed(
 // }
 
 impl Matrix {
-    /// Now in Tensor
+    /// Deprecated: Use `scale()` instead, which automatically chooses optimal implementation.
+    #[deprecated(since = "0.1.1", note = "Use `scale()` instead")]
     pub fn scale_simd(&self, scalar: f32) -> Self {
         let partitioner = Partitioner::with_partitions_simd(self.len(), 16);
 
@@ -192,6 +191,8 @@ impl Matrix {
         Self::new(self.row_count(), self.column_count(), values)
     }
 
+    /// Deprecated: Use `scale()` instead, which automatically chooses optimal implementation.
+    #[deprecated(since = "0.1.1", note = "Use `scale()` instead")]
     pub fn scale_simd_new(&self, scalar: f32) -> Matrix {
         let values = self.read_values().scale_simd(scalar);
         Matrix::new(self.row_count(), self.column_count(), values)
@@ -315,10 +316,11 @@ pub fn toeplitz_bruce_matrix(kernel: &[f32],
 pub trait SliceExt {
     fn mul_simd(&self, rhs: &Self) -> Vec<f32>;
     fn scale_simd(&self, scalar: f32) -> Vec<f32>;
+    fn par_scale_simd(&self, scalar: f32, len: usize) -> Vec<f32>;
     fn mm_transpose(&self, rhs: &Self, l_rows: usize, columns: usize, r_rows: usize) -> Vec<f32>;
     fn par_mm_transpose(&self, rhs: &Self, l_rows: usize, columns: usize, r_rows: usize) -> Vec<f32>;
-    fn cross_correlate(&self, 
-        kernel: &Self, 
+    fn cross_correlate(&self,
+        kernel: &Self,
         kernel_count: usize,
         kernel_height: usize, kernel_width: usize,
         batches: usize,
@@ -327,8 +329,22 @@ pub trait SliceExt {
 
 impl SliceExt for [f32] {
     fn mul_simd(&self, rhs: &Self) -> Vec<f32> { mul_simd(self, rhs) }
-    
+
     fn scale_simd(&self, scalar: f32) -> Vec<f32> { scale_simd(self, scalar) }
+
+    fn par_scale_simd(&self, scalar: f32, len: usize) -> Vec<f32> {
+        let partitioner = Partitioner::with_partitions_simd(
+            len,
+            thread::available_parallelism().unwrap().get());
+
+        let inner = |partition: &Partition| {
+            let start = partition.get_start();
+            let end = partition.get_end() + 1;
+            scale_simd(&self[start..end], scalar)
+        };
+
+        partitioner.parallelized(inner)
+    }
 
     fn mm_transpose(&self, rhs: &Self, l_rows: usize, columns: usize, r_rows: usize) -> Vec<f32> {
         let size = l_rows * r_rows;
@@ -355,9 +371,9 @@ impl SliceExt for [f32] {
     }
 
     fn par_mm_transpose(&self, rhs: &Self, l_rows: usize, columns: usize, r_rows: usize) -> Vec<f32> {
-        let partitioner = Partitioner::with_partitions(
+        let partitioner = Partitioner::with_partitions_simd(
             l_rows,
-             thread::available_parallelism().unwrap().get());
+            thread::available_parallelism().unwrap().get());
 
         let inner = |partition: &Partition| {
             let chunk = partition.size() * columns;
@@ -386,7 +402,7 @@ impl SliceExt for [f32] {
 
         let image_size = image_height * image_width;
 
-        let partitioner = Partitioner::with_partitions(batches, 16);
+        let partitioner = Partitioner::with_partitions_simd(batches, 16);
 
         let mut toeplitzes = Vec::with_capacity(kernel_count);
         for kernel in 0..kernel_count {
@@ -754,7 +770,6 @@ mod tests {
         });
     }
 
-    #[ignore = "im2col test has bugs"]
     #[test]
     fn test_im2col() {
         let _elapsed = timed_with_context(|context| {

@@ -1,19 +1,96 @@
 use std::io::Write;
 
-use crate::{digit_image::DigitImage, geoalg::f32_math::matrix::Matrix, input_csv_reader::InputCsvReader, nn::{activation_functions::{accuracy, backward_categorical_cross_entropy_loss_wrt_softmax, forward_categorical_cross_entropy_loss, SOFTMAX}, learning_rate::LearningRate, neural::NeuralNetwork}, output_bin_writer::OutputBinWriter, statistics::sample::Sample};
+use crate::{digit_image::DigitImage, geoalg::f32_math::matrix::Matrix, input_csv_reader::InputCsvReader, nn::{activation_functions::{accuracy, backward_categorical_cross_entropy_loss_wrt_softmax, forward_categorical_cross_entropy_loss, SOFTMAX}, error::{NeuralNetworkError, Result}, learning_rate::LearningRate, neural::NeuralNetwork}, output_bin_writer::OutputBinWriter, statistics::sample::Sample};
 
 use super::layers::input::Input;
 
+/// Hyperparameters for training a neural network.
+///
+/// Controls all aspects of the training process including batch sizes, epochs,
+/// checkpointing, and logging.
+///
+/// # Examples
+///
+/// ```
+/// use ai::nn::trainer::TrainingHyperParameters;
+///
+/// let hyperparams = TrainingHyperParameters {
+///     backup_cycle: 10,
+///     total_epochs: 50,
+///     training_sample: 60000,
+///     batch_size: 128,
+///     trained_model_location: String::from("./trained/model"),
+///     batch_inform_size: 100,
+///     output_accuracy: true,
+///     output_loss: true,
+///     save_per_epoch: true,
+/// };
+/// ```
 pub struct TrainingHyperParameters {
+    /// Number of epochs between full model backups (rolling file system)
     pub backup_cycle: usize,
+    /// Total number of training epochs to run
     pub total_epochs: usize,
+    /// Total number of training samples in the dataset
     pub training_sample: usize,
+    /// Number of samples per training batch
     pub batch_size: usize,
+    /// Directory path where trained models are saved
     pub trained_model_location: String,
+    /// Print progress every N batches (0 to disable)
     pub batch_inform_size: usize,
+    /// Whether to print accuracy metrics during training
     pub output_accuracy: bool,
+    /// Whether to print loss values during training
     pub output_loss: bool,
+    /// Whether to save model weights after each epoch
     pub save_per_epoch: bool
+}
+
+impl TrainingHyperParameters {
+    /// Validates the hyperparameters and returns an error if any are invalid.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - `batch_size` is 0
+    /// - `training_sample` is less than `batch_size`
+    /// - `total_epochs` is 0
+    /// - `backup_cycle` is 0
+    pub fn validate(&self) -> Result<()> {
+        if self.batch_size == 0 {
+            return Err(NeuralNetworkError::InvalidHyperparameters {
+                parameter: "batch_size".to_string(),
+                reason: "must be greater than 0".to_string(),
+            });
+        }
+
+        if self.training_sample < self.batch_size {
+            return Err(NeuralNetworkError::InvalidHyperparameters {
+                parameter: "training_sample".to_string(),
+                reason: format!(
+                    "must be at least batch_size ({}), got {}",
+                    self.batch_size, self.training_sample
+                ),
+            });
+        }
+
+        if self.total_epochs == 0 {
+            return Err(NeuralNetworkError::InvalidHyperparameters {
+                parameter: "total_epochs".to_string(),
+                reason: "must be greater than 0".to_string(),
+            });
+        }
+
+        if self.backup_cycle == 0 {
+            return Err(NeuralNetworkError::InvalidHyperparameters {
+                parameter: "backup_cycle".to_string(),
+                reason: "must be greater than 0".to_string(),
+            });
+        }
+
+        Ok(())
+    }
 }
 
 /// Creates an InputCsvReader
@@ -52,9 +129,50 @@ pub fn from_sample_digit_images(sample: &mut Sample<DigitImage>, requested_batch
     )
 }
 
-/// Try to put all println output in here instead of in the other functions.
-/// Unstable.
-//pub fn train_network(nn_nodes: &mut Vec<NeuralNetworkNode>, tp: TrainingHyperParameters, load_from_file: bool, include_batch_output: bool) {
+/// Trains a neural network using mini-batch gradient descent with categorical cross-entropy loss.
+///
+/// This function handles the complete training loop including:
+/// - Loading checkpointed models (if requested)
+/// - Batch sampling with automatic shuffling
+/// - Forward and backward propagation
+/// - Model checkpointing with rolling file cycles
+/// - Validation metrics (accuracy and loss)
+/// - Progress logging
+///
+/// # Arguments
+///
+/// * `nn` - The neural network to train (mutable)
+/// * `tp` - Training hyperparameters configuration
+/// * `load_from_file` - Whether to attempt loading a previously trained model
+/// * `include_batch_output` - Whether to print per-batch progress
+///
+/// # Training Process
+///
+/// 1. **Initialization**: Load existing model or start fresh
+/// 2. **Each Epoch**:
+///    - Shuffle training data via random batch sampling
+///    - Forward pass: compute predictions
+///    - Compute loss: categorical cross-entropy with softmax
+///    - Backward pass: compute gradients and update weights
+///    - Validation: evaluate on test set
+///    - Save checkpoint: rolling file system with configurable backup cycle
+///
+/// # File Organization
+///
+/// Models are saved with rolling file cycles to prevent overfitting:
+/// - Files: `model.1.bin`, `model.2.bin`, ..., `model.{backup_cycle}.bin`
+/// - Automatically rotates through files, allowing easy rollback
+///
+/// # Examples
+///
+/// See `examples/mnist_handwritten_digits.rs` for complete usage.
+///
+/// # Performance
+///
+/// Training speed depends on:
+/// - Network architecture (layers, neurons, filters)
+/// - Batch size (larger = more throughput, less frequent updates)
+/// - Matrix operations use SIMD and multi-threading automatically
 pub fn train_network(nn: &mut NeuralNetwork, tp: TrainingHyperParameters, load_from_file: bool, include_batch_output: bool) {
         // Training hyper-parameters
     let batches = tp.training_sample / tp.batch_size;
@@ -105,7 +223,7 @@ pub fn train_network(nn: &mut NeuralNetwork, tp: TrainingHyperParameters, load_f
             let predictions = (SOFTMAX.f)(&forward_stack.pop().unwrap());
             
             // Backward pass on training data batch
-            let dvalues6 = backward_categorical_cross_entropy_loss_wrt_softmax(&predictions, &targets).scale_simd(1. / tp.batch_size as f32);
+            let dvalues6 = backward_categorical_cross_entropy_loss_wrt_softmax(&predictions, &targets).scale(1. / tp.batch_size as f32);
             nn.backward(learning_rate, &dvalues6, &mut forward_stack);
 
             // Only uncomment if network training is slow to see if accuracy and data loss is actually improving

@@ -1,4 +1,4 @@
-use std::{collections::btree_map::Values, thread};
+use std::thread;
 
 pub struct Kernel{
     pub c: usize,
@@ -7,6 +7,7 @@ pub struct Kernel{
 }
 
 impl Kernel {
+    #[allow(dead_code)]
     fn new() -> Self {
         Kernel { c: 3, h: 3, w: 3 }
     }
@@ -72,8 +73,6 @@ pub fn im2col_std_parallel(
 
 #[cfg(test)]
 mod tests {
-    use crate::nn::layers::input;
-
     use super::*;
 
     #[test]

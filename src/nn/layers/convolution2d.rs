@@ -7,19 +7,62 @@ use super::{max_pooling::MaxPooling, Matrix, Propagates};
 // Useful for debugging
 //use crate::prettify::*;
 
+/// Dimensions for 2D data (images, feature maps).
+///
+/// Represents the spatial dimensions of images or activation maps.
 pub struct Dimensions {
     pub height: usize,
     pub width: usize
 }
 
 impl Dimensions {
+    /// Returns dimensions as a tuple `(height, width)`.
     pub fn shape(&self) -> (usize, usize) {
         (self.height, self.width)
     }
 }
 
+/// 2D Convolutional layer for processing spatial data.
 ///
-pub struct Convolution2dDeprecated {
+/// Applies learnable filters (kernels) across the input to extract spatial features.
+/// Uses im2col transformation to convert convolution into efficient matrix multiplication.
+///
+/// # Implementation Details
+///
+/// - **Convolution Mode**: Valid (no padding) - output size is reduced
+/// - **Stride**: Fixed at 1 (no striding yet)
+/// - **Channels**: Currently supports grayscale (1 channel) only
+/// - **Output Size**: `(input_height - kernel_height + 1, input_width - kernel_width + 1)`
+///
+/// # Initialization
+///
+/// Filters are initialized using He uniform initialization based on fan-in.
+/// Biases are initialized to zero.
+///
+/// # Examples
+///
+/// ```
+/// use ai::nn::layers::convolution2d::{Convolution2d, Dimensions};
+/// use ai::nn::layers::Propagates;
+/// use ai::geoalg::f32_math::matrix::Matrix;
+///
+/// // Create layer: 32 filters of size 3x3 for 28x28 grayscale images
+/// let k_d = Dimensions { height: 3, width: 3 };
+/// let i_d = Dimensions { height: 28, width: 28 };
+/// let mut layer = Convolution2d::new(32, 1, k_d, i_d);
+///
+/// // Forward pass on batch of 16 images
+/// let inputs = Matrix::new_randomized_z(16, 28 * 28);  // Flattened 28x28 images
+/// let outputs = layer.forward(&inputs);
+/// // Output shape: (16, 32 * 26 * 26) - 32 feature maps of size 26x26
+/// ```
+///
+/// # Performance
+///
+/// - **im2col transformation**: Converts sliding window operation to matrix multiplication
+/// - **SIMD acceleration**: Uses vectorized operations for GEMM
+/// - **Multi-threading**: Parallelizes across batches and filters
+pub struct Convolution2d {
     pub filters: usize,
     pub kernels: Matrix,        // Same as weights
     pub biases: Matrix,
@@ -28,7 +71,7 @@ pub struct Convolution2dDeprecated {
     //pub stride: usize,        // Assumes stride of 1 for now.
 }
 
-impl Convolution2dDeprecated {
+impl Convolution2d {
     /// Set channels to 1 for greyscale, 3 for RGB.
     /// * RGB support not implemented yet, so ensure channels is 1.
     /// * Might consider allowing for more flexibility here, but have to think carefuly about the cleanest way to do this.
@@ -40,7 +83,7 @@ impl Convolution2dDeprecated {
         //let normal = Normal::new(0., normal_term).unwrap();
         let uniform = Uniform::new_inclusive(-term, term);
         
-        Convolution2dDeprecated {
+        Convolution2d {
             filters,
             //kernels: Matrix::new_randomized_normal(filters, channels * k_d.height * k_d.width, normal),
             kernels: Matrix::new_randomized_uniform(filters, channels * k_d.height * k_d.width, uniform),
@@ -66,18 +109,10 @@ impl Convolution2dDeprecated {
     }
 }
 
-impl Propagates for Convolution2dDeprecated {
+impl Propagates for Convolution2d {
     fn forward(&mut self, inputs: &Matrix) -> Matrix {
-        let original = false;
-        if original {
-        // Known to work
-            let r = inputs.valid_cross_correlation(&self.kernels, &self.k_d, &self.i_d);
-            r
-        } else {
-        // Seems to be working, and is much faster!
-           let r = inputs.par_cc_im2col(&self.kernels, &self.k_d, &self.i_d);
-           r
-        }
+        // Uses im2col transformation for efficient convolution via matrix multiplication
+        inputs.par_cc_im2col(&self.kernels, &self.k_d, &self.i_d)
     }
 
     fn backward<'a>(&'a mut self, learning_rate: &mut LearningRate, dvalues: &Matrix, inputs: &Matrix) -> Matrix {
@@ -141,7 +176,7 @@ mod tests {
             130., 140., 150., 160.
         ]);
 
-        let mut cv2d = Convolution2dDeprecated::new(
+        let mut cv2d = Convolution2d::new(
             filters,
             1, 
             Dimensions { width: 3, height: 3 } , 
@@ -180,7 +215,7 @@ mod tests {
         // Test two different images
         let inputs = Matrix::new(batch_size, s28x28, vec![1.0; batch_size * s28x28]);
 
-        let mut cv2d = Convolution2dDeprecated::new(
+        let mut cv2d = Convolution2d::new(
             filters,
             1, 
             Dimensions { width: 3, height: 3 } , 

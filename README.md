@@ -10,14 +10,67 @@ AI library written in rust
 * Uses an adjustable file cycling system while training for easy rollback if training performance begins to decline or to rollback when model shows signs of overfitting. Automatically saves model weights and biases after each epoch.
 
 ## Installation
-Requires using nightly rust build for SIMD to work.
 
-```
-rustup upgrade -- nightly
+### System Requirements
+- **Rust:** Nightly build (required for portable SIMD features)
+- **CPU:** Multi-core processor with SIMD support (SSE/AVX on x86, NEON on ARM)
+- **OS:** Linux, macOS, or Windows
+- **Git:** Required for cloning the repository
+
+### Prerequisites
+
+**All platforms:**
+- [Rust toolchain](https://rustup.rs/) - Install rustup if not already installed
+- Git - [Download for your platform](https://git-scm.com/downloads)
+
+**Windows users:** You'll need one of the following to extract ZIP files from command line:
+- PowerShell (built-in, Windows 5.0+)
+- [7-Zip](https://www.7-zip.org/) or [WinRAR](https://www.win-rar.com/) (optional)
+- Or use Windows Explorer to extract manually
+
+### Dependencies
+This project has minimal external dependencies:
+- `rand = "0.8.5"` - Random number generation
+- `rand_distr = "0.4.0"` - Statistical distributions
+
+### Setup
+
+#### 1. Install Rust Nightly
+
+**All platforms:**
+```bash
+rustup install nightly
 rustup default nightly
 ```
 
-Ensure you unzip the archive zip files into the training folder to be able to run the examples.
+#### 2. Extract MNIST Datasets (Required for Examples)
+
+**Linux & macOS:**
+```bash
+unzip archive/mnist_train.csv.zip -d training/
+unzip archive/mnist_test.csv.zip -d training/
+```
+
+**Windows (PowerShell):**
+```powershell
+Expand-Archive -Path archive\mnist_train.csv.zip -DestinationPath training\
+Expand-Archive -Path archive\mnist_test.csv.zip -DestinationPath training\
+```
+
+**Windows (Command Prompt with 7-Zip or WinRAR installed):**
+```cmd
+7z x archive\mnist_train.csv.zip -otraining\
+7z x archive\mnist_test.csv.zip -otraining\
+```
+
+**Alternative for Windows:** You can also extract the ZIP files manually using Windows Explorer.
+
+#### 3. Build the Project
+
+**All platforms:**
+```bash
+cargo build --release
+```
 
 ### Run unit test and see output for each test in debug mode
 ```
@@ -32,18 +85,57 @@ cargo test --release -- --show-output
 cargo llvm-cov --html
 ```
 
-### Run examples
-Make sure to run in release mode to see how fast the library can perform on your machine.
+## API Documentation
 
-Fully connected Neural Network
+Generate and view the full API documentation locally:
+```bash
+cargo doc --open
 ```
+
+This will build the documentation for all modules, structs, and methods, then open it in your browser.
+
+### Run examples
+**Important:** Always run in release mode to see realistic performance. Debug mode can be 10-100x slower.
+
+Fully connected Neural Network:
+```bash
 cargo run --release --example mnist_digits
 ```
 
-Convolutional NeuralNetwork
-```
+Convolutional Neural Network:
+```bash
 cargo run --release --example mnist_conv_digits
 ```
+
+## Architecture
+
+### Core Components
+
+#### Matrix Operations (`src/geoalg/f32_math/`)
+- **Row-major storage** for cache efficiency and optimal memory access patterns
+- **SIMD-accelerated operations** using portable SIMD (16-lane f32 vectors)
+- **Multi-threaded operations** via intelligent work partitioning
+- **Optimized convolution** via im2col transformation for efficient GEMM operations
+- **Adaptive algorithm selection** automatically chooses single/multi-threaded SIMD based on workload size
+
+#### Neural Network Layers (`src/nn/layers/`)
+- **Dense**: Fully connected layer with He initialization
+- **Convolution2d**: 2D convolution with configurable kernels and filters
+- **MaxPooling**: Max pooling with gradient tracking for backpropagation
+- **Input**: Shape specification layer
+
+#### Training System (`src/nn/trainer.rs`)
+- Batch sampling with automatic shuffling
+- Model checkpointing with rolling file cycles
+- CSV data loading and binary model persistence
+- Configurable hyperparameters
+
+### Performance Features
+- **Portable SIMD**: 16 f32 elements per vector operation
+- **Dynamic thread scaling** based on `available_parallelism()`
+- **Work partitioning** optimized for SIMD alignment
+- **im2col convolution** for efficient matrix multiplication
+- **Adaptive methods**: `scale()` and `mul_transposed_b()` automatically select optimal implementation
 
 ## Useful features
 ### Partitioner and Partition
@@ -64,10 +156,22 @@ Allows for wrapping functions to determine runtime. Useful for seeing how perfor
   * A simple fully connected neural network that uses Softmax and Cross Entropy Loss.
   * An implementation using convolutional neural network.
 
+## Current Limitations
+
+- **Convolution**: Only "valid" mode (no padding) currently supported
+- **Optimizers**: Only basic SGD; no Adam/RMSprop/momentum yet
+- **Learning Rate**: Fixed learning rate only (adaptive scheduling planned)
+- **GPU**: CPU-only, no CUDA/GPU acceleration
+- **Data Formats**: CSV and binary only, no HDF5/NPZ support
+- **Batch Normalization**: Not yet implemented
+
 ## Coming Soon
 * Transformers
-  * Potional-encoding modules
-  * Embedding
+  * Positional-encoding modules
+  * Embedding layer
+* Advanced Optimizers (Adam, RMSprop)
+* Learning rate scheduling
+* Batch Normalization and Dropout layers
 
 ## Goals of project
   * To develop a set of tools to allow simple creation of complex neural networks.

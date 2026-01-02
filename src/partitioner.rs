@@ -1,6 +1,4 @@
-use std::{fmt::Debug, ops::Index, result, thread};
-
-use rand_distr::num_traits::ToPrimitive;
+use std::{fmt::Debug, ops::Index, thread};
 
 use crate::partition::Partition;
 
@@ -28,8 +26,8 @@ impl Index<usize> for Partitioner {
 impl Partitioner {
     pub fn new(partitions: Vec<Partition>) -> Self { Partitioner { partitions } }
 
-    /// Creates a partitioner with partitions that are mostly equal in size, with no more than a difference of 1. 
-    #[deprecated]   
+    /// Creates a partitioner with partitions that are mostly equal in size, with no more than a difference of 1.
+    /// For SIMD-optimized partitioning, use `with_partitions_simd()` instead.
     pub fn with_partitions(count: usize, partition_count: usize) -> Self {
         let partition_size = count / partition_count;
 
@@ -60,8 +58,7 @@ impl Partitioner {
     }
 
     /// Parallelizes work among partitions as evenly as possible.
-    /// Ensures result is aggregated in correct order. 
-    #[deprecated]
+    /// Ensures result is aggregated in correct order.
     pub fn parallelized<T, F>(&self, function: F) -> Vec<T> 
     where
         F: FnOnce(&Partition) -> Vec<T> + Send + Copy,
@@ -121,6 +118,7 @@ impl Partitioner {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rand_distr::num_traits::ToPrimitive;
 
     #[test]
     fn test_chunked_parallelizable() {

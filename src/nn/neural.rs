@@ -1,21 +1,22 @@
 use std::fs::File;
-use std::io::Read;
+use std::io::{Read, ErrorKind};
 
 use dense::Dense;
 use input::Input;
 
 use crate::nn::layers::*;
+use crate::nn::error::{NeuralNetworkError, Result};
 use crate::geoalg::f32_math::matrix::*;
 use crate::output_bin_writer::OutputBinWriter;
 
 use super::activations::activation::Activation;
-use super::layers::convolution2d::Convolution2dDeprecated;
+use super::layers::convolution2d::Convolution2d;
 use super::layers::max_pooling::MaxPooling;
 use super::learning_rate::LearningRate;
 
 pub enum NeuralNetworkNode {
     DenseLayer(Dense),
-    Convolution2dLayer(Convolution2dDeprecated),
+    Convolution2dLayer(Convolution2d),
     ActivationFunction(Activation),
     MaxPoolLayer(MaxPooling)
 }
@@ -119,48 +120,65 @@ impl NeuralNetwork {
         floats
     }
 
-    pub fn attempt_load_network(&mut self, from_file_path: &str, cycle: usize) -> Result<usize, String> {
-        let file_open_try = File::open(format!("{from_file_path}{cycle}.nn"));
- 
+    /// Attempts to load a previously trained network from a file.
+    ///
+    /// # Arguments
+    ///
+    /// * `from_file_path` - Base path for model files (e.g., "./trained/model")
+    /// * `cycle` - File cycle number (e.g., 1 for "model1.nn")
+    ///
+    /// # Returns
+    ///
+    /// Returns the epoch number the model was trained to, or an error if loading fails.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The model file doesn't exist
+    /// - The file cannot be opened (permissions, etc.)
+    /// - The file format is corrupted or invalid
+    pub fn attempt_load_network(&mut self, from_file_path: &str, cycle: usize) -> Result<usize> {
+        let file_path = format!("{}{}.nn", from_file_path, cycle);
+
+        let mut file = File::open(&file_path).map_err(|e| {
+            match e.kind() {
+                ErrorKind::NotFound => NeuralNetworkError::ModelNotFound {
+                    path: from_file_path.to_string(),
+                    cycle,
+                },
+                _ => NeuralNetworkError::IoError(e),
+            }
+        })?;
+
         // 4 for 32-bit, 8 for 64-bit
         const CHUNK_SIZE: usize = 4;
 
-        let epoch;
+        let epoch = NeuralNetwork::read_usize(&mut file);
 
-        match file_open_try {
-            Ok(mut file) => {   // File could be opened for read
-                epoch = NeuralNetwork::read_usize(&mut file);
-                for node in self.nodes.iter_mut() {
-                    match node {
-                        NeuralNetworkNode::DenseLayer(n) => {
-                            // Load weights first
-                            let (mut rows, mut columns) = n.weights.shape();
-                            let weight_floats = NeuralNetwork::read_section(&mut file, columns * rows, CHUNK_SIZE);
-                            n.weights = Matrix::new(rows, columns, weight_floats);
+        for node in self.nodes.iter_mut() {
+            match node {
+                NeuralNetworkNode::DenseLayer(n) => {
+                    // Load weights first
+                    let (mut rows, mut columns) = n.weights.shape();
+                    let weight_floats = NeuralNetwork::read_section(&mut file, columns * rows, CHUNK_SIZE);
+                    n.weights = Matrix::new(rows, columns, weight_floats);
 
-                            // Load biases next
-                            (rows, columns) = n.biases.shape();                            
-                            let biases_floats = NeuralNetwork::read_section(&mut file, columns * rows, CHUNK_SIZE);
-                            n.biases = Matrix::new(rows, columns, biases_floats);
-                            //println!("Loaded weights and biases for dense layer.")
-                        },
-                        NeuralNetworkNode::Convolution2dLayer(n) => {
-                            // Load weights first
-                            let (mut rows, mut columns) = n.kernels.shape();
-                            let kernel_floats = NeuralNetwork::read_section(&mut file, columns * rows, CHUNK_SIZE);
-                            n.kernels = Matrix::new(rows, columns, kernel_floats);
+                    // Load biases next
+                    (rows, columns) = n.biases.shape();
+                    let biases_floats = NeuralNetwork::read_section(&mut file, columns * rows, CHUNK_SIZE);
+                    n.biases = Matrix::new(rows, columns, biases_floats);
+                },
+                NeuralNetworkNode::Convolution2dLayer(n) => {
+                    // Load weights first
+                    let (mut rows, mut columns) = n.kernels.shape();
+                    let kernel_floats = NeuralNetwork::read_section(&mut file, columns * rows, CHUNK_SIZE);
+                    n.kernels = Matrix::new(rows, columns, kernel_floats);
 
-                            (rows, columns) = n.biases.shape();                            
-                            let biases_floats = NeuralNetwork::read_section(&mut file, columns * rows, CHUNK_SIZE);
-                            n.biases = Matrix::new(rows, columns, biases_floats);
-                            //println!("Loaded kernels and biases for convolution2d layer.")
-                        }
-                        _ => { }
-                    }
+                    (rows, columns) = n.biases.shape();
+                    let biases_floats = NeuralNetwork::read_section(&mut file, columns * rows, CHUNK_SIZE);
+                    n.biases = Matrix::new(rows, columns, biases_floats);
                 }
-            }
-            _ => {
-                return Err("Could not find or open file specified, starting new model.".to_string());
+                _ => { }
             }
         }
 

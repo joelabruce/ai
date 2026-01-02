@@ -4,10 +4,36 @@ use crate::{geoalg::f32_math::simd_extensions::dot_product_simd3, nn::layers::co
 
 use super::simd_extensions::{im2col_transposed, SliceExt};
 
-/// Matrix is implemented as a single dimensional vector of f32s.
-/// This implementation of Matrix is row-major. 
-/// Row-major is specified so certain optimizations and parallelization can be performed.
-/// Column-major is not implemented. Unless it helps with optimizations, may never be implemented.
+/// A high-performance matrix implementation with SIMD and multi-threading optimizations.
+///
+/// `Matrix` stores data in row-major order as a contiguous `Vec<f32>` for optimal cache locality
+/// and SIMD vectorization. This design enables efficient parallel operations across rows.
+///
+/// # Performance Characteristics
+///
+/// - **Storage**: Row-major, contiguous memory layout
+/// - **SIMD**: Operations use 16-lane f32 SIMD vectors where beneficial
+/// - **Multi-threading**: Large operations automatically parallelize across CPU cores
+/// - **Adaptive**: Automatically selects optimal algorithm based on matrix size
+///
+/// # Examples
+///
+/// ```
+/// use ai::geoalg::f32_math::matrix::Matrix;
+///
+/// // Create a 2x3 matrix
+/// let matrix = Matrix::new(2, 3, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+/// assert_eq!(matrix.shape(), (2, 3));
+///
+/// // Scale all elements
+/// let scaled = matrix.scale(2.0);
+/// assert_eq!(scaled.row(0), &[2.0, 4.0, 6.0]);
+/// ```
+///
+/// # Thread Safety
+///
+/// Matrix is `Send` and can be safely moved between threads. Operations that require
+/// mutable access are not thread-safe and should be synchronized externally.
 #[derive(PartialEq, Debug, Clone, Default)]
 pub struct Matrix {
     rows: usize,
@@ -30,21 +56,66 @@ impl IndexMut<usize> for Matrix {
 }
 
 impl Matrix {
-    /// Returns size of underlying vector.
+    /// Returns the total number of elements in the matrix.
+    ///
+    /// This is equal to `rows * columns`.
+    ///
+    /// # Time Complexity
+    /// O(1)
     pub fn len(&self) -> usize { self.values.len() }
 
-    /// Returns number of rows this matrix has.
+    /// Returns the number of rows in this matrix.
+    ///
+    /// # Time Complexity
+    /// O(1)
     pub fn row_count(&self) -> usize { self.rows }
 
-    /// Returns number of columns this matrix has.
+    /// Returns the number of columns in this matrix.
+    ///
+    /// # Time Complexity
+    /// O(1)
     pub fn column_count(&self) -> usize { self.columns }
 
+    /// Returns the dimensions of this matrix as `(rows, columns)`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ai::geoalg::f32_math::matrix::Matrix;
+    ///
+    /// let matrix = Matrix::new(3, 4, vec![0.0; 12]);
+    /// assert_eq!(matrix.shape(), (3, 4));
+    /// ```
+    ///
+    /// # Time Complexity
+    /// O(1)
     pub fn shape(&self) -> (usize, usize) { (self.rows, self.columns) }
 
-    /// Returns a slice of the values this matrix has.
+    /// Returns a slice view of all values in row-major order.
+    ///
+    /// # Time Complexity
+    /// O(1)
     pub fn read_values(&self) -> &[f32] { &self.values }
 
-    /// Returns a new Matrix.
+    /// Creates a new matrix with the specified dimensions and values.
+    ///
+    /// # Arguments
+    ///
+    /// * `rows` - Number of rows
+    /// * `columns` - Number of columns
+    /// * `values` - Vector of f32 values in row-major order (length must equal `rows * columns`)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ai::geoalg::f32_math::matrix::Matrix;
+    ///
+    /// let matrix = Matrix::new(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
+    /// assert_eq!(matrix.shape(), (2, 2));
+    /// ```
+    ///
+    /// # Time Complexity
+    /// O(1) - takes ownership of the vector without copying
     pub fn new(rows: usize, columns: usize, values: Vec<f32>) -> Self {
         Self { rows, columns, values }
     }
@@ -102,7 +173,7 @@ impl Matrix {
             return Self::new(self.columns, self.rows, self.values.clone());
         }
 
-        let partition_strategy = &Partitioner::with_partitions(
+        let partition_strategy = &Partitioner::with_partitions_simd(
             self.len(),
             thread::available_parallelism().unwrap().get());
         
@@ -120,37 +191,45 @@ impl Matrix {
         Self::new(self.columns, self.rows, values)
     }
 
-    /// Computes matrix multiplication and divying up work amongst partitions.
-    /// Faster multiplcation when you need to multiply the transposed matrix of rhs.
-    /// Avoids calculating the transpose twice.
-    /// Partitioner implementation complete.
-    /// Now in Tensor.
-    pub fn mul_with_transpose(&self, rhs: &Matrix) -> Matrix {
+    /// Multiplies this matrix with the transpose of another matrix (A × B^T).
+    ///
+    /// Computes the matrix multiplication `self × rhs.transpose()` without explicitly
+    /// creating the transposed matrix. This is more efficient than transposing first.
+    ///
+    /// # Arguments
+    ///
+    /// * `rhs` - The right-hand side matrix (will be implicitly transposed)
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self.columns != rhs.columns` (dimensions incompatible for A × B^T)
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ai::geoalg::f32_math::matrix::Matrix;
+    ///
+    /// // Matrix A: 2x3
+    /// let a = Matrix::new(2, 3, vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
+    /// // Matrix B: 2x3 (will be transposed to 3x2)
+    /// let b = Matrix::new(2, 3, vec![7.0, 8.0, 9.0, 10.0, 11.0, 12.0]);
+    ///
+    /// // Result will be 2x2
+    /// let result = a.mul_transposed_b(&b);
+    /// assert_eq!(result.shape(), (2, 2));
+    /// ```
+    ///
+    /// # Performance
+    ///
+    /// - **Multi-threading**: Parallelizes across rows for large matrices
+    /// - **SIMD**: Uses vectorized dot products for row calculations
+    /// - **Cache efficiency**: Avoids explicit transpose, improving memory access patterns
+    /// - **Time Complexity**: O(m × n × p) where result is m×p and shared dimension is n
+    pub fn mul_transposed_b(&self, rhs: &Matrix) -> Matrix {
         assert_eq!(self.columns, rhs.columns, "When multiplying with transposed, columns must be equal for lhs and rhs.");
 
-        let partition_strategy = Partitioner::with_partitions(self.rows, thread::available_parallelism().unwrap().get());
-
-        let inner_process = move |partition: &Partition| {
-            let mut partition_values: Vec<f32> = Vec::with_capacity(partition.size() * rhs.rows);
-            for row in partition.range() {
-                let ls = self.row(row);
-                for transposed_row in 0..rhs.rows {
-                    let rs = rhs.row(transposed_row);
-                    //let dot_product = dot_product_of_vector_slices(&ls, &rs);
-                    let dot_product = dot_product_simd3(&ls, &rs);
-                    partition_values.push(dot_product);
-                }
-            }
-            partition_values
-        };
-
-        let values = partition_strategy.parallelized(inner_process);
-        Self::new(self.rows, rhs.rows, values)
-    }
-
-    pub fn mul_transpose_simd(&self, rhs: &Matrix) -> Matrix {
         let values = self.values.par_mm_transpose(
-            &rhs.values, 
+            &rhs.values,
             self.row_count(),
             self.column_count(),
             rhs.row_count());
@@ -158,13 +237,25 @@ impl Matrix {
         Matrix::new(self.row_count(), rhs.row_count(), values)
     }
 
+    /// Deprecated: Use `mul_transposed_b()` instead for clearer naming.
+    #[deprecated(since = "0.1.1", note = "Use `mul_transposed_b()` instead")]
+    pub fn mul_transpose_simd(&self, rhs: &Matrix) -> Matrix {
+        self.mul_transposed_b(rhs)
+    }
+
+    /// Deprecated: Use `mul_transposed_b()` instead for clearer naming.
+    #[deprecated(since = "0.1.1", note = "Use `mul_transposed_b()` instead")]
+    pub fn mul_with_transpose(&self, rhs: &Matrix) -> Matrix {
+        self.mul_transposed_b(rhs)
+    }
+
     /// Subtracts rhs Matrix from lhs Matrix.
     /// Partitioner implementation complete.
     /// In Tensor
     pub fn sub(&self, rhs: &Matrix) -> Self {
         assert!(self.rows == rhs.rows && self.columns == rhs.columns, "When subtracting two matrices, they must have same order.");
- 
-        let partition_strategy = &Partitioner::with_partitions(self.len(), thread::available_parallelism().unwrap().get());
+
+        let partition_strategy = &Partitioner::with_partitions_simd(self.len(), thread::available_parallelism().unwrap().get());
 
         let inner_process = move |partition: &Partition| {
             let mut partition_values = Vec::with_capacity(partition.size());
@@ -182,8 +273,8 @@ impl Matrix {
     /// In tensor.
     pub fn add(&self, rhs: &Matrix) -> Self {
         assert!(self.rows == rhs.rows && self.columns == rhs.columns, "When subtracting two matrices, they must have same order.");
-    
-        let partition_strategy = &Partitioner::with_partitions(self.len(), thread::available_parallelism().unwrap().get());
+
+        let partition_strategy = &Partitioner::with_partitions_simd(self.len(), thread::available_parallelism().unwrap().get());
 
         let inner_process = move |partition: &Partition| {
             let mut partition_values = Vec::with_capacity(partition.size());
@@ -205,7 +296,7 @@ impl Matrix {
         assert_eq!(rhs.rows, 1, "Rhs matrix must have 1 row.");
         assert_eq!(self.columns, rhs.columns, "Lhs and rhs must have equal number of columns.");
 
-        let partition_strategy = &Partitioner::with_partitions(self.rows, thread::available_parallelism().unwrap().get());
+        let partition_strategy = &Partitioner::with_partitions_simd(self.rows, thread::available_parallelism().unwrap().get());
 
         let inner_process = move |partition: &Partition| {
             let mut partition_values= Vec::with_capacity(partition.size() * self.columns);
@@ -229,7 +320,7 @@ impl Matrix {
     /// Partitioner implementation complete.
     /// In Tensor
     pub fn reduce_rows_by_add(&self) -> Self {
-        let partition_strategy = &Partitioner::with_partitions(self.columns, thread::available_parallelism().unwrap().get());
+        let partition_strategy = &Partitioner::with_partitions_simd(self.columns, thread::available_parallelism().unwrap().get());
 
         let inner_process =move |partition: &Partition| {
             let mut partition_values = Vec::with_capacity(partition.size());
@@ -249,23 +340,42 @@ impl Matrix {
         Self::new(1, self.columns, values)
     }
 
-    /// Scales matrix by a scalar.
-    /// Instead of making a division operator, please pass in reciprocal of scalar.
-    /// Partitioner implementation complete.
-    /// Now in Tensor
+    /// Scales all elements of the matrix by a scalar value.
+    ///
+    /// Returns a new matrix where each element is multiplied by `scalar`.
+    /// This method uses adaptive algorithm selection for optimal performance:
+    ///
+    /// - **Small matrices** (< 1000 elements): Single-threaded SIMD
+    /// - **Large matrices** (≥ 1000 elements): Multi-threaded SIMD across CPU cores
+    ///
+    /// # Arguments
+    ///
+    /// * `scalar` - The value to multiply each element by
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use ai::geoalg::f32_math::matrix::Matrix;
+    ///
+    /// let matrix = Matrix::new(2, 2, vec![1.0, 2.0, 3.0, 4.0]);
+    /// let scaled = matrix.scale(2.0);
+    /// assert_eq!(scaled.read_values(), &[2.0, 4.0, 6.0, 8.0]);
+    /// ```
+    ///
+    /// # Performance
+    ///
+    /// - **SIMD**: 16 f32 elements processed per vector operation
+    /// - **Multi-threading**: Automatically engages for matrices with ≥ 1000 elements
+    /// - **Time Complexity**: O(n) where n is the number of elements
     pub fn scale(&self, scalar: f32) -> Self {
-        let partition_strategy = &Partitioner::with_partitions(self.len(), thread::available_parallelism().unwrap().get());
+        // For very small matrices, use single-threaded SIMD
+        if self.len() < 1000 {
+            let values = self.read_values().scale_simd(scalar);
+            return Self::new(self.row_count(), self.column_count(), values);
+        }
 
-        let inner_process = move |partition: &Partition| {
-            let mut partition_values = Vec::with_capacity(partition.size());
-            for i in partition.range() {
-                partition_values.push(self.values[i] * scalar);
-            }
-
-            partition_values
-        };
-
-        let values = partition_strategy.parallelized(inner_process);
+        // For larger matrices, use multi-threaded SIMD
+        let values = self.read_values().par_scale_simd(scalar, self.len());
         Self::new(self.row_count(), self.column_count(), values)
     }
 
@@ -273,8 +383,8 @@ impl Matrix {
     pub fn par_cc_im2col(&self, kernels: &Matrix, k_d: &Dimensions, i_d: &Dimensions) -> Self {
         let batches = self.row_count();
 
-        let partitioner = &Partitioner::with_partitions(
-            batches, 
+        let partitioner = &Partitioner::with_partitions_simd(
+            batches,
             thread::available_parallelism().unwrap().get());
 
         // Adjust for valid convolution (no padding)
@@ -348,8 +458,8 @@ impl Matrix {
     pub fn valid_cross_correlation(&self, kernels: &Matrix, k_d: &Dimensions, i_d: &Dimensions) -> Self {
         let batches = self.row_count();
 
-        let partitioner = &Partitioner::with_partitions(
-            batches, 
+        let partitioner = &Partitioner::with_partitions_simd(
+            batches,
             thread::available_parallelism().unwrap().get());
 
         // Adjust for valid convolution (no padding)
@@ -406,8 +516,8 @@ impl Matrix {
     pub fn full_outer_convolution(&self, filters: &Matrix, k_d: &Dimensions, i_d: &Dimensions) -> Self {
         let batches = self.row_count();
 
-        let partitioner = &Partitioner::with_partitions(
-            batches, 
+        let partitioner = &Partitioner::with_partitions_simd(
+            batches,
             thread::available_parallelism().unwrap().get());
 
         // Adjust for full outer convolution (don't padd, just do bounds checking)
@@ -488,7 +598,7 @@ impl Matrix {
     pub fn maxpool(&self, filters: usize, stride: usize, i_d: &Dimensions, p_d: &Dimensions, o_d: &Dimensions) -> (Self, Vec<usize>) {
         let batches = self.row_count();
 
-        let partitioner = &Partitioner::with_partitions(
+        let partitioner = &Partitioner::with_partitions_simd(
             batches,
             thread::available_parallelism().unwrap().get());
 
