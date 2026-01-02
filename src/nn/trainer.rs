@@ -54,9 +54,8 @@ pub fn from_sample_digit_images(sample: &mut Sample<DigitImage>, requested_batch
 
 /// Try to put all println output in here instead of in the other functions.
 /// Unstable.
-//pub fn train_network(nn_nodes: &mut Vec<NeuralNetworkNode>, tp: TrainingHyperParameters, load_from_file: bool, include_batch_output: bool) {
 pub fn train_network(nn: &mut NeuralNetwork, tp: TrainingHyperParameters, load_from_file: bool, include_batch_output: bool) {
-        // Training hyper-parameters
+    // Training hyper-parameters
     let batches = tp.training_sample / tp.batch_size;
     let v_batch_size = std::cmp::min(batches * tp.batch_size / 5, 9999);        
     let trained_model_location = &tp.trained_model_location;

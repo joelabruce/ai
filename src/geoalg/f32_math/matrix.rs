@@ -97,28 +97,45 @@ impl Matrix {
     /// Returns transpose of matrix.
     /// Partitioner implementation complete.
     /// Now in Tensor
+    // pub fn transpose_(&self) -> Self {
+    //     if self.rows == 1 || self.columns == 1 {
+    //         return Self::new(self.columns, self.rows, self.values.clone());
+    //     }
+
+    //     let partition_strategy = &Partitioner::with_partitions(
+    //         self.len(),
+    //         thread::available_parallelism().unwrap().get());
+        
+    //     let inner_process = move |partition: &Partition| {
+    //         let mut partition_values = Vec::with_capacity(partition.size());
+    //         for i in partition.range() {
+    //             let index_to_read = self.columns * (i % self.rows) + i / self.rows;
+    //             partition_values.push(self.values[index_to_read]);
+    //         }
+
+    //         partition_values
+    //     };
+
+    //     let values = partition_strategy.parallelized(inner_process);
+    //     Self::new(self.columns, self.rows, values)
+    // }
+
     pub fn transpose(&self) -> Self {
         if self.rows == 1 || self.columns == 1 {
             return Self::new(self.columns, self.rows, self.values.clone());
         }
-
-        let partition_strategy = &Partitioner::with_partitions(
-            self.len(),
-            thread::available_parallelism().unwrap().get());
         
-        let inner_process = move |partition: &Partition| {
-            let mut partition_values = Vec::with_capacity(partition.size());
-            for i in partition.range() {
-                let index_to_read = self.columns * (i % self.rows) + i / self.rows;
-                partition_values.push(self.values[index_to_read]);
-            }
+        let chunk_size = self.len() / thread::available_parallelism().unwrap().get();
 
-            partition_values
-        };
-
-        let values = partition_strategy.parallelized(inner_process);
-        Self::new(self.columns, self.rows, values)
+        let mut partition_values = vec![0.0f32; self.len()];
+        Partitioner::chunked_parallelized(chunk_size, &mut partition_values, |i| {
+            let index_to_read = self.columns * (i % self.rows) + i / self.rows;
+            self.values[index_to_read]
+        });
+ 
+        Self::new(self.columns, self.rows, partition_values)
     }
+
 
     /// Computes matrix multiplication and divying up work amongst partitions.
     /// Faster multiplcation when you need to multiply the transposed matrix of rhs.
