@@ -183,6 +183,33 @@ Allows for wrapping functions to determine runtime. Useful for seeing how perfor
   * A simple fully connected neural network that uses Softmax and Cross Entropy Loss.
   * An implementation using convolutional neural network.
 
+## Benchmarking
+
+We're collecting real-world benchmark results from different hardware configurations! Help us by running the benchmark script and contributing your results.
+
+### Quick Start
+
+**Linux/macOS:**
+```bash
+chmod +x benchmark.sh
+./benchmark.sh
+```
+
+**Windows PowerShell:**
+```powershell
+.\benchmark.ps1
+```
+
+The script automatically:
+- Collects your system specifications (CPU, RAM, OS)
+- Runs the MNIST training example in release mode
+- Records performance metrics (training time, accuracy)
+- Appends results to `BENCHMARKS.md` in a beautiful format
+
+### View Results
+
+Check out the community benchmark results in **[BENCHMARKS.md](BENCHMARKS.md)** to see how your system compares!
+
 ## Current Limitations
 
 - **Convolution**: Only "valid" mode (no padding) currently supported
