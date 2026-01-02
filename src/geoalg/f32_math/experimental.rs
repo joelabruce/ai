@@ -84,7 +84,8 @@ mod tests {
         let num_threads = 4;
         let shape = Kernel::new();
 
-        let input = vec![0.0f32; 100000 * 100000];
+        // Input should match shape: c * h * w = 3 * 3 * 3 = 27 elements
+        let input = vec![0.0f32; shape.c * shape.h * shape.w];
 
         let _result = im2col_std_parallel(&input, &shape, k_size, stride, padding, num_threads);
     }
