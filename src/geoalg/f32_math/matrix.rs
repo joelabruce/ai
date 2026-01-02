@@ -558,9 +558,7 @@ impl Matrix {
                                 }
                             }
 
-                            //print!("{c_accum}, ");
                             partition_values[batch_offset + row * o_columns + column] = c_accum;
-                            //partition_values.push(c_accum);
                         }
                     }
                 }
@@ -639,9 +637,6 @@ impl Matrix {
         };
 
         let (values, max_indices) = partitioner.parallelized(inner_process).into_iter().unzip();
-
-        //let msg = format!("{:?}", max_indices).bright_purple();
-        //println!("Max indices: {msg}");
 
         (Matrix::new(batches, filters * rows_x_columns, values), max_indices)
     }
@@ -831,8 +826,6 @@ mod tests {
             0., 0., 0., 0., 0., 0.,
         ]);
 
-        //let msg = format!("{:?}", actual).bright_purple();
-        //println!("{msg}");
         assert_eq!(actual, expected);
     }
 

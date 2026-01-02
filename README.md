@@ -11,6 +11,33 @@ AI library written in rust
 
 ## Installation
 
+### Quick Start (Recommended)
+
+For the easiest setup experience, use the provided initialization scripts:
+
+**Linux & macOS:**
+```bash
+./init.sh
+```
+
+**Windows (Command Prompt):**
+```cmd
+init.bat
+```
+
+**Windows (PowerShell):**
+```powershell
+.\init.ps1
+```
+
+These scripts will:
+- Verify Rust installation
+- Install nightly toolchain if needed
+- Extract MNIST datasets
+- Build the project and fetch dependencies
+
+If you prefer manual setup or encounter any issues, follow the detailed instructions below.
+
 ### System Requirements
 - **Rust:** Nightly build (required for portable SIMD features)
 - **CPU:** Multi-core processor with SIMD support (SSE/AVX on x86, NEON on ARM)

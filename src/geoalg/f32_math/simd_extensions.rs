@@ -517,8 +517,6 @@ mod tests {
 
             //     partition_values
             // });
-            // let elapsed = timed_context.checkpoint();
-            // println!("Mul Elapsed: {elapsed:0.9} binary_simd *Quickly becoming slowest");
         });
     }
 
@@ -578,9 +576,6 @@ mod tests {
         println!("{:?}", t9);
         println!("{:?}", t10);
         println!("{:?}", t11);
-
-        // let msg = format!("Partitions: {:?}", x).bright_red();
-        // println!("{msg}");
     }
 
     #[test]
@@ -813,24 +808,6 @@ mod tests {
             let actual = kernels.read_values().mm_transpose(&im2col_transposed, kernel_count, kernel_size, image_count * feature_size);
 
             println!("{:?} v {:?}", actual.len(), expected.len());
-
-            // println!("{:?}", &expected.read_values()[0..50]);
-            // println!("{:?}", &actual[0..50]);
-
-            // for i in 0..feature_size {
-            //     let start = i * kernel_size;
-            //     let end = start + kernel_size;
-            //     println!("{:?}", &im2col_transposed[start..end]);
-            // }
-
-            // let mut start = 0;
-            // let mut end = kernel_size;
-            // for i in 0..feature_height {
-            //     println!("{:?}", &im2col_transposed[start..end]);
-            //     start = end;
-            //     end += kernel_size;
-                
-            // }
         });
     }
 
